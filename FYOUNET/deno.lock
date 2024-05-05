@@ -1,0 +1,16 @@
+{
+  "version": "3",
+  "packages": {
+    "specifiers": {
+      "jsr:@mys1024/worker-fn@2": "jsr:@mys1024/worker-fn@2.2.6"
+    },
+    "jsr": {
+      "@mys1024/worker-fn@2.2.6": {
+        "integrity": "30e78d4bf22a4e1246a437edd97f2808e079aa79a689ec66d73f00e2873dd1ad"
+      }
+    }
+  },
+  "remote": {
+    "https://deno.land/x/get_ip@v2.0.0/mod.ts": "8a967dece886ddf7f7bf6c8d6000c98a4ff374834a90a4e0fde868ce4301873d"
+  }
+}
