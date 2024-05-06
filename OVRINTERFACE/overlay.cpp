@@ -6,9 +6,13 @@
 #include <map>
 #include <iostream>
 #include <filesystem>  // Make sure this is correctly included
+#include <sstream>
+#include <string>
 
 namespace fs = std::filesystem;
 using namespace vr;
+
+#pragma region init
 
 OverlayInterface *s_pSharedVRController = NULL;
 
@@ -36,6 +40,9 @@ OverlayInterface::~OverlayInterface()
 {
 }
 
+#pragma endregion
+
+#pragma region helpers
 
 std::string GetTrackedDeviceString(vr::IVRSystem *pHmd, vr::TrackedDeviceIndex_t unDevice, vr::TrackedDeviceProperty prop)
 {
@@ -51,7 +58,6 @@ std::string GetTrackedDeviceString(vr::IVRSystem *pHmd, vr::TrackedDeviceIndex_t
 		return buf;
 	}
 }
-
 
 vr::VROverlayHandle_t OverlayInterface::Init()
 {
@@ -117,6 +123,8 @@ vr::VROverlayHandle_t OverlayInterface::Init()
 {
 	float m[3][4];
 }; */
+
+#pragma endregion
 
 #pragma region overlay movement
 
@@ -438,6 +446,81 @@ bool OverlayInterface::IsControllerCloseToOverlay(vr::IVRSystem* pVRSystem, vr::
 
 #pragma endregion overlay movement
 
+#pragma region overlay networking
+
+vr::HmdMatrix34_t OverlayInterface::GetOverlayPositionRelativeToHMD(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle) {
+    vr::HmdMatrix34_t transformMatrix;
+    vr::TrackedDeviceIndex_t hmdIndex = vr::k_unTrackedDeviceIndex_Hmd;
+    // Corrected the function call by passing the address of hmdIndex
+    vr::EVROverlayError error = vr::VROverlay()->GetOverlayTransformTrackedDeviceRelative(overlayHandle, &hmdIndex, &transformMatrix);
+
+    if (error != vr::VROverlayError_None) {
+        std::cerr << "Error getting overlay transform relative to HMD: " << error << std::endl;
+        //vr::HmdMatrix34_t{float [3][4]{float [4]{(float)(1.0F), (float)(0.0F), (float)(0.0F), (float)(0.0F)}}}
+        transformMatrix.m[0][0] = 1.0f; transformMatrix.m[0][1] = 0.0f; transformMatrix.m[0][2] = 0.0f; transformMatrix.m[0][3] = 0.0f;
+        transformMatrix.m[1][0] = 0.0f; transformMatrix.m[1][1] = 1.0f; transformMatrix.m[1][2] = 0.0f; transformMatrix.m[1][3] = 0.0f;
+        transformMatrix.m[2][0] = 0.0f; transformMatrix.m[2][1] = 0.0f; transformMatrix.m[2][2] = 1.0f; transformMatrix.m[2][3] = 0.0f;
+    }
+
+    return transformMatrix;
+}
+
+vr::HmdVector3_t OverlayInterface::GetHMDPositionRelativeToTrackingUniverseOrigin(vr::IVRSystem* pVRSystem) {
+    // Define the tracking universe origin
+    vr::ETrackingUniverseOrigin eTrackingOrigin = vr::ETrackingUniverseOrigin::TrackingUniverseStanding;
+
+    // Define the prediction time (0 for the most current data)
+    float fPredictionTime = 0.0f;
+
+    // Allocate an array to hold the poses
+    vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
+
+    // Get the poses for all devices
+    pVRSystem->GetDeviceToAbsoluteTrackingPose(eTrackingOrigin, fPredictionTime, poses, vr::k_unMaxTrackedDeviceCount);
+
+    // Get the HMD index
+    vr::TrackedDeviceIndex_t hmdIndex = vr::k_unTrackedDeviceIndex_Hmd;
+
+    // Check if the HMD is valid
+    if (!pVRSystem->IsTrackedDeviceConnected(hmdIndex)) {
+        std::cerr << "HMD not connected." << std::endl;
+        return {0, 0, 0}; // Return a zero vector if the HMD is not connected
+    }
+
+    // Get the pose for the HMD
+    vr::TrackedDevicePose_t& hmdPose = poses[hmdIndex];
+
+    // Check if the pose is valid
+    if (!hmdPose.bPoseIsValid) {
+        std::cerr << "HMD pose not valid." << std::endl;
+        return {0, 0, 0}; // Return a zero vector if the pose is not valid
+    }
+
+    // Extract the position from the pose
+    vr::HmdVector3_t position = {hmdPose.mDeviceToAbsoluteTracking.m[0][3], hmdPose.mDeviceToAbsoluteTracking.m[1][3], hmdPose.mDeviceToAbsoluteTracking.m[2][3]};
+
+    return position;
+}
+
+std::string OverlayInterface::serializePositions(const vr::HmdMatrix34_t& overlayPosition, const vr::HmdVector3_t& hmdPosition) {
+    std::stringstream ss;
+    // Serialize overlay position
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            ss << overlayPosition.m[i][j] << " ";
+        }
+    }
+    // Serialize HMD position
+    for (int i = 0; i < 3; ++i) {
+        ss << hmdPosition.v[i] << " ";
+    }
+    return ss.str();
+}
+
+#pragma endregion 
+
+#pragma region init stuff
+
 void OverlayInterface::Shutdown()
 {
 	DisconnectFromVRRuntime();
@@ -498,4 +581,4 @@ vr::HmdError OverlayInterface::GetLastHmdError()
 	return m_eLastHmdError;
 }
 
-
+#pragma endregion

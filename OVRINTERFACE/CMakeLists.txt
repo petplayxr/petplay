@@ -17,6 +17,7 @@ overlay.h
 
 #region link overlay crap
 target_include_directories(petplay PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(petplay Ws2_32)
 
 #region LINK OPENVR LMAO
 

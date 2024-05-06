@@ -37,8 +37,6 @@ public:
 
     float CalculateDistanceToOverlay(const vr::HmdVector3_t& rayOrigin, const vr::HmdVector3_t& rayDirection, vr::VROverlayHandle_t overlayHandle);
 
-    
-    
     bool isGripped = false;
     // Map to store the state of each button
     std::map<int, vr::TrackedDeviceIndex_t> controllerIndexes;
@@ -53,6 +51,14 @@ public:
     void SetOverlayPositionToController(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex);
 
     vr::VROverlayHandle_t Init();
+
+    vr::HmdMatrix34_t GetOverlayPositionRelativeToHMD(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle);
+
+    // Function prototype for GetHMDPositionRelativeToTrackingUniverseOrigin
+    vr::HmdVector3_t GetHMDPositionRelativeToTrackingUniverseOrigin(vr::IVRSystem* pVRSystem);
+
+    // Function prototype for serializePositions
+    std::string serializePositions(const vr::HmdMatrix34_t& overlayPosition, const vr::HmdVector3_t& hmdPosition);
     
 	void Shutdown();
 	void EnableRestart();
