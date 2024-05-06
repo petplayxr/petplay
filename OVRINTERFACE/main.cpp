@@ -62,7 +62,7 @@ int main() {
         vr::HmdVector3_t position = {overlayTransform.m[0][3], overlayTransform.m[1][3], overlayTransform.m[2][3]};
         cout << "Overlay position: " << position.v[0] << ", " << position.v[1] << ", " << position.v[2] << endl;
         // Add a delay or condition to break the loop if needed
-        Sleep(1000); // Wait for 1 second before getting the position again
+        Sleep(1);
     }
 
     #pragma endregion

@@ -24,12 +24,21 @@ public:
         bool wasPressed;
     };
 
-    float CalculateDistanceToOverlay(const vr::HmdVector3_t& rayOrigin, const vr::HmdVector3_t& rayDirection, vr::VROverlayHandle_t overlayHandle);
+    bool IsControllerCloseToOverlay(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex);
+
 
     struct ControllerPosition {
         bool isGripping;
         vr::HmdVector3_t position;
     };
+
+    ControllerPosition GetGrippingControllerPosition(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex);
+
+
+    float CalculateDistanceToOverlay(const vr::HmdVector3_t& rayOrigin, const vr::HmdVector3_t& rayDirection, vr::VROverlayHandle_t overlayHandle);
+
+    
+    
     bool isGripped = false;
     // Map to store the state of each button
     std::map<int, vr::TrackedDeviceIndex_t> controllerIndexes;
@@ -52,7 +61,6 @@ public:
     void HandleVRInput(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t pOverlayToCheckFor);
     bool IsGrippingOverlay(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex);
     std::map<int, vr::TrackedDeviceIndex_t> GetControllerIndexes(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle);
-    ControllerPosition GetGrippingControllerPosition(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex);
     vr::IVRSystem* GetVRSystem();
     vr::HmdError GetLastHmdError();
 

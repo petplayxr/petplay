@@ -118,90 +118,7 @@ vr::VROverlayHandle_t OverlayInterface::Init()
 	float m[3][4];
 }; */
 
-
-vr::HmdMatrix34_t OverlayInterface::GetOverlayPos(VROverlayHandle_t m_ulOverlayHandle, HmdVector2_t *m_vOverlayPosition)
-{
-    HmdMatrix34_t matTransform;
-    vr::ETrackingUniverseOrigin eTrackingOrigin = vr::ETrackingUniverseOrigin::TrackingUniverseStanding;
-    vr::EVROverlayError error = vr::VROverlay()->GetTransformForOverlayCoordinates(m_ulOverlayHandle, eTrackingOrigin, *m_vOverlayPosition, &matTransform);
-
-    if (error != vr::VROverlayError_None) {
-        // Handle error
-    }
-
-    return matTransform;
-}
-
-void OverlayInterface::SetOverlayPositionToController(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex) {
-    vr::HmdVector3_t controllerPosition = GetGrippingControllerPosition(pVRSystem, overlayHandle, controllerIndex).position;
-
-    // Define the step size for moving the overlay
-    float stepSize = 0.01f; // Adjust this value as needed
-
-    // Calculate the new position for the overlay
-    vr::HmdVector3_t newOverlayPosition;
-    newOverlayPosition.v[0] = controllerPosition.v[0] + stepSize; // Adjust the X position
-    newOverlayPosition.v[1] = controllerPosition.v[1]; // Keep the Y position the same
-    newOverlayPosition.v[2] = controllerPosition.v[2]; // Keep the Z position the same
-
-    // Create a transformation matrix for the new position
-    vr::HmdMatrix34_t transformMatrix;
-    transformMatrix.m[0][0] = 1.0f; transformMatrix.m[0][1] = 0.0f; transformMatrix.m[0][2] = 0.0f; transformMatrix.m[0][3] = newOverlayPosition.v[0];
-    transformMatrix.m[1][0] = 0.0f; transformMatrix.m[1][1] = 1.0f; transformMatrix.m[1][2] = 0.0f; transformMatrix.m[1][3] = newOverlayPosition.v[1];
-    transformMatrix.m[2][0] = 0.0f; transformMatrix.m[2][1] = 0.0f; transformMatrix.m[2][2] = 1.0f; transformMatrix.m[2][3] = newOverlayPosition.v[2];
-
-    // Set the overlay's position to the new position
-    vr::VROverlay()->SetOverlayTransformAbsolute(overlayHandle, vr::TrackingUniverseStanding, &transformMatrix);
-}
-
-void OverlayInterface::UpdateButtonState(vr::IVRSystem* pVRSystem, vr::TrackedDeviceIndex_t controllerIndex, vr::EVRButtonId buttonId) {
-    vr::VRControllerState_t controllerState;
-    if (pVRSystem->GetControllerState(controllerIndex, &controllerState, sizeof(controllerState))) {
-        bool isPressed = controllerState.ulButtonPressed & vr::ButtonMaskFromId(buttonId);
-        ButtonState& state = buttonStates[controllerIndex][buttonId];
-        state.wasPressed = state.isPressed;
-        state.isPressed = isPressed;
-    }
-}
-
-void OverlayInterface::HandleVRInput(vr::IVRSystem* pVRSystem, VROverlayHandle_t pOverlayToCheckFor) {
-    vr::TrackedDeviceIndex_t controller1 = GetControllerIndexes(pVRSystem, pOverlayToCheckFor)[0];
-	vr::TrackedDeviceIndex_t controller2 = GetControllerIndexes(pVRSystem, pOverlayToCheckFor)[1];
-    // Update the state for each button
-    UpdateButtonState(pVRSystem, controller1, vr::k_EButton_SteamVR_Trigger);
-    UpdateButtonState(pVRSystem, controller1, vr::k_EButton_Grip);
-	UpdateButtonState(pVRSystem, controller2, vr::k_EButton_SteamVR_Trigger);
-    UpdateButtonState(pVRSystem, controller2, vr::k_EButton_Grip);
-
-	OverlayInterface::ButtonState controller1ButtonState = buttonStates[controller1][vr::k_EButton_Grip];
-	OverlayInterface::ButtonState controller2ButtonState = buttonStates[controller2][vr::k_EButton_Grip];
-
-    if ((!controller1ButtonState.wasPressed && controller1ButtonState.isPressed) 
-	|| (!controller2ButtonState.wasPressed && controller2ButtonState.isPressed)) {
-        printf("Grip button pressed!\n");
-		if (IsGrippingOverlay(pVRSystem, pOverlayToCheckFor, controller1) && !isGripped) {
-			isGripped = true;
-			currentControllerGrippingOverlay = controller1;
-			printf("Controller1 Gripped Overlay!\n");
-			return;
-		}
-		else if(IsGrippingOverlay(pVRSystem, pOverlayToCheckFor, controller2) && !isGripped) {
-			isGripped = true;
-			currentControllerGrippingOverlay = controller2;
-			printf("Controller2 Gripped Overlay!\n");
-			return;
-		}
-    }
-
-    if ((controller1ButtonState.wasPressed && !controller1ButtonState.isPressed) 
-	&& (controller2ButtonState.wasPressed && !controller2ButtonState.isPressed)) {
-        printf("Grip button released!\n");
-		if (isGripped) {
-			isGripped = false;
-			currentControllerGrippingOverlay = NULL;
-		}
-    }
-}
+#pragma region overlay movement
 
 bool OverlayInterface::IsGrippingOverlay(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex) {
     // Get the controller's pose
@@ -247,6 +164,180 @@ bool OverlayInterface::IsGrippingOverlay(vr::IVRSystem* pVRSystem, vr::VROverlay
     }
 
     return isIntersecting;
+}
+
+vr::HmdMatrix34_t OverlayInterface::GetOverlayPos(VROverlayHandle_t m_ulOverlayHandle, HmdVector2_t *m_vOverlayPosition)
+{
+    HmdMatrix34_t matTransform;
+    vr::ETrackingUniverseOrigin eTrackingOrigin = vr::ETrackingUniverseOrigin::TrackingUniverseStanding;
+    vr::EVROverlayError error = vr::VROverlay()->GetTransformForOverlayCoordinates(m_ulOverlayHandle, eTrackingOrigin, *m_vOverlayPosition, &matTransform);
+
+    if (error != vr::VROverlayError_None) {
+        // Handle error
+    }
+
+    return matTransform;
+}
+
+void LogHMDAndControllersPositions(vr::IVRSystem* pVRSystem) {
+    // Define the tracking universe origin
+    vr::ETrackingUniverseOrigin eTrackingOrigin = vr::TrackingUniverseStanding;
+
+    // Define the prediction time (0 for the most current data)
+    float fPredictionTime = 0.0f;
+
+    // Allocate an array to hold the poses
+    vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
+
+    // Get the poses for all devices
+    pVRSystem->GetDeviceToAbsoluteTrackingPose(eTrackingOrigin, fPredictionTime, poses, vr::k_unMaxTrackedDeviceCount);
+
+    // Iterate through all tracked devices
+    for (vr::TrackedDeviceIndex_t unDevice = 0; unDevice < vr::k_unMaxTrackedDeviceCount; ++unDevice) {
+        // Check if the device is connected
+        if (!pVRSystem->IsTrackedDeviceConnected(unDevice)) continue;
+
+        // Get the device class
+        vr::ETrackedDeviceClass deviceClass = pVRSystem->GetTrackedDeviceClass(unDevice);
+
+        // Initialize a string to hold the device type
+        std::string deviceType = "Unknown";
+
+        // Check if the device is an HMD, left controller, or right controller
+        if (deviceClass == vr::TrackedDeviceClass_HMD) {
+            deviceType = "HMD";
+        } else if (deviceClass == vr::TrackedDeviceClass_Controller) {
+            // Check if it's the left or right controller
+            vr::ETrackedControllerRole role = pVRSystem->GetControllerRoleForTrackedDeviceIndex(unDevice);
+            if (role == vr::TrackedControllerRole_LeftHand) {
+                deviceType = "Left Controller";
+            } else if (role == vr::TrackedControllerRole_RightHand) {
+                deviceType = "Right Controller";
+            }
+        }
+
+        // Get the pose for the device
+        vr::TrackedDevicePose_t& pose = poses[unDevice];
+
+        // Check if the pose is valid
+        if (pose.bPoseIsValid) {
+            // Extract the position from the pose
+            vr::HmdVector3_t position = {pose.mDeviceToAbsoluteTracking.m[0][3], pose.mDeviceToAbsoluteTracking.m[1][3], pose.mDeviceToAbsoluteTracking.m[2][3]};
+
+            // Log the position with the device type
+            std::cout << deviceType << " Position: (" << position.v[0] << ", " << position.v[1] << ", " << position.v[2] << ")" << std::endl;
+        }
+    }
+}
+
+
+
+void OverlayInterface::SetOverlayPositionToController(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex) {
+    LogHMDAndControllersPositions(pVRSystem); // Log all device positions (for debugging purposes)
+    
+    std::cout << "Controller device id : " << controllerIndex << std::endl;
+
+    // Allocate an array of TrackedDevicePose_t to hold the poses
+    vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
+
+    // Get the poses for all devices
+    pVRSystem->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0, poses, vr::k_unMaxTrackedDeviceCount);
+
+    // Check if the controller is valid
+    if (!poses[controllerIndex].bPoseIsValid) {
+        return; // Exit the function if the controller's pose is not valid
+    }
+
+    // Convert the controller's pose to a matrix
+    vr::HmdMatrix34_t transformMatrix = poses[controllerIndex].mDeviceToAbsoluteTracking;
+
+    // Set the overlay's transform to the controller's transform
+    vr::VROverlay()->SetOverlayTransformAbsolute(overlayHandle, vr::TrackingUniverseStanding, &transformMatrix);
+}
+
+void OverlayInterface::UpdateButtonState(vr::IVRSystem* pVRSystem, vr::TrackedDeviceIndex_t controllerIndex, vr::EVRButtonId buttonId) {
+    vr::VRControllerState_t controllerState;
+    if (pVRSystem->GetControllerState(controllerIndex, &controllerState, sizeof(controllerState))) {
+        bool isPressed = controllerState.ulButtonPressed & vr::ButtonMaskFromId(buttonId);
+        ButtonState& state = buttonStates[controllerIndex][buttonId];
+        state.wasPressed = state.isPressed;
+        state.isPressed = isPressed;
+    }
+}
+
+void OverlayInterface::HandleVRInput(vr::IVRSystem* pVRSystem, VROverlayHandle_t pOverlayToCheckFor) {
+    // Define the tracking universe origin
+    vr::ETrackingUniverseOrigin eTrackingOrigin = vr::ETrackingUniverseOrigin::TrackingUniverseStanding;
+
+    // Define the prediction time (0 for the most current data)
+    float fPredictionTime = 0.0f;
+
+    // Allocate an array to hold the poses
+    vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
+
+    // Get the poses for all devices
+    pVRSystem->GetDeviceToAbsoluteTrackingPose(eTrackingOrigin, fPredictionTime, poses, vr::k_unMaxTrackedDeviceCount);
+
+    vr::TrackedDeviceIndex_t leftControllerIndex = vr::k_unTrackedDeviceIndexInvalid;
+    vr::TrackedDeviceIndex_t rightControllerIndex = vr::k_unTrackedDeviceIndexInvalid;
+
+    // Iterate through all tracked devices to find the left and right controllers
+    for (vr::TrackedDeviceIndex_t unDevice = 0; unDevice < vr::k_unMaxTrackedDeviceCount; ++unDevice) {
+        // Check if the device is connected
+        if (!pVRSystem->IsTrackedDeviceConnected(unDevice)) continue;
+
+        // Get the device class
+        vr::ETrackedDeviceClass deviceClass = pVRSystem->GetTrackedDeviceClass(unDevice);
+
+        // Check if the device is a controller
+        if (deviceClass == vr::TrackedDeviceClass_Controller) {
+            // Check if it's the left or right controller
+            vr::ETrackedControllerRole role = pVRSystem->GetControllerRoleForTrackedDeviceIndex(unDevice);
+            if (role == vr::TrackedControllerRole_LeftHand) {
+                leftControllerIndex = unDevice;
+            } else if (role == vr::TrackedControllerRole_RightHand) {
+                rightControllerIndex = unDevice;
+            }
+        }
+    }
+
+    // Update the state for each button
+    UpdateButtonState(pVRSystem, leftControllerIndex, vr::k_EButton_Grip);
+    UpdateButtonState(pVRSystem, rightControllerIndex, vr::k_EButton_Grip);
+
+    OverlayInterface::ButtonState leftControllerButtonState = buttonStates[leftControllerIndex][vr::k_EButton_Grip];
+    OverlayInterface::ButtonState rightControllerButtonState = buttonStates[rightControllerIndex][vr::k_EButton_Grip];
+
+    if (leftControllerButtonState.isPressed)
+    {
+        printf("Grip button is held!\n");
+        if (IsControllerCloseToOverlay(pVRSystem, pOverlayToCheckFor, leftControllerIndex) && !isGripped) {
+            isGripped = true;
+            currentControllerGrippingOverlay = leftControllerIndex;
+            printf("Left Controller Gripped Overlay!\n");
+            return;
+        }
+        
+    }
+    if (rightControllerButtonState.isPressed)
+    {
+        printf("Grip button is held!\n");
+        if(IsControllerCloseToOverlay(pVRSystem, pOverlayToCheckFor, rightControllerIndex) && !isGripped) {
+            isGripped = true;
+            currentControllerGrippingOverlay = rightControllerIndex;
+            printf("Right Controller Gripped Overlay!\n");
+            return;
+        }
+    }
+
+    if ((!leftControllerButtonState.isPressed) 
+    && (!rightControllerButtonState.isPressed)) {
+        
+        if (isGripped) {
+            isGripped = false;
+            currentControllerGrippingOverlay = vr::k_unTrackedDeviceIndexInvalid; // Reset to invalid index
+        }
+    }
 }
 
 float OverlayInterface::CalculateDistanceToOverlay(const vr::HmdVector3_t& rayOrigin, const vr::HmdVector3_t& rayDirection, vr::VROverlayHandle_t overlayHandle) {
@@ -312,13 +403,10 @@ OverlayInterface::ControllerPosition OverlayInterface::GetGrippingControllerPosi
 
         // Check if the controller is valid
         if (controllerPose.bPoseIsValid) {
-            // Convert the controller's pose to a matrix
-            vr::HmdMatrix34_t controllerMatrix = controllerPose.mDeviceToAbsoluteTracking;
-
-            // Extract the position from the matrix
-            result.position.v[0] = controllerMatrix.m[0][3];
-            result.position.v[1] = controllerMatrix.m[1][3];
-            result.position.v[2] = controllerMatrix.m[2][3];
+            // Directly extract the position from the pose
+            result.position.v[0] = controllerPose.mDeviceToAbsoluteTracking.m[0][3];
+            result.position.v[1] = controllerPose.mDeviceToAbsoluteTracking.m[1][3];
+            result.position.v[2] = controllerPose.mDeviceToAbsoluteTracking.m[2][3];
 
             result.isGripping = true;
         }
@@ -327,6 +415,28 @@ OverlayInterface::ControllerPosition OverlayInterface::GetGrippingControllerPosi
     return result;
 }
 
+bool OverlayInterface::IsControllerCloseToOverlay(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex) {
+    vr::HmdVector3_t controllerPosition = GetGrippingControllerPosition(pVRSystem, overlayHandle, controllerIndex).position;
+    vr::HmdMatrix34_t overlayMatrix;
+    vr::ETrackingUniverseOrigin trackingUniverseOrigin = vr::TrackingUniverseStanding;
+    vr::EVROverlayError error = vr::VROverlay()->GetOverlayTransformAbsolute(overlayHandle, &trackingUniverseOrigin, &overlayMatrix);
+    if (error != vr::VROverlayError_None) {
+        std::cerr << "Error getting overlay transform: " << error << std::endl;
+        return false; // Return false if there's an error
+    }
+
+    // Calculate the overlay's center
+    vr::HmdVector3_t overlayCenter = {overlayMatrix.m[0][3], overlayMatrix.m[1][3], overlayMatrix.m[2][3]};
+
+    // Calculate the distance from the controller to the overlay
+    float distance = static_cast<float>(std::sqrt(std::pow(controllerPosition.v[0] - overlayCenter.v[0], 2) + std::pow(controllerPosition.v[1] - overlayCenter.v[1], 2) + std::pow(controllerPosition.v[2] - overlayCenter.v[2], 2)));
+
+    // Check if the distance is within the threshold for a successful grab
+    float threshold = 0.8f; // Set the threshold value
+    return distance < threshold;
+}
+
+#pragma endregion overlay movement
 
 void OverlayInterface::Shutdown()
 {
