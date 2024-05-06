@@ -105,7 +105,7 @@ vr::VROverlayHandle_t OverlayInterface::Init()
         transformMatrix.m[0][0] = 1.0f; transformMatrix.m[0][1] = 0.0f; transformMatrix.m[0][2] = 0.0f; transformMatrix.m[0][3] = 0.0f;
         transformMatrix.m[1][0] = 0.0f; transformMatrix.m[1][1] = 1.0f; transformMatrix.m[1][2] = 0.0f; transformMatrix.m[1][3] = 0.0f;
         transformMatrix.m[2][0] = 0.0f; transformMatrix.m[2][1] = 0.0f; transformMatrix.m[2][2] = 1.0f; transformMatrix.m[2][3] = 0.0f;
-        vr::VROverlay()->SetOverlayTransformTrackedDeviceRelative(m_ulOverlayHandle, vr::TrackedControllerRole_LeftHand, &transformMatrix);
+        vr::VROverlay()->SetOverlayTransformAbsolute(m_ulOverlayHandle, vr::TrackingUniverseStanding, &transformMatrix);
         vr::VROverlay()->ShowOverlay(m_ulOverlayHandle);
 	}
 	return m_ulOverlayHandle;
@@ -135,14 +135,23 @@ vr::HmdMatrix34_t OverlayInterface::GetOverlayPos(VROverlayHandle_t m_ulOverlayH
 void OverlayInterface::SetOverlayPositionToController(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex) {
     vr::HmdVector3_t controllerPosition = GetGrippingControllerPosition(pVRSystem, overlayHandle, controllerIndex).position;
 
+    // Define the step size for moving the overlay
+    float stepSize = 0.01f; // Adjust this value as needed
+
+    // Calculate the new position for the overlay
+    vr::HmdVector3_t newOverlayPosition;
+    newOverlayPosition.v[0] = controllerPosition.v[0] + stepSize; // Adjust the X position
+    newOverlayPosition.v[1] = controllerPosition.v[1]; // Keep the Y position the same
+    newOverlayPosition.v[2] = controllerPosition.v[2]; // Keep the Z position the same
+
     // Create a transformation matrix for the new position
     vr::HmdMatrix34_t transformMatrix;
-    transformMatrix.m[0][0] = 1.0f; transformMatrix.m[0][1] = 0.0f; transformMatrix.m[0][2] = 0.0f; transformMatrix.m[0][3] = controllerPosition.v[0];
-    transformMatrix.m[1][0] = 0.0f; transformMatrix.m[1][1] = 1.0f; transformMatrix.m[1][2] = 0.0f; transformMatrix.m[1][3] = controllerPosition.v[1];
-    transformMatrix.m[2][0] = 0.0f; transformMatrix.m[2][1] = 0.0f; transformMatrix.m[2][2] = 1.0f; transformMatrix.m[2][3] = controllerPosition.v[2];
+    transformMatrix.m[0][0] = 1.0f; transformMatrix.m[0][1] = 0.0f; transformMatrix.m[0][2] = 0.0f; transformMatrix.m[0][3] = newOverlayPosition.v[0];
+    transformMatrix.m[1][0] = 0.0f; transformMatrix.m[1][1] = 1.0f; transformMatrix.m[1][2] = 0.0f; transformMatrix.m[1][3] = newOverlayPosition.v[1];
+    transformMatrix.m[2][0] = 0.0f; transformMatrix.m[2][1] = 0.0f; transformMatrix.m[2][2] = 1.0f; transformMatrix.m[2][3] = newOverlayPosition.v[2];
 
-    // Set the overlay's position relative to the controller
-    vr::VROverlay()->SetOverlayTransformTrackedDeviceRelative(overlayHandle, controllerIndex, &transformMatrix);
+    // Set the overlay's position to the new position
+    vr::VROverlay()->SetOverlayTransformAbsolute(overlayHandle, vr::TrackingUniverseStanding, &transformMatrix);
 }
 
 void OverlayInterface::UpdateButtonState(vr::IVRSystem* pVRSystem, vr::TrackedDeviceIndex_t controllerIndex, vr::EVRButtonId buttonId) {
@@ -224,7 +233,58 @@ bool OverlayInterface::IsGrippingOverlay(vr::IVRSystem* pVRSystem, vr::VROverlay
     vr::VROverlayIntersectionResults_t results;
 
     // If the intersection was successful, the controller is gripping the overlay
-    return vr::VROverlay()->ComputeOverlayIntersection(overlayHandle, &params, &results);
+    bool isIntersecting = vr::VROverlay()->ComputeOverlayIntersection(overlayHandle, &params, &results);
+    if (!isIntersecting) {
+        // Calculate the distance from the controller's ray to the overlay
+        float distanceToOverlay = CalculateDistanceToOverlay(rayOrigin, rayDirection, overlayHandle);
+        std::cout << "Missed overlay by: " << distanceToOverlay << " units" << std::endl;
+
+        // Check if the distance is within the threshold for a successful grab
+        float threshold = 0.8f; // Set the threshold value
+        if (distanceToOverlay < threshold) {
+            return true; // Consider it a successful grab if the distance is less than the threshold
+        }
+    }
+
+    return isIntersecting;
+}
+
+float OverlayInterface::CalculateDistanceToOverlay(const vr::HmdVector3_t& rayOrigin, const vr::HmdVector3_t& rayDirection, vr::VROverlayHandle_t overlayHandle) {
+
+    if (overlayHandle != vr::k_ulOverlayHandleInvalid) {
+    vr::HmdMatrix34_t overlayMatrix;
+    vr::ETrackingUniverseOrigin trackingUniverseOrigin = vr::TrackingUniverseStanding;
+    vr::EVROverlayError error = vr::VROverlay()->GetOverlayTransformAbsolute(overlayHandle, &trackingUniverseOrigin, &overlayMatrix);
+    if (error != vr::VROverlayError_None) {
+        std::cerr << "Error getting overlay transform: " << error << std::endl;
+        return -1.0f; // Return an error value
+    }
+        // Proceed with the rest of your code to calculate the distance
+    } else {
+        std::cerr << "Invalid overlay handle" << std::endl;
+        return -1.0f; // Return an error value
+    }
+
+    // Assuming the overlay is flat and oriented along the Z-axis
+    vr::HmdVector3_t overlayNormal = {0, 0, 1}; // Normal vector of the overlay (assuming it's flat and oriented along the Z-axis)
+
+    // Get the overlay's transformation matrix
+    vr::HmdMatrix34_t overlayMatrix;
+    vr::ETrackingUniverseOrigin trackingUniverseOrigin = vr::TrackingUniverseStanding;
+    vr::EVROverlayError error = vr::VROverlay()->GetOverlayTransformAbsolute(overlayHandle, &trackingUniverseOrigin, &overlayMatrix);
+    if (error != vr::VROverlayError_None) {
+        std::cerr << "Error getting overlay transform: " << error << std::endl;
+        return -1.0f; // Return an error value
+    }
+
+    // Calculate the overlay's center
+    vr::HmdVector3_t overlayCenter = {overlayMatrix.m[0][3], overlayMatrix.m[1][3], overlayMatrix.m[2][3]}; // Corrected calculation
+
+    // Calculate the distance from the ray origin to the overlay
+    vr::HmdVector3_t pointToPlane = {overlayCenter.v[0] - rayOrigin.v[0], overlayCenter.v[1] - rayOrigin.v[1], overlayCenter.v[2] - rayOrigin.v[2]};
+    float distance = std::abs(pointToPlane.v[0] * overlayNormal.v[0] + pointToPlane.v[1] * overlayNormal.v[1] + pointToPlane.v[2] * overlayNormal.v[2]) / std::sqrt(overlayNormal.v[0] * overlayNormal.v[0] + overlayNormal.v[1] * overlayNormal.v[1] + overlayNormal.v[2] * overlayNormal.v[2]);
+
+    return distance;
 }
 
 std::map<int, vr::TrackedDeviceIndex_t> OverlayInterface::GetControllerIndexes(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle) {

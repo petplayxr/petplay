@@ -24,6 +24,8 @@ public:
         bool wasPressed;
     };
 
+    float CalculateDistanceToOverlay(const vr::HmdVector3_t& rayOrigin, const vr::HmdVector3_t& rayDirection, vr::VROverlayHandle_t overlayHandle);
+
     struct ControllerPosition {
         bool isGripping;
         vr::HmdVector3_t position;
