@@ -3,12 +3,13 @@ import { actorManager } from "../actorsystem/actorManager.ts";
 import { ActorP2P } from "../actorsystem/actorP2P.ts";
 import { ReceivePayload } from "../main.ts";
 
-//why should we extend networked version of actor instead of normal actor?
+
 export class ChatApp extends ActorP2P<ChatApp> {
   private name: string;
   private messages: string[] = [];
   private names: Record<string, string> = {};
 
+  // Constructor for the ChatApp actor.
   constructor(publicIp: string, name: string) {
     super("chat", publicIp);
     this.name = name;
