@@ -31,7 +31,16 @@
                 "--allow-all"
             ],
             "attachSimplePort": 9229
+        },
+        
+    ],
+    "compounds": [
+        {
+            "name": "DebugAll",
+            "configurations": [
+                "DebugPETPLAYcpp",
+                "DEBUGFYOUNET"
+            ]
         }
-
     ]
 }

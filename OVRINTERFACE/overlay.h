@@ -50,9 +50,10 @@ public:
     vr::HmdMatrix34_t GetOverlayPos(vr::VROverlayHandle_t m_ulOverlayHandle, vr::HmdVector2_t *m_vOverlayPosition);
     void SetOverlayPositionToController(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex);
 
-    vr::VROverlayHandle_t Init();
+    vr::VROverlayHandle_t CreateInteractiveOverlay();
+    vr::VROverlayHandle_t CreateAlignmentOverlay();
 
-    vr::HmdMatrix34_t GetOverlayPositionRelativeToHMD(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle);
+    vr::HmdMatrix34_t GetOverlayPositionAbsolute(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle);
 
     // Function prototype for GetHMDPositionRelativeToTrackingUniverseOrigin
     vr::HmdVector3_t GetHMDPositionRelativeToTrackingUniverseOrigin(vr::IVRSystem* pVRSystem);
