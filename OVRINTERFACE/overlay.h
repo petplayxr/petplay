@@ -49,8 +49,9 @@ public:
     
     vr::HmdMatrix34_t GetOverlayPos(vr::VROverlayHandle_t m_ulOverlayHandle, vr::HmdVector2_t *m_vOverlayPosition);
     void SetOverlayPositionToController(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex);
+    void SetOverlayPosition(vr::VROverlayHandle_t overlayHandle, vr::HmdMatrix34_t position);
 
-    vr::VROverlayHandle_t CreateInteractiveOverlay();
+    vr::VROverlayHandle_t CreateInteractiveOverlay(const std::string& overlayName);
     vr::VROverlayHandle_t CreateAlignmentOverlay();
 
     vr::HmdMatrix34_t GetOverlayPositionAbsolute(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle);

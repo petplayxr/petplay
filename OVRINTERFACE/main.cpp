@@ -6,6 +6,7 @@
 #include <overlay.h>
 #include <windows.h>
 #include <ws2tcpip.h>
+#include <sstream>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -23,7 +24,7 @@ void sendPositions(SOCKET socket, const std::string& serializedData) {
 }
 
 // Function to receive data from the client
-void receiveData(SOCKET socket) {
+void receiveData(SOCKET socket, OverlayInterface& overlayInterface, vr::VROverlayHandle_t overlayHandle) {
     char recvbuf[512];
     int recvbuflen = 512;
     int iResult;
@@ -31,14 +32,46 @@ void receiveData(SOCKET socket) {
     iResult = recv(socket, recvbuf, recvbuflen, 0);
     if (iResult > 0) {
         recvbuf[iResult] = '\0'; // Null-terminate the buffer to make it a valid string
-        //cout << "Received data: " << recvbuf << endl;
+
+        // Parse the received data
+        // Assuming data is in the format: "m0 m1 m2 m3 m4 m5 ... m11"
+        std::istringstream iss(recvbuf);
+        std::vector<float> matrixElements;
+        float num;
+        int count = 0;
+        while (iss >> num && count < 12) {  // Read only the first 12 elements
+            matrixElements.push_back(num);
+            count++;
+        }
+
+        if (matrixElements.size() == 12) { // Ensure we have exactly 12 elements (3x4 matrix)
+            vr::HmdMatrix34_t transformMatrix;
+            transformMatrix.m[0][0] = matrixElements[0];
+            transformMatrix.m[0][1] = matrixElements[1];
+            transformMatrix.m[0][2] = matrixElements[2];
+            transformMatrix.m[0][3] = matrixElements[3];
+            transformMatrix.m[1][0] = matrixElements[4];
+            transformMatrix.m[1][1] = matrixElements[5];
+            transformMatrix.m[1][2] = matrixElements[6];
+            transformMatrix.m[1][3] = matrixElements[7];
+            transformMatrix.m[2][0] = matrixElements[8];
+            transformMatrix.m[2][1] = matrixElements[9];
+            transformMatrix.m[2][2] = matrixElements[10];
+            transformMatrix.m[2][3] = matrixElements[11];
+                
+
+            // Update overlay position
+            overlayInterface.SetOverlayPosition(overlayHandle, transformMatrix);
+            //cout << "Overlay position updated" << endl;
+        } else {
+            cerr << "Received invalid data format for matrix." << endl;
+        }
     } else if (iResult == 0) {
         cout << "Connection closing..." << endl;
     } else {
         cerr << "recv failed with error: " << WSAGetLastError() << endl;
     }
 }
-
 int main() {
 
 
@@ -119,7 +152,7 @@ int main() {
 
     #pragma region create interactive overlay
     OverlayInterface overlayInterface;
-    vr::VROverlayHandle_t m_ulOverlayHandle = overlayInterface.CreateInteractiveOverlay();
+    vr::VROverlayHandle_t m_ulOverlayHandle = overlayInterface.CreateInteractiveOverlay("self");
     if (m_ulOverlayHandle) {
         cout << "Overlay initialized" << endl;
     } else {
@@ -142,6 +175,22 @@ int main() {
     vr::HmdVector2_t overlayPosition2 = {0.0f, 0.0f}; // Initialize overlay position
     #pragma endregion
 
+    #pragma region create P2 overlay
+
+    OverlayInterface overlayInterfaceNET;
+    vr::VROverlayHandle_t m_ulOverlayHandleNET = overlayInterfaceNET.CreateInteractiveOverlay("p2");
+    if (m_ulOverlayHandleNET) {
+        cout << "P2 Overlay initialized" << endl;
+    } else {
+        cout << "Overlay initialization failed" << endl;
+        return 1; // Exit if overlay initialization fails
+    }
+
+    vr::HmdVector2_t overlayPosition3 = {0.0f, 0.0f}; // Initialize overlay position
+
+    #pragma endregion
+
+
     while (true) {
 
         #pragma region overlay
@@ -156,7 +205,7 @@ int main() {
 
         //cout << "Overlay position: " << position.v[0] << ", " << position.v[1] << ", " << position.v[2] << endl;
         // Add a delay or condition to break the loop if needed
-        Sleep(5);
+        Sleep(1);
 
         
         #pragma endregion
@@ -174,12 +223,12 @@ int main() {
         // Send the serialized data
         //cout << "Sending serialized data: " << serializedPositions << endl;
         sendPositions(ClientSocket, serializedPositions);
-        receiveData(ClientSocket);
+        receiveData(ClientSocket, overlayInterfaceNET, m_ulOverlayHandleNET);
         #pragma endregion
 
         
         // Add a delay or condition to break the loop if needed
-        Sleep(100);
+        Sleep(1);
         
 
         

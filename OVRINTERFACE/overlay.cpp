@@ -42,11 +42,11 @@ OverlayInterface::~OverlayInterface()
 
 #pragma endregion
 
-vr::VROverlayHandle_t OverlayInterface::CreateInteractiveOverlay()
+vr::VROverlayHandle_t OverlayInterface::CreateInteractiveOverlay(const std::string& overlayName)
 {
 	bool bSuccess = true;
 
-    m_strName = "systemoverlay";
+    m_strName = overlayName;
 
     bSuccess = ConnectToVRRuntime();
 
@@ -284,12 +284,18 @@ void LogHMDAndControllersPositions(vr::IVRSystem* pVRSystem) {
             vr::HmdVector3_t position = {pose.mDeviceToAbsoluteTracking.m[0][3], pose.mDeviceToAbsoluteTracking.m[1][3], pose.mDeviceToAbsoluteTracking.m[2][3]};
 
             // Log the position with the device type
-            std::cout << deviceType << " Position: (" << position.v[0] << ", " << position.v[1] << ", " << position.v[2] << ")" << std::endl;
+            //std::cout << deviceType << " Position: (" << position.v[0] << ", " << position.v[1] << ", " << position.v[2] << ")" << std::endl;
         }
     }
 }
 
+void OverlayInterface::SetOverlayPosition(vr::VROverlayHandle_t overlayHandle, vr::HmdMatrix34_t overlayPosition) {
 
+    overlayPosition.m[0][3] *= -1;
+
+    // Set the overlay's transform to the controller's transform
+    vr::VROverlay()->SetOverlayTransformAbsolute(overlayHandle, vr::TrackingUniverseStanding, &overlayPosition);
+}
 
 void OverlayInterface::SetOverlayPositionToController(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex) {
     LogHMDAndControllersPositions(pVRSystem); // Log all device positions (for debugging purposes)
