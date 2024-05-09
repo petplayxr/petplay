@@ -18,9 +18,28 @@
         },
         {
             "request": "launch",
-            "name": "DEBUGFYOUNET",
+            "name": "DEBUGFYOUNET1",
             "type": "node",
-            "program": "${workspaceFolder}/FYOUNET/main.ts",
+            "cwd": "${workspaceFolder}/FYOUNET",
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect=0.0.0.0:9228",
+                "--allow-net",
+                "--inspect-wait",
+                "--allow-all",
+                "main.ts",
+                "client1",
+                "8080",
+                "127.0.0.1:8081"
+            ],
+            "attachSimplePort": 9228
+        },
+        {
+            "request": "launch",
+            "name": "DEBUGFYOUNET2",
+            "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET",
             "console": "integratedTerminal",
             "runtimeExecutable": "deno",
@@ -28,7 +47,12 @@
                 "run",
                 "--allow-net",
                 "--inspect-wait",
-                "--allow-all"
+                "--allow-all",
+                "main.ts",
+                "client2",
+                "8081",
+                "127.0.0.1:8080"
+
             ],
             "attachSimplePort": 9229
         },
@@ -38,8 +62,8 @@
         {
             "name": "DebugAll",
             "configurations": [
-                "DebugPETPLAYcpp",
-                "DEBUGFYOUNET"
+                "DEBUGFYOUNET1",
+                "DEBUGFYOUNET2"
             ]
         }
     ]

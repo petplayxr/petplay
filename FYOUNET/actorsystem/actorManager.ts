@@ -35,6 +35,10 @@ export class actorManager extends Actor{
     delete this.actors[uuid as string];
   }
 
+  listactors() {
+    console.log("LISTACTORS:", JSON.stringify(this.actors));
+  }
+
 
   /**
    * Commands an actor to perform an action.

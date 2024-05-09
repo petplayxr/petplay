@@ -17,7 +17,7 @@ export class IPCOVRConnector {
     
         // Retry logic
         const maxRetries = 9000; // Maximum number of retries
-        const retryDelay = 2000; // Delay in milliseconds between retries
+        const retryDelay = 12000; // Delay in milliseconds between retries
     
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {

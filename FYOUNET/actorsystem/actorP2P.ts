@@ -141,7 +141,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
 
   // Synchronizes the peer list among connected peers.
   async h_syncPeers(ctx: actorManager, ips: Record<string, string>) {
-    console.log(Object.keys(ips));
+    console.log("SYNCHRONIZE ACTORS: OBJECT KEYS= " + Object.keys(ips));
     const newPeers = Object.keys(ips).filter(peer => !(peer in ctx.peers || peer === ctx.uuid));
     
     for (const peer of newPeers) {
