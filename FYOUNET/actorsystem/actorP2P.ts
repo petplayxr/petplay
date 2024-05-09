@@ -111,7 +111,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
     for (const peer of Object.keys(ctx.peers)) {
       const conn = ctx.peers[peer];
       if (conn instanceof WebSocketConnection) {
-        const addr = `${peer}:${this.actorid}` as Address<T>;
+        const addr = `${peer}` as Address<T>;
         const message = new Message(addr, type, payload);
         tasks.push(conn.send(message));
       }
