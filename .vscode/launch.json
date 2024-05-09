@@ -44,7 +44,7 @@
                 "main.ts",
                 "client1",
                 "8080",
-                "127.0.0.1:8081",
+                "71.36.126.225:25565",
                 "p1"
             ],
             "postDebugTask": "pause",
@@ -66,6 +66,51 @@
                 "client2",
                 "8081",
                 "127.0.0.1:8080",
+                "p2"
+
+            ],
+            "postDebugTask": "pause",
+            "attachSimplePort": 9229
+        },
+
+        {
+            "request": "launch",
+            "name": "DEBUGINTERNET1",
+            "type": "node",
+            "cwd": "${workspaceFolder}/FYOUNET",
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect=0.0.0.0:9228",
+                "--allow-net",
+                "--inspect-wait",
+                "--allow-all",
+                "TestMultiplayer.ts",
+                "client1",
+                "25565",
+                "71.36.126.225:25565",
+                "p1"
+            ],
+            "postDebugTask": "pause",
+            "attachSimplePort": 9228
+        },
+        {
+            "request": "launch",
+            "name": "DEBUGINTERNET2",
+            "type": "node",
+            "cwd": "${workspaceFolder}/FYOUNET",
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--allow-net",
+                "--inspect-wait",
+                "--allow-all",
+                "TestMultiplayer.ts",
+                "client2",
+                "25565",
+                "185.174.27.213:25565",
                 "p2"
 
             ],
