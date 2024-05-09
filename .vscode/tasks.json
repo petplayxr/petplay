@@ -30,5 +30,10 @@
             },
             "problemMatcher": "$gcc"
         },
+        {
+            "label": "pause",
+            "type": "shell",
+            "command": "read -p 'Press any key to continue...'"
+        }
     ]
 }
