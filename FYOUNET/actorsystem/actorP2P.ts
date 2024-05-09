@@ -51,17 +51,21 @@ class WebSocketConnection implements Connection {
 
 // a networked actor
 export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
+
   private server?: Deno.HttpServer // Optional HTTP server for handling WebSocket connections.
   private publicIp: string // Public IP address of the portal.
+  
 
   constructor(name: string, publicIp: string) {
     super()
-    this.uuid = name
+    this.actorname = name
+    this.actorid
     this.publicIp = publicIp
   }
 
   // Handles adding the portal to the system, setting up the server for WebSocket connections.
   override onAdd(ctx: actorManager) {
+    console.log(`Portal ${this.actorid} added at ${this.publicIp}`)
     const port = this.publicIp.split(":")[1]
     this.server = Deno.serve({ port: parseInt(port) }, req => {
       if (req.headers.get("upgrade") !== "websocket") {
@@ -108,7 +112,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
     for (const peer of Object.keys(ctx.peers)) {
       const conn = ctx.peers[peer];
       if (conn instanceof WebSocketConnection) {
-        const addr = `${peer}:${this.uuid}` as Address<T>;
+        const addr = `${peer}:${this.actorid}` as Address<T>;
         const message = new Message(addr, type, payload);
         tasks.push(conn.send(message));
       }
@@ -120,7 +124,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   // helper Serializes the list of peers and their IPs for sharing.
   serializePeers(ctx: actorManager): Record<string, string> {
     const peers: Record<string, string> = {}
-    peers[ctx.uuid] = this.publicIp
+    peers[ctx.actorid] = this.publicIp
 
     for (const peer of Object.keys(ctx.peers)) {
       const conn = ctx.peers[peer]
@@ -134,7 +138,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   // Handles connecting to a new peer and synchronizing the peer list.
   async h_connect(ctx: actorManager, ip: string) {
     console.log("connecting to", ip);
-    const addr = this.uuid as Address<T>;
+    const addr = this.actorname as Address<T>;
     const message = new Message(addr, "h_syncPeers", this.serializePeers(ctx));
     await WebSocketConnection.create(ip).send(message);
   }
@@ -142,19 +146,19 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   // Synchronizes the peer list among connected peers.
   async h_syncPeers(ctx: actorManager, ips: Record<string, string>) {
     console.log("SYNCHRONIZE ACTORS: OBJECT KEYS= " + Object.keys(ips));
-    const newPeers = Object.keys(ips).filter(peer => !(peer in ctx.peers || peer === ctx.uuid));
+    const newPeers = Object.keys(ips).filter(peer => !(peer in ctx.peers || peer === ctx.actorid));
     
     for (const peer of newPeers) {
       ctx.peers[peer] = WebSocketConnection.create(ips[peer], () => {
         delete ctx.peers[peer];
-        const addr = `${peer}:${this.uuid}` as Address<T>;
+        const addr = `${peer}:${this.actorid}` as Address<T>;
         this.onDisconnect(ctx, addr);
       });
     }
     
     const peers = this.serializePeers(ctx);
     const tasks = newPeers.map(async peer => {
-      const addr = `${peer}:${this.uuid}` as Address<ActorP2P>;
+      const addr = `${peer}:${this.actorid}` as Address<ActorP2P>;
       const message = new Message(addr, "h_syncPeers", peers);
       //deno-lint-ignore no-explicit-any
       await (ctx as any).command(addr, message.type, message.payload);

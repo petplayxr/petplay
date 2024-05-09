@@ -66,7 +66,7 @@ if (import.meta.main) {
   const aOverlay: Address<OverlayActor> = actors.add(new OverlayActor(`127.0.0.1:${port}`, name, ipcport))
 
   //wait 2 seconds
-  await new Promise(resolve => setTimeout(resolve, 2000))
+  await new Promise(resolve => setTimeout(resolve, 12000))
 
   actors.command(aOverlay, "h_connect", ip2)
 

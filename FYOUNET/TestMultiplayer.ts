@@ -56,7 +56,7 @@ if (import.meta.main) {
   console.log(`Your IP is ${ip}`)
 
   //create actorManager
-  const actors = new actorManager()
+  const actorBoss = new actorManager()
 
 
 
@@ -76,14 +76,14 @@ if (import.meta.main) {
   //#region chatapp
   
 
-  const aChatApp : Address<ChatApp> = actors.add(new ChatApp(`127.0.0.1:${port}`, name))
+  const aChatApp : Address<ChatApp> = actorBoss.add(new ChatApp(`${ip}`, name, "chat"))
 
 
-  actors.command(aChatApp, "h_connect", ip2)
+  actorBoss.command(aChatApp, "h_connect", ip2)
 
   //#endregion
 
-  actors.listactors()
+  actorBoss.listactors()
 
   /* while (true) {
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -97,12 +97,13 @@ if (import.meta.main) {
 
     if (msg.startsWith("/")) {
       console.log("Command")
+      actorBoss.command(aChatApp, "h_connect", ip2)
     } else {
       // clear line
       await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"))
 
       //tell chat app to broadcast message
-      actors.command(aChatApp, "h_broadcast", msg)
+      actorBoss.command(aChatApp, "h_broadcast", msg)
       //actors.command(aOverlay, "h_broadcast", null)
     }
   }

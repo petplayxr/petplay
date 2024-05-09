@@ -88,8 +88,8 @@
                 "--allow-all",
                 "TestMultiplayer.ts",
                 "client1",
-                "25565",
-                "71.36.126.225:25565",
+                "25567",
+                "192.168.1.129:25565",
                 "p1"
             ],
             "postDebugTask": "pause",

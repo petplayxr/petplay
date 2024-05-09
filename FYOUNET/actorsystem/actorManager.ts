@@ -1,9 +1,14 @@
-import { Actor, Connection, Address, ActorMessage, ActorPayload } from "./types.ts";
+import { Actor, Connection, Address, ActorMessage, ActorPayload, ActorId } from "./types.ts";
 import { Message } from "./message.ts";
 
 //actor manager actor
-export class actorManager extends Actor{
+export class actorManager extends Actor {
   private actors: Record<string, Actor> = {};
+  
+  constructor() {
+    super()
+    this.actorname = "actorManager";
+  }
 
   //uuid: string = crypto.randomUUID();
   peers: Record<string, Connection> = {};
@@ -15,13 +20,13 @@ export class actorManager extends Actor{
    * @returns The address of the added actor.
    */
   add<T extends Actor>(actor: T): Address<T> {
-    this.actors[actor.uuid] = actor;
+    this.actors[actor.actorid] = actor;
     actor.onAdd(this);
     return this.addressOf(actor);
   }
 
   addressOf<T extends Actor>(actor: T): Address<T> {
-    return `${this.uuid}:${actor.uuid}` as Address<T>;
+    return `${actor.actorid}` as Address<T>;
   }
 
   remove(addr: Address<unknown>): void {
@@ -51,16 +56,17 @@ export class actorManager extends Actor{
     addr: Address<T>,
     type: K,
     payload: ActorPayload<T, K>
-    ): Promise<void> {
+  ): Promise<void> {
 
-    const split = (addr as string).split(":");
 
-    const message = new Message(addr, type, payload);
-    
-
-    //
-    if (split.length === 1) {
-      // deno-lint-ignore no-explicit-any
+    function isLocal(pet: ActorId | Address<T>): pet is ActorId {
+      return (<ActorId>pet) !== undefined;
+    }
+    function isRemote(pet: ActorId | Address<T>): pet is Address<T> {
+      return (<Address<T>>pet) !== undefined;
+    }
+    if (isLocal(addr)) {
+      console.log("local")
       const actor = this.actors[addr as string] as any;
       if (actor === undefined) {
         console.error(`Actor with UUID ${addr as string} not found.`);
@@ -69,12 +75,25 @@ export class actorManager extends Actor{
       }
       return;
     }
+    else if (isRemote(addr)) {
+      console.log("remote")
+
+    }
+
+
+    const message = new Message(addr, type, payload);
+    console.log(message)
+
+    //relay actor message to remote actor
+    if (split.length === 1) {
+
+    }
 
     const peer = split[0];
     const uuid = split[1];
 
-    //
-    if (peer === this.uuid) {
+    //relay actor message to local actor
+    if (peer === this.actorid) {
       // deno-lint-ignore no-explicit-any
       const actor = this.actors[uuid] as any;
       if (actor === undefined) {
@@ -85,7 +104,7 @@ export class actorManager extends Actor{
       return;
     }
 
-    //
+    //???
     const conn = this.peers[peer];
     if (conn === undefined) {
       console.error(`Peer with UUID ${peer} not found.`);
