@@ -4,13 +4,14 @@ import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
 
 //actor manager actor
 export class actorManager extends Actor {
-  private actors: Record<string, Actor> = {};
+  public actors: Record<string, Actor> = {};
   private localip: string;
 
   constructor(localip: string) {
     super()
     this.localip = localip;
     this.actorname = "actorManager";
+    //this.actors[this.actorid] = this;
   }
 
   //uuid: string = crypto.randomUUID();
@@ -44,7 +45,8 @@ export class actorManager extends Actor {
   }
 
   listactors() {
-    console.log("LISTACTORS:", JSON.stringify(this.actors));
+    console.log("LISTACTORS:");
+    //console.log("LISTACTORS:", JSON.stringify(this.actors));
   }
 
   getlocalActor(actorname: string) {
@@ -62,12 +64,12 @@ export class actorManager extends Actor {
         return false;
       }
     });
-  
+
     // Check if the actorname matches
     if (localActor && localActor.actorname === actorname) {
       return localActor;
     }
-  
+
     // If no actor matches the criteria, return undefined
     return undefined;
   }
@@ -85,7 +87,7 @@ export class actorManager extends Actor {
     payload: ActorPayload<T, K>
   ): Promise<void> {
 
- 
+
     if (isActorId(addr)) {
       console.log("hasactorid, lets find actor")
       if (isRemoteActorId(addr)) {
@@ -94,28 +96,42 @@ export class actorManager extends Actor {
         const message = new Message(addr, type, payload);
 
         const split = (addr as string).split("@");
-        const peer = split[0];
-        const uuid = split[1];
-        const conn = this.peers[peer];
+        const actorid = split[0];
+        const Fip = split[1];
+        const split2 = Fip.split(":");
+        const ip = split2[0];
+        if (ip === this.localip) {
+          const actor = this.actors[actorid as string] as any;
+          if (actor === undefined) {
+            console.error(`Actor with UUID ${addr as string} not found.`);
+          } else {
+            await actor[type]?.(this, payload);
+          }
+          return;
+
+        }
+
+
+        const conn = this.peers[actorid];
         if (conn === undefined) {
           console.error(`Peer with UUID ${peer} not found.`);
         } else {
           await conn.send(message);
         }
-
+        return;
 
 
       }
       else {
 
-      const actor = this.actors[addr as string] as any;
-      if (actor === undefined) {
-        console.error(`Actor with UUID ${addr as string} not found.`);
-      } else {
-        await actor[type]?.(this, payload);
+        const actor = this.actors[addr as string] as any;
+        if (actor === undefined) {
+          console.error(`Actor with UUID ${addr as string} not found.`);
+        } else {
+          await actor[type]?.(this, payload);
+        }
+        return;
       }
-      return;
-    }
 
     }
     else if (isActorName(addr)) {
@@ -130,7 +146,7 @@ export class actorManager extends Actor {
     }
 
 
-    
+
 
     //
     /* if (peer === this.uuid) {
@@ -145,6 +161,6 @@ export class actorManager extends Actor {
     } */
 
     //
-    
+
   }
 }

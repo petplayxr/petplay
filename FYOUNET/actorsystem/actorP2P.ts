@@ -55,7 +55,6 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   private server?: Deno.HttpServer // Optional HTTP server for handling WebSocket connections.
   private publicIp: string // Public IP address of the portal.
 
-
   constructor(name: string, publicIp: string) {
     super()
     this.actorname = name
@@ -124,13 +123,18 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   // helper Serializes the list of peers and their IPs for sharing.
   serializePeers(ctx: actorManager): Record<string, string> {
     const peers: Record<string, string> = {}
-    peers[ctx.actorid] = this.publicIp
+    //public actors: Record<string, Actor> = {};
+    for (const actorId in ctx.actors) {
 
-    for (const peer of Object.keys(ctx.peers)) {
-      const conn = ctx.peers[peer]
-      if (conn instanceof WebSocketConnection) {
-        peers[peer] = conn.ip
+      const actor = ctx.actors[actorId];
+      peers[actor.actorid] = this.publicIp
+      for (const peer of Object.keys(ctx.peers)) {
+        const conn = ctx.peers[peer]
+        if (conn instanceof WebSocketConnection) {
+          peers[peer] = conn.ip
+        }
       }
+      
     }
     return peers
   }
