@@ -1,4 +1,4 @@
-import { Actor, Connection, Address, ActorMessage, ActorPayload, isActorId, isActorName } from "./types.ts";
+import { Actor, Connection, Address, ActorMessage, ActorPayload, isActorId, isActorName, isRemoteActorId } from "./types.ts";
 import { Message } from "./message.ts";
 import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
 
@@ -87,7 +87,27 @@ export class actorManager extends Actor {
 
  
     if (isActorId(addr)) {
-      console.log("local")
+      console.log("hasactorid, lets find actor")
+      if (isRemoteActorId(addr)) {
+        console.log("remoteactor")
+
+        const message = new Message(addr, type, payload);
+
+        const split = (addr as string).split("@");
+        const peer = split[0];
+        const uuid = split[1];
+        const conn = this.peers[peer];
+        if (conn === undefined) {
+          console.error(`Peer with UUID ${peer} not found.`);
+        } else {
+          await conn.send(message);
+        }
+
+
+
+      }
+      else {
+
       const actor = this.actors[addr as string] as any;
       if (actor === undefined) {
         console.error(`Actor with UUID ${addr as string} not found.`);
@@ -95,6 +115,8 @@ export class actorManager extends Actor {
         await actor[type]?.(this, payload);
       }
       return;
+    }
+
     }
     else if (isActorName(addr)) {
       console.log("address has no UUID, assume local actor. insecure true")
@@ -108,19 +130,10 @@ export class actorManager extends Actor {
     }
 
 
-    /* const message = new Message(addr, type, payload);
-    console.log(message) */
+    
 
-    //relay actor message to remote actor
-    /* if (split.length === 1) {
-
-    } */
-
-    /* const peer = split[0];
-    const uuid = split[1];
-
-    //relay actor message to local actor
-    if (peer === this.actorid) {
+    //
+    /* if (peer === this.uuid) {
       // deno-lint-ignore no-explicit-any
       const actor = this.actors[uuid] as any;
       if (actor === undefined) {
@@ -131,12 +144,7 @@ export class actorManager extends Actor {
       return;
     } */
 
-    //???
-    /* const conn = this.peers[peer];
-    if (conn === undefined) {
-      console.error(`Peer with UUID ${peer} not found.`);
-    } else {
-      await conn.send(message);
-    } */
+    //
+    
   }
 }

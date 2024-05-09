@@ -144,30 +144,53 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   }
 
   // Synchronizes the peer list among connected peers.
-  async h_syncPeers(ctx: actorManager, ips: Record<string, string>) {
-    console.log("SYNCHRONIZE ACTORS: OBJECT KEYS= " + Object.keys(ips));
+  async h_syncPeers(ctx: actorManager, ip: Record<string, string>) {
+    console.log("SYNCHRONIZE ACTORS: OBJECT KEYS= " + Object.keys(ip));
 
     //"actorManager:3a5a7a31-8a86-4dff-a3df-e4c43cdf0ae5" : "185.174.27.213:25565"
-    const newPeers = Object.keys(ips).filter(peer => {
+    const newPeers = Object.keys(ip).map(peer => {
       // Check if the peer's IP address is already in ctx.peers or matches the current actor's IP address.
-      let peerFullIp = ips[peer];
-
-
-
-      return peerFullIp 
-    });
-
+      if (ctx.peers[peer] || ip[peer] === this.publicIp) {
+        return
+      }
+      const peerFullIp = ip[peer];
+      // Return the peer's IP address directly, instead of null.
+      return { [peer]: peerFullIp };
+    }).filter(Boolean) as { [key: string]: string }[]; // Assert the type here
+  
     for (const peer of newPeers) {
-      ctx.peers[peer] = WebSocketConnection.create(ips[peer], () => {
-        delete ctx.peers[peer];
+      console.log(`Attempting to open connection to peer: ${peer}`);
+      let actorid = null;
+      let ip2 = null;
+
+
+      for (const [key, value] of Object.entries(peer)) {
+        actorid = key;
+        console.log(actorid);
+        ip2 = value;
+        console.log(ip2);
+      }
+      console.log(ip[actorid]);
+
+      ctx.peers[actorid] = WebSocketConnection.create(ip[actorid], () => {
+        delete ctx.peers[actorid];
         const addr = `${peer}:${this.actorid}` as Address<T>;
         this.onDisconnect(ctx, addr);
       });
     }
 
     const peers = this.serializePeers(ctx);
+    //send peers back to all peers?
     const tasks = newPeers.map(async peer => {
-      const addr = `${peer}:${this.actorid}` as Address<ActorP2P>;
+      console.log("peer:");
+      console.log(peer);
+      let addr = null
+      for (const [key, value] of Object.entries(peer)) {
+        addr = `${key}@${value}` as Address<ActorP2P>;
+        console.log(addr);
+
+      }
+      
       const message = new Message(addr, "h_syncPeers", peers);
       //deno-lint-ignore no-explicit-any
       await (ctx as any).command(addr, message.type, message.payload);

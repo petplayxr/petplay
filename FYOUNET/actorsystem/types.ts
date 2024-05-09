@@ -13,6 +13,10 @@ export function isActorId(value: string): value is ActorId {
   return value.includes(":");
 }
 
+export function isRemoteActorId(value: string): value is Address<any> {
+  return value.includes("@");
+}
+
 export function isActorName(value: string): value is ActorName {
   return !value.includes(":");
 }
