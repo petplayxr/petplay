@@ -34,7 +34,7 @@ class WebSocketConnection implements Connection {
     if (this.sock.readyState === this.sock.OPEN) {
       this.sock.send(message.serialize());
       return Promise.resolve()
-    } 
+    }
 
     // If the socket is not open, wait for it to open before sending the message.
     else {
@@ -54,7 +54,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
 
   private server?: Deno.HttpServer // Optional HTTP server for handling WebSocket connections.
   private publicIp: string // Public IP address of the portal.
-  
+
 
   constructor(name: string, publicIp: string) {
     super()
@@ -117,7 +117,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
         tasks.push(conn.send(message));
       }
     }
-    
+
     await Promise.all(tasks)
   }
 
@@ -146,14 +146,17 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   // Synchronizes the peer list among connected peers.
   async h_syncPeers(ctx: actorManager, ips: Record<string, string>) {
     console.log("SYNCHRONIZE ACTORS: OBJECT KEYS= " + Object.keys(ips));
-    
+
     //"actorManager:3a5a7a31-8a86-4dff-a3df-e4c43cdf0ae5" : "185.174.27.213:25565"
     const newPeers = Object.keys(ips).filter(peer => {
       // Check if the peer's IP address is already in ctx.peers or matches the current actor's IP address.
-      const peerIp = ips[peer];
-      return!(peerIp in ctx.peers || peerIp === this.publicIp);
+      let peerFullIp = ips[peer];
+
+
+
+      return peerFullIp 
     });
-    
+
     for (const peer of newPeers) {
       ctx.peers[peer] = WebSocketConnection.create(ips[peer], () => {
         delete ctx.peers[peer];
@@ -161,7 +164,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
         this.onDisconnect(ctx, addr);
       });
     }
-    
+
     const peers = this.serializePeers(ctx);
     const tasks = newPeers.map(async peer => {
       const addr = `${peer}:${this.actorid}` as Address<ActorP2P>;

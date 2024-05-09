@@ -33,9 +33,9 @@ if (import.meta.main) {
 
   const name = Deno.args[0]
 
-  const port = Deno.args[1]
+  const ownip = Deno.args[1]
 
-  const ip2 = Deno.args[2]
+  const friendip = Deno.args[2]
 
   const mode = Deno.args[3]
 
@@ -52,10 +52,11 @@ if (import.meta.main) {
   }
 
   //username and ip
-  const localip = await getIP()
+  
 
-
-  const fullip = `${localip}:${port}`
+  const fullip = ownip
+  const localip = ownip.split(":")[0]
+  //const fullip = `${localip}:${ownip}`
   
   console.log(`Your IP is ${fullip}`)
 
@@ -83,7 +84,7 @@ if (import.meta.main) {
   const aChatApp : Address<ChatApp> = actorBoss.add(new ChatApp(`${fullip}`, name, "chat"))
 
 
-  actorBoss.command(aChatApp, "h_connect", ip2)
+  actorBoss.command(aChatApp, "h_connect", friendip)
 
   //#endregion
 
@@ -101,7 +102,7 @@ if (import.meta.main) {
 
     if (msg.startsWith("/")) {
       console.log("Command")
-      actorBoss.command(aChatApp, "h_connect", ip2)
+      actorBoss.command(aChatApp, "h_connect", friendip)
     } else {
       // clear line
       await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"))
