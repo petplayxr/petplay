@@ -1,12 +1,15 @@
-import { Actor, Connection, Address, ActorMessage, ActorPayload, ActorId } from "./types.ts";
+import { Actor, Connection, Address, ActorMessage, ActorPayload, isActorId, isActorName } from "./types.ts";
 import { Message } from "./message.ts";
+import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
 
 //actor manager actor
 export class actorManager extends Actor {
   private actors: Record<string, Actor> = {};
-  
-  constructor() {
+  private localip: string;
+
+  constructor(localip: string) {
     super()
+    this.localip = localip;
     this.actorname = "actorManager";
   }
 
@@ -44,6 +47,30 @@ export class actorManager extends Actor {
     console.log("LISTACTORS:", JSON.stringify(this.actors));
   }
 
+  getlocalActor(actorname: string) {
+    const myip = this.localip
+    const localActor = Object.values(this.actors).find(actor => {
+      // Check if the actor has a publicIp property
+      if (actor.publicIp) {
+        // Assuming publicIp is in the format "ip:port"
+        const [ip, port] = actor.publicIp.split(':');
+        // Compare only the port part with myip
+        return ip === myip;
+      } else {
+        // If the actor does not have a publicIp, you might want to skip the comparison
+        // or handle it differently based on your application's logic
+        return false;
+      }
+    });
+  
+    // Check if the actorname matches
+    if (localActor && localActor.actorname === actorname) {
+      return localActor;
+    }
+  
+    // If no actor matches the criteria, return undefined
+    return undefined;
+  }
 
   /**
    * Commands an actor to perform an action.
@@ -58,14 +85,8 @@ export class actorManager extends Actor {
     payload: ActorPayload<T, K>
   ): Promise<void> {
 
-
-    function isLocal(pet: ActorId | Address<T>): pet is ActorId {
-      return (<ActorId>pet) !== undefined;
-    }
-    function isRemote(pet: ActorId | Address<T>): pet is Address<T> {
-      return (<Address<T>>pet) !== undefined;
-    }
-    if (isLocal(addr)) {
+ 
+    if (isActorId(addr)) {
       console.log("local")
       const actor = this.actors[addr as string] as any;
       if (actor === undefined) {
@@ -75,21 +96,27 @@ export class actorManager extends Actor {
       }
       return;
     }
-    else if (isRemote(addr)) {
-      console.log("remote")
-
+    else if (isActorName(addr)) {
+      console.log("address has no UUID, assume local actor. insecure true")
+      const actor = this.getlocalActor(addr as string) as any;
+      if (actor === undefined) {
+        console.error(`Actor with name ${addr as string} not found.`);
+      } else {
+        await actor[type]?.(this, payload);
+      }
+      return;
     }
 
 
-    const message = new Message(addr, type, payload);
-    console.log(message)
+    /* const message = new Message(addr, type, payload);
+    console.log(message) */
 
     //relay actor message to remote actor
-    if (split.length === 1) {
+    /* if (split.length === 1) {
 
-    }
+    } */
 
-    const peer = split[0];
+    /* const peer = split[0];
     const uuid = split[1];
 
     //relay actor message to local actor
@@ -102,14 +129,14 @@ export class actorManager extends Actor {
         await actor[type]?.(this, payload);
       }
       return;
-    }
+    } */
 
     //???
-    const conn = this.peers[peer];
+    /* const conn = this.peers[peer];
     if (conn === undefined) {
       console.error(`Peer with UUID ${peer} not found.`);
     } else {
       await conn.send(message);
-    }
+    } */
   }
 }

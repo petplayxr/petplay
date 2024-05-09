@@ -52,11 +52,15 @@ if (import.meta.main) {
   }
 
   //username and ip
-  const ip = `${await getIP()}:${port}`
-  console.log(`Your IP is ${ip}`)
+  const localip = await getIP()
+
+
+  const fullip = `${localip}:${port}`
+  
+  console.log(`Your IP is ${fullip}`)
 
   //create actorManager
-  const actorBoss = new actorManager()
+  const actorBoss = new actorManager(localip)
 
 
 
@@ -76,7 +80,7 @@ if (import.meta.main) {
   //#region chatapp
   
 
-  const aChatApp : Address<ChatApp> = actorBoss.add(new ChatApp(`${ip}`, name, "chat"))
+  const aChatApp : Address<ChatApp> = actorBoss.add(new ChatApp(`${fullip}`, name, "chat"))
 
 
   actorBoss.command(aChatApp, "h_connect", ip2)

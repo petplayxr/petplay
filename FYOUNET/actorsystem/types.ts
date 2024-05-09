@@ -3,27 +3,36 @@ import { Message } from "./message.ts";
 
 export type ActorId = string & { __brand: 'ActorId' };
 
+export type ActorName = string
+
 function createActorId(actorname: string, uuid: string): ActorId {
   return `${actorname}:${uuid}` as ActorId;
 }
 
+export function isActorId(value: string): value is ActorId {
+  return value.includes(":");
+}
+
+export function isActorName(value: string): value is ActorName {
+  return !value.includes(":");
+}
 
 export class Actor {
   protected _uuid: string = crypto.randomUUID();
-  protected _actoname: string = "BaseActor";
+  protected _actorname: ActorName = "BaseActor";
   protected _actorid: ActorId;
 
   constructor() {
-    this._actorid = createActorId(this._actoname, this._uuid);
+    this._actorid = createActorId(this._actorname, this._uuid);
   }
 
   public set actorname(actorName: string) {
-    this._actoname = actorName;
+    this._actorname = actorName;
     // Update the combined ID property when the actorName changes
-    this._actorid = createActorId(this._actoname, this._uuid);
+    this._actorid = createActorId(this._actorname, this._uuid);
   }
   public get actorname(): string {
-    return this._actoname;
+    return this._actorname;
   }
 
   public get actorid(): ActorId {
@@ -34,6 +43,7 @@ export class Actor {
 
   onRemove() {}
 }
+
 
 
 export interface Connection {

@@ -146,7 +146,13 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   // Synchronizes the peer list among connected peers.
   async h_syncPeers(ctx: actorManager, ips: Record<string, string>) {
     console.log("SYNCHRONIZE ACTORS: OBJECT KEYS= " + Object.keys(ips));
-    const newPeers = Object.keys(ips).filter(peer => !(peer in ctx.peers || peer === ctx.actorid));
+    
+    //"actorManager:3a5a7a31-8a86-4dff-a3df-e4c43cdf0ae5" : "185.174.27.213:25565"
+    const newPeers = Object.keys(ips).filter(peer => {
+      // Check if the peer's IP address is already in ctx.peers or matches the current actor's IP address.
+      const peerIp = ips[peer];
+      return!(peerIp in ctx.peers || peerIp === this.publicIp);
+    });
     
     for (const peer of newPeers) {
       ctx.peers[peer] = WebSocketConnection.create(ips[peer], () => {
