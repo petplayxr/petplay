@@ -100,8 +100,13 @@ vr::VROverlayHandle_t OverlayInterface::CreateInteractiveOverlay(const std::stri
 	return m_ulOverlayHandle;
 }
 
-vr::VROverlayHandle_t OverlayInterface::CreateAlignmentOverlay()
+vr::VROverlayHandle_t OverlayInterface::CreateAlignmentOverlay(bool mode)
 {
+    if (mode) {
+        std::cout << "p1" << std::endl;
+    } else {
+        std::cout << "p2" << std::endl;
+    }
 	bool bSuccess = true;
 
     m_strName = "alignmentoverlay";
@@ -125,8 +130,16 @@ vr::VROverlayHandle_t OverlayInterface::CreateAlignmentOverlay()
 		vr::VROverlay()->SetOverlayInputMethod(m_ulOverlayHandle, vr::VROverlayInputMethod_Mouse);
         /* vr::VROverlay()->SetOverlayColor(m_ulOverlayHandle, 1.0f, 0.0f, 1.0f); */
 
+        std::string relativePath = "";
 
-        std::string relativePath = "../resources/P1.png";
+        if (mode) {
+            relativePath = "../resources/P1.png";
+        } else {
+            relativePath = "../resources/P2.png";
+        }
+        
+
+
         try {
             fs::path absolutePath = fs::absolute(relativePath);
 

@@ -37,6 +37,19 @@ if (import.meta.main) {
 
   const ip2 = Deno.args[2]
 
+  const mode = Deno.args[3]
+
+  let ipcport = 1
+
+  if (mode == "p1") {
+    console.log("p1")
+    ipcport = 27015
+  }
+
+  else if (mode == "p2") {
+    console.log("p2")
+    ipcport = 27016
+  }
 
   //username and ip
   const ip = `${await getIP()}:${port}`
@@ -45,30 +58,41 @@ if (import.meta.main) {
   //create actorManager
   const actors = new actorManager()
 
+
+
   //#region overlay
 
-  /* const aOverlay: Address<OverlayActor> = actors.add(new OverlayActor(ip, name))
+
+  const aOverlay: Address<OverlayActor> = actors.add(new OverlayActor(`127.0.0.1:${port}`, name, ipcport))
 
   //wait 2 seconds
   await new Promise(resolve => setTimeout(resolve, 2000))
 
-  actors.command(aOverlay, "h_connect", ip2) */
+  actors.command(aOverlay, "h_connect", ip2)
+
+
   //#endregion
 
   //#region chatapp
   
-  // add local chatapp
-  const aChatApp : Address<ChatApp> = actors.add(new ChatApp(`127.0.0.1:${port}`, name))
+
+  /* const aChatApp : Address<ChatApp> = actors.add(new ChatApp(`127.0.0.1:${port}`, name))
 
 
-  actors.command(aChatApp, "h_connect", ip2)
+  actors.command(aChatApp, "h_connect", ip2) */
 
   //#endregion
 
   actors.listactors()
 
-
   while (true) {
+    await new Promise(resolve => setTimeout(resolve, 100))
+    //console.log("try broadcast")
+    actors.command(aOverlay, "h_broadcast", null)
+  }
+
+
+  /* while (true) {
     const msg = await asyncPrompt() ?? ""
 
     if (msg.startsWith("/")) {
@@ -81,7 +105,7 @@ if (import.meta.main) {
       actors.command(aChatApp, "h_broadcast", msg)
       //actors.command(aOverlay, "h_broadcast", null)
     }
-  }
+  } */
 }
 
 

@@ -72,7 +72,26 @@ void receiveData(SOCKET socket, OverlayInterface& overlayInterface, vr::VROverla
         cerr << "recv failed with error: " << WSAGetLastError() << endl;
     }
 }
-int main() {
+int main(int argc, char* argv[]) {
+
+    if (argc < 2) {
+        cerr << "Usage: " << argv[0] << " <IPC_PORT>" << endl;
+        return 1; // Exit if no arguments are provided
+    }
+    int ipcPort = atoi(argv[2]);
+    if (ipcPort) {
+        cout << "IPC Port: " << ipcPort << endl;
+    } else {
+        cerr << "Invalid IPC Port" << endl;
+        return 1; // Exit if invalid IPC port is provided
+    }
+    std::string modeStr = argv[1];
+    bool mode = (modeStr == "true");
+    if (mode) {
+        cout << "p1" << endl;
+    } else {
+        cout << "p2" << endl;
+    }
 
 
     #pragma region Test
@@ -121,7 +140,7 @@ int main() {
     sockaddr_in service;
     service.sin_family = AF_INET;
     service.sin_addr.s_addr = INADDR_ANY;
-    service.sin_port = htons(27015);
+    service.sin_port = htons(ipcPort);
 
     if (bind(ListenSocket, (SOCKADDR*)&service, sizeof(service)) == SOCKET_ERROR) {
         cerr << "bind failed with error: " << WSAGetLastError() << endl;
@@ -143,6 +162,8 @@ int main() {
         closesocket(ListenSocket);
         WSACleanup();
         return 1;
+    } else {
+        cout << "IPC connection established successfully." << endl;
     }
 
     #pragma endregion
@@ -164,7 +185,7 @@ int main() {
 
     #pragma region create alignment overlay
     OverlayInterface overlayInterface2;
-    vr::VROverlayHandle_t m_ulOverlayHandle2 = overlayInterface2.CreateAlignmentOverlay();
+    vr::VROverlayHandle_t m_ulOverlayHandle2 = overlayInterface2.CreateAlignmentOverlay(mode);
     if (m_ulOverlayHandle2) {
         cout << "ALIGN initialized" << endl;
     } else {

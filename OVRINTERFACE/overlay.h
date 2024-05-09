@@ -52,7 +52,7 @@ public:
     void SetOverlayPosition(vr::VROverlayHandle_t overlayHandle, vr::HmdMatrix34_t position);
 
     vr::VROverlayHandle_t CreateInteractiveOverlay(const std::string& overlayName);
-    vr::VROverlayHandle_t CreateAlignmentOverlay();
+    vr::VROverlayHandle_t CreateAlignmentOverlay(bool mode);
 
     vr::HmdMatrix34_t GetOverlayPositionAbsolute(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle);
 

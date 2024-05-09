@@ -5,13 +5,25 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "DebugPETPLAYcpp",
+            "name": "DebugPETPLAYcpp1",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/OVRINTERFACE/out/build/default/Debug/petplay.exe",
-            "args": [],
+            "args": ["true","27015"],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${workspaceFolder}/OVRINTERFACE",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "cmake-build-debug"
+        },
+        {
+            "name": "DebugPETPLAYcpp2",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/OVRINTERFACE/out/build/default/Debug/petplay.exe",
+            "args": ["false","27016"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/OVRINTERFACE",
             "environment": [],
             "console": "integratedTerminal",
             "preLaunchTask": "cmake-build-debug"
@@ -32,7 +44,8 @@
                 "main.ts",
                 "client1",
                 "8080",
-                "127.0.0.1:8081"
+                "127.0.0.1:8081",
+                "p1"
             ],
             "attachSimplePort": 9228
         },
@@ -51,7 +64,8 @@
                 "main.ts",
                 "client2",
                 "8081",
-                "127.0.0.1:8080"
+                "127.0.0.1:8080",
+                "p2"
 
             ],
             "attachSimplePort": 9229
@@ -60,8 +74,38 @@
     ],
     "compounds": [
         {
-            "name": "DebugAll",
+            "name": "DebugFYOUALL",
             "configurations": [
+                "DEBUGFYOUNET1",
+                "DEBUGFYOUNET2"
+            ]
+        },
+        {
+            "name": "DebugPETPLAYcpp",
+            "configurations": [
+                "DebugPETPLAYcpp1",
+                "DebugPETPLAYcpp2"
+            ]
+        },
+        {
+            "name": "DebugP1",
+            "configurations": [
+                "DebugPETPLAYcpp1",
+                "DEBUGFYOUNET1"
+            ]
+        },
+        {
+            "name": "DebugP2",
+            "configurations": [
+                "DebugPETPLAYcpp2",
+                "DEBUGFYOUNET2"
+            ]
+        },
+        {
+            "name": "DebugALL",
+            "configurations": [
+                "DebugPETPLAYcpp1",
+                "DebugPETPLAYcpp2",
                 "DEBUGFYOUNET1",
                 "DEBUGFYOUNET2"
             ]

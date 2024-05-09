@@ -9,7 +9,7 @@ export class IPCOVRConnector {
         this.port = 27015;
     }
 
-    async connect() {
+    async connect(port: number) {
         if (this.conn) {
             console.log("Already connected to server.");
             return;
@@ -17,13 +17,13 @@ export class IPCOVRConnector {
     
         // Retry logic
         const maxRetries = 9000; // Maximum number of retries
-        const retryDelay = 12000; // Delay in milliseconds between retries
+        const retryDelay = 1000; // Delay in milliseconds between retries
     
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 this.conn = await Deno.connect({
                     hostname: this.hostname,
-                    port: this.port,
+                    port: port ?? this.port,
                 });
                 console.log("Connected to server!");
                 this.receiveAndProcessData();

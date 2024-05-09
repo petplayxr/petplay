@@ -11,18 +11,20 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
     private names: Record<string, string> = {};
     private ovrConnector: IPCOVRConnector;
     private connected: boolean = false;
+    private latestCoord: string = "";
 
 
     // Constructor for the OverlayActor actor.
-    constructor(publicIp: string, name: string) {
+    constructor(publicIp: string, name: string, ipcport: number) {
         super("overlay", publicIp);
         this.ovrConnector = new IPCOVRConnector();
         this.name = name;
 
         // Setup connection and data handling from IPC
-        this.setupIPCConnector();
+        this.setupIPCConnector(ipcport);
     }
 
+    // when a connection between actors is made
     override async onConnect(ctx: actorManager, addr: Address<OverlayActor>): Promise<void> {
         await ctx.command(addr, "h_receive", {
             addr: ctx.addressOf(this),
@@ -32,6 +34,7 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
         this.connected = true;
     }
 
+    // when a connection between actors is broken
     override onDisconnect(ctx: actorManager, addr: Address<OverlayActor>): Promise<void> {
         if (addr as string in this.names) {
             this.h_receive(ctx, {
@@ -44,8 +47,18 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
         return Promise.resolve();
     }
 
-    setupIPCConnector() {
-        this.ovrConnector.connect();
+    // start ipc
+    setupIPCConnector(ipcport:number) {
+        this.ovrConnector.connect(ipcport);
+
+        this.ovrConnector.subscribe(async (data) => {
+            try {
+                this.latestCoord = data;
+            } catch (error) {
+                console.error(`Error in subscription callback: ${error}`);
+            }
+        });
+
     }
 
     //receive a coordinate from friend
@@ -69,19 +82,21 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
         }
     }
 
+    //begin broadcasting coord to all friends
     async h_broadcast(ctx: actorManager) {
-        console.log(`<${this.name}>`);
+        //console.log("Broadcasting to all friends");
     
         if (this.connected) {
-            this.ovrConnector.subscribe(async (data) => { // Mark the callback as async
-                while (this.connected) {
-                    await this.broadcast(ctx, "h_receive", {
-                        addr: ctx.addressOf(this),
-                        name: this.name,
-                        data,
-                    });
-                }
+            console.log("Connected is true");
+            console.log(`<${this.name}> ${this.latestCoord}`);
+
+            await this.broadcast(ctx, "h_receive", {
+            addr: ctx.addressOf(this),
+            name: this.name,
+            data: this.latestCoord,
             });
+        } else {
+            console.log("Not connected to any friends yet");
         }
     }
 
