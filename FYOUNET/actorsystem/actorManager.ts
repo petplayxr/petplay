@@ -129,7 +129,7 @@ export class actorManager extends Actor {
         if (actor === undefined) {
           console.error(`Actor with UUID ${addr as string} not found.`);
         } else {
-          console.log('Before calling payload:', payload);
+          //console.log('Before calling payload:', payload);
           // Check if payload is a function and adjust the arguments accordingly
           if (typeof payload === 'function') {
             // If payload is a function, pass only payload
@@ -138,7 +138,7 @@ export class actorManager extends Actor {
             // Otherwise, pass this and payload as before
             await actor[type]?.(this, payload);
           }
-          console.log('After calling payload:', payload);
+          //console.log('After calling payload:', payload);
         }
         return;
       }

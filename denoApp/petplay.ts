@@ -100,11 +100,11 @@ function processcommand(msgD: string) {
     }
 }
 
-function beginOverlaystream() {
+async function beginOverlaystream() {
     while (true) {
         actormanager.command(aOverlay, "h_broadcast", null)
+        await new Promise((resolve) => setTimeout(resolve, 12));
     }
-    
 }
 
 //#endregion
@@ -168,6 +168,8 @@ if (import.meta.main) {
     actormanager.listactors()
 
     while (true) {
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
 
         //fix type
         actormanager.command(aOverlay, "isConnected", (connected:boolean) => {

@@ -49,7 +49,7 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
     }
 
     async isConnected(callback: (connected: boolean) => void) {
-        if (this.connected && this.ipcconnected) {
+        if (this.ipcconnected) {
             callback(true);
         } else {
             callback(false);
@@ -106,7 +106,8 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
             data: this.latestCoord,
             });
         } else {
-            console.log("Not connected to any friends yet");
+            console.log(this.latestCoord);
+            this.ovrConnector.updateCoord(this.latestCoord);
         }
     }
 
