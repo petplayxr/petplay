@@ -168,6 +168,8 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
       let ip2 = null;
 
 
+      //write better code here to make sure actorid can not be null
+
       for (const [key, value] of Object.entries(peer)) {
         actorid = key;
         console.log(actorid);
@@ -194,7 +196,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
         console.log(addr);
 
       }
-      
+      //fix this
       const message = new Message(addr, "h_syncPeers", peers);
       //deno-lint-ignore no-explicit-any
       await (ctx as any).command(addr, message.type, message.payload);

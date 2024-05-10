@@ -29,7 +29,7 @@ async function asyncPrompt(): Promise<string> {
 }
 
 if (import.meta.main) {
-  console.log(Deno.args); // ['one, 'two', 'three']
+  console.log("runtime args: "+Deno.args); // ['one, 'two', 'three']
 
   const name = Deno.args[0]
 
@@ -88,6 +88,7 @@ if (import.meta.main) {
 
   //#endregion
 
+  //make this function output readable
   actorBoss.listactors()
 
   /* while (true) {
