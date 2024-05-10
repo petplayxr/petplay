@@ -102,7 +102,7 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
             else
             {
                 this.ovrConnector.updateCoord(coord.data);
-                console.log(`<${coord.name}> ${coord.data}`);
+                //console.log(`<${coord.name}> ${coord.data}`);
             }
         }
     }
@@ -123,8 +123,8 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
         {
     
             if (this.connected) {
-                console.log("Connected is true");
-                console.log(`<${this.name}> ${this.latestCoord}`);
+                //console.log("Connected is true");
+                //console.log(`<${this.name}> ${this.latestCoord}`);
 
                 await this.broadcast(ctx, "h_receive", {
                 addr: ctx.addressOf(this),
@@ -132,7 +132,7 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
                 data: this.latestCoord,
                 });
             } else {
-                console.log(this.latestCoord);
+                //console.log(this.latestCoord);
                 //this.ovrConnector.updateCoord(this.latestCoord);
             }
         }

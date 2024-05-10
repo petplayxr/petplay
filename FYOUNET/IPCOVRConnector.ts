@@ -48,7 +48,7 @@ export class IPCOVRConnector {
         const encoder = new TextEncoder();
         const encodedData = encoder.encode(data);
         await this.conn.write(encodedData);
-        console.log("Sent data back to server.");
+        //console.log("Sent data back to server.");
     }
 
     subscribe(callback: (data: string) => void) {
@@ -61,24 +61,35 @@ export class IPCOVRConnector {
             return;
         }
         const buffer = new Uint8Array(4096);
+    
         while (true) {
-            const bytesRead = await this.conn.read(buffer);
-            if (bytesRead === null) {
-                console.log("Connection closed by server.");
-                break; // Exit the loop if the server closes the connection
+            try {
+                const bytesRead = await this.conn.read(buffer);
+                if (bytesRead === null) {
+                    console.log("Connection closed by server.");
+                    break; // Exit the loop if the server closes the connection
+                }
+                const decoder = new TextDecoder();
+                const receivedMsg = decoder.decode(buffer.subarray(0, bytesRead));
+                //console.log("Received data:", receivedMsg);
+    
+                // Notify subscribers
+                this.subscribers.forEach(subscriber => subscriber(receivedMsg));
+            } catch (error) {
+                console.error("Error reading data from connection:", error);
+                if (error.message.includes('os error 10054')) {
+                    console.error("Connection was reset by the remote host.");
+                    // Optional: Attempt to reconnect here
+                    break; // You might want to exit or attempt a reconnection
+                }
             }
-            const decoder = new TextDecoder();
-            const receivedMsg = decoder.decode(buffer.subarray(0, bytesRead));
-            console.log("Received data:", receivedMsg);
-
-            // Notify subscribers
-            this.subscribers.forEach(subscriber => subscriber(receivedMsg));
         }
-
+    
         // Close the connection
         if (this.conn) {
             this.conn.close();
             this.conn = null;
         }
     }
+    
 }

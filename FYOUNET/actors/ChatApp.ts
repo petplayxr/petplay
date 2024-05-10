@@ -52,13 +52,13 @@ export class ChatApp extends ActorP2P<ChatApp> {
       }
     } else {
       this.messages.push(`<${msg.name}> ${msg.msg}`);
-      console.log(`<${msg.name}> ${msg.msg}`);
+      //console.log(`<${msg.name}> ${msg.msg}`);
     }
   }
 
   async h_broadcast(ctx: actorManager, msg: string) {
     this.messages.push(`<${this.name}> ${msg}`);
-    console.log(`<${this.name}> ${msg}`);
+    //console.log(`<${this.name}> ${msg}`);
     console.log(this.actorid)
 
     await this.broadcast(ctx, "h_receive", {

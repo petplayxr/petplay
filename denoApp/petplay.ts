@@ -103,9 +103,24 @@ function processcommand(msgD: string) {
 
 async function beginOverlaystream() {
     while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
         actormanager.command(aOverlay, "h_broadcast", null)
         await new Promise((resolve) => setTimeout(resolve, 12));
     }
+}
+
+async function checkOverlayConnection() {
+    return new Promise((resolve) => {
+        actormanager.command(aOverlay, "isConnected", (connected) => {
+            if (connected) {
+                console.log("OverlayActor is connected.");
+                resolve(true);
+            } else {
+                console.log("OverlayActor is not connected.");
+                setTimeout(() => resolve(false), 3000); // Retry after 1 second
+            }
+        });
+    });
 }
 
 //#endregion
@@ -168,20 +183,17 @@ if (import.meta.main) {
     //this func should be improved a bit
     actormanager.listactors()
 
+    while (!(await checkOverlayConnection())) {
+        console.log("Waiting for overlay to connect...");
+    }
+    beginOverlaystream();
+
     while (true) {
 
         await new Promise((resolve) => setTimeout(resolve, 5000));
 
         //fix type
-        actormanager.command(aOverlay, "isConnected", (connected:boolean) => {
-            if (connected) {
-                console.log("OverlayActor is connected.");
-                beginOverlaystream()
-                
-            } else {
-                console.log("OverlayActor is not connected.");
-            }
-        });
+        
 
         const msg = await asyncPrompt() ?? ""
 
