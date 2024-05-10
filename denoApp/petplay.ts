@@ -60,6 +60,7 @@ async function asyncPrompt(): Promise<string> {
     }
 }
 
+//PROCESS USER COMMAND
 function processcommand(msgD: string) {
 
     const msg = msgD.replace(/\r/g, '');
@@ -145,7 +146,7 @@ const actormanager = new actorManager(localip)
 const aChatApp: Address<ChatApp> = actormanager.add(new ChatApp(localfullip, username, "chat"))
 
 //we create a new overlay actor on the localip
-const aOverlay: Address<OverlayActor> = actormanager.add(new OverlayActor(`${localip}:25568`, username, ipcport))
+const aOverlay: Address<OverlayActor> = actormanager.add(new OverlayActor(`${localip}:25568`, username, ipcport, mode))
 
 
 //#endregion

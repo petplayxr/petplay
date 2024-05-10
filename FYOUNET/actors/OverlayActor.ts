@@ -13,16 +13,22 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
     private connected: boolean = false;
     private latestCoord: string = "";
     private ipcconnected: boolean = false;
+    private mode: string;
 
 
     // Constructor for the OverlayActor actor.
-    constructor(publicIp: string, name: string, ipcport: number) {
+    constructor(publicIp: string, name: string, ipcport: number,mode: string) {
         super("overlay", publicIp);
-        this.ovrConnector = new IPCOVRConnector();
-        this.name = name;
 
-        // Setup connection and data handling from IPC
-        this.setupIPCConnector(ipcport);
+        this.name = name;
+        this.mode = mode;
+        if (mode!=="mirror")
+            {
+                this.ovrConnector = new IPCOVRConnector();
+                this.setupIPCConnector(ipcport);
+            }
+
+        
     }
 
     // when a connection between actors is made
@@ -59,7 +65,8 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
     // start ipc
     setupIPCConnector(ipcport:number) {
         this.ovrConnector.connect(ipcport);
-
+        
+        //write overlay coord to latestCoord
         this.ovrConnector.subscribe(async (data) => {
             this.ipcconnected = true;
             try {
@@ -73,6 +80,7 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
 
     //receive a coordinate from friend
     h_receive(_: actorManager, coord: ReceiveCoord) {
+        
         this.names[coord.addr as string] = coord.name;
         if ("event" in coord) {
             switch (coord.event) {
@@ -87,27 +95,46 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
                 }
             }
         } else {
-            this.ovrConnector.updateCoord(coord.data);
-            console.log(`<${coord.name}> ${coord.data}`);
+            if (this.mode == "mirror")
+            {
+                this.latestCoord = coord.data;
+            }
+            else
+            {
+                this.ovrConnector.updateCoord(coord.data);
+                console.log(`<${coord.name}> ${coord.data}`);
+            }
         }
     }
 
     //begin broadcasting coord to all friends
     async h_broadcast(ctx: actorManager) {
         //console.log("Broadcasting to all friends");
-    
-        if (this.connected) {
-            console.log("Connected is true");
-            console.log(`<${this.name}> ${this.latestCoord}`);
 
+        if(this.mode == "mirror")
+        {
             await this.broadcast(ctx, "h_receive", {
-            addr: ctx.addressOf(this),
-            name: this.name,
-            data: this.latestCoord,
+                addr: ctx.addressOf(this),
+                name: this.name,
+                data: this.latestCoord,
             });
-        } else {
-            console.log(this.latestCoord);
-            this.ovrConnector.updateCoord(this.latestCoord);
+        }
+        else
+        {
+    
+            if (this.connected) {
+                console.log("Connected is true");
+                console.log(`<${this.name}> ${this.latestCoord}`);
+
+                await this.broadcast(ctx, "h_receive", {
+                addr: ctx.addressOf(this),
+                name: this.name,
+                data: this.latestCoord,
+                });
+            } else {
+                console.log(this.latestCoord);
+                //this.ovrConnector.updateCoord(this.latestCoord);
+            }
         }
     }
 
