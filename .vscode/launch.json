@@ -47,7 +47,6 @@
                 "71.36.126.225:25565",
                 "p1"
             ],
-            "postDebugTask": "pause",
             "attachSimplePort": 9228
         },
         {
@@ -69,10 +68,8 @@
                 "p2"
 
             ],
-            "postDebugTask": "pause",
             "attachSimplePort": 9229
         },
-
         {
             "request": "launch",
             "name": "DEBUGINTERNET1",
@@ -92,7 +89,6 @@
                 "172.26.159.31:25565",
                 "p1"
             ],
-            "postDebugTask": "pause",
             "attachSimplePort": 9228
         },
         {
@@ -114,9 +110,30 @@
                 "p2"
 
             ],
-            "postDebugTask": "pause",
             "attachSimplePort": 9229
         },
+        {
+            "request": "launch",
+            "name": "debugdenoapp",
+            "type": "node",
+            "cwd": "${workspaceFolder}/denoApp/out",
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect=0.0.0.0:9228",
+                "--allow-net",
+                "--inspect-wait",
+                "--allow-all",
+                "../petplay.ts",
+                "client1",
+                "172.26.187.120:25567",
+                "172.26.159.31:25565",
+                "p1"
+            ],
+            "attachSimplePort": 9228
+        },
+
         
     ],
     "compounds": [

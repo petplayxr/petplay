@@ -84,7 +84,7 @@ if (import.meta.main) {
   const aChatApp : Address<ChatApp> = actorBoss.add(new ChatApp(`${fullip}`, name, "chat"))
 
 
-  actorBoss.command(aChatApp, "h_connect", friendip)
+  
 
   //#endregion
 

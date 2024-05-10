@@ -39,20 +39,7 @@ if (import.meta.main) {
 
   const mode = Deno.args[3]
 
-  let ipcport = 1
-
-  if (mode == "p1") {
-    console.log("p1")
-    ipcport = 27015
-  }
-
-  else if (mode == "p2") {
-    console.log("p2")
-    ipcport = 27016
-  }
-
-  //username and ip
-  const ip = `${await getIP()}:${port}`
+  
   console.log(`Your IP is ${ip}`)
 
   //create actorManager

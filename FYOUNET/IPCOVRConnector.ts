@@ -17,7 +17,7 @@ export class IPCOVRConnector {
     
         // Retry logic
         const maxRetries = 9000; // Maximum number of retries
-        const retryDelay = 1000; // Delay in milliseconds between retries
+        const retryDelay = 10000; // Delay in milliseconds between retries
     
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
@@ -29,9 +29,9 @@ export class IPCOVRConnector {
                 this.receiveAndProcessData();
                 break; // Exit the loop if the connection is successful
             } catch (error) {
-                console.error(`Attempt ${attempt} failed: ${error.message}`);
+                console.error(`CouldNotAttach vr interface Attempt ${attempt} failed: ${error.message}`);
                 if (attempt < maxRetries) {
-                    console.log(`Retrying in ${retryDelay / 1000} seconds...`);
+                    //console.log(`Retrying in ${retryDelay / 1000} seconds...`);
                     await new Promise(resolve => setTimeout(resolve, retryDelay));
                 } else {
                     console.error("Maximum retries reached. Connection failed.");

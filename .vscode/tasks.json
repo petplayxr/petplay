@@ -31,9 +31,33 @@
             "problemMatcher": "$gcc"
         },
         {
-            "label": "pause",
+            "label": "copyRelease",
             "type": "shell",
-            "command": "read -p 'Press any key to continue...'"
+            "command": "copy",
+            "args": [
+                "${workspaceFolder}\\OVRINTERFACE\\out\\build\\default\\Debug\\*",
+                "${workspaceFolder}\\denoApp\\out\\dependencies\\"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "builddenoapp",
+            "type": "shell",
+            "command": "deno",
+            "options": {
+                "cwd": "${workspaceFolder}/denoApp"
+            },
+            "args": [
+                "compile","--no-check","--allow-all", "--output", "./out/petplayxr.exe", "petplay.ts"
+            ],
+
+        },
+        {
+            "label" : "buildpetplay",
+            "dependsOn": ["cmake-build-debug", "copyRelease",],
+
         }
     ]
 }

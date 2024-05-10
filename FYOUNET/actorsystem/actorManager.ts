@@ -1,4 +1,5 @@
 import { Actor, Connection, Address, ActorMessage, ActorPayload, isActorId, isActorName, isRemoteActorId } from "./types.ts";
+import {ActorP2P} from "./actorP2P.ts"
 import { Message } from "./message.ts";
 import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
 
@@ -52,8 +53,8 @@ export class actorManager extends Actor {
   //correct typechecking to use actorp2p as that has a publicip
   getlocalActor(actorname: string) {
     const myip = this.localip
-    const localActor = Object.values(this.actors).find(actor => {
-
+    const localActor = Object.values(this.actors).find((actor: Actor) => {
+      
       if (actor.publicIp) {
 
         const [ip, port] = actor.publicIp.split(':');

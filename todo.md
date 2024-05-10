@@ -1,1 +1,2 @@
 - Add SteamVR controller profiles. 
+- only use 1 petplay instance for testing and 2 fyounet instances 
