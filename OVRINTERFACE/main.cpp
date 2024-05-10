@@ -7,10 +7,15 @@
 #include <windows.h>
 #include <ws2tcpip.h>
 #include <sstream>
+#include <cmath>
+#include <chrono>
 
 #pragma comment(lib, "Ws2_32.lib")
 
 using namespace std;
+
+
+
 
 class overlay {
     // Existing class definition remains unchanged
@@ -23,6 +28,15 @@ void sendPositions(SOCKET socket, const std::string& serializedData) {
     }
 }
 
+bool isDrasticallyDifferent(const std::vector<float>& newMatrix, const std::vector<float>& oldMatrix, float threshold = 0.9) {
+    for (int i = 0; i < 12; ++i) {
+        if (std::fabs(newMatrix[i] - oldMatrix[i]) > threshold) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Function to receive data from the client
 void receiveData(SOCKET socket, OverlayInterface& overlayInterface, vr::VROverlayHandle_t overlayHandle) {
     char recvbuf[512];
@@ -30,8 +44,12 @@ void receiveData(SOCKET socket, OverlayInterface& overlayInterface, vr::VROverla
     int iResult;
 
     iResult = recv(socket, recvbuf, recvbuflen, 0);
-    if (iResult > 0) {
-        recvbuf[iResult] = '\0'; // Null-terminate the buffer to make it a valid string
+
+    static std::vector<float> lastValidMatrix(12, 0);
+    static auto lastUpdateTime = std::chrono::high_resolution_clock::now(); // Store the last update time
+    
+    if (iResult > 0 && iResult <= sizeof(recvbuf)) {
+        recvbuf[iResult - 1] = '\0'; // Null-terminate the buffer to make it a valid string
 
         // Parse the received data
         // Assuming data is in the format: "m0 m1 m2 m3 m4 m5 ... m11"
@@ -45,24 +63,35 @@ void receiveData(SOCKET socket, OverlayInterface& overlayInterface, vr::VROverla
         }
 
         if (matrixElements.size() == 12) { // Ensure we have exactly 12 elements (3x4 matrix)
-            vr::HmdMatrix34_t transformMatrix;
-            transformMatrix.m[0][0] = matrixElements[0];
-            transformMatrix.m[0][1] = matrixElements[1];
-            transformMatrix.m[0][2] = matrixElements[2];
-            transformMatrix.m[0][3] = matrixElements[3];
-            transformMatrix.m[1][0] = matrixElements[4];
-            transformMatrix.m[1][1] = matrixElements[5];
-            transformMatrix.m[1][2] = matrixElements[6];
-            transformMatrix.m[1][3] = matrixElements[7];
-            transformMatrix.m[2][0] = matrixElements[8];
-            transformMatrix.m[2][1] = matrixElements[9];
-            transformMatrix.m[2][2] = matrixElements[10];
-            transformMatrix.m[2][3] = matrixElements[11];
+            auto now = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdateTime).count();
+
+
+            if (duration > 100 || lastValidMatrix.empty() || !isDrasticallyDifferent(matrixElements, lastValidMatrix)) {
+                vr::HmdMatrix34_t transformMatrix;
+                transformMatrix.m[0][0] = matrixElements[0];
+                transformMatrix.m[0][1] = matrixElements[1];
+                transformMatrix.m[0][2] = matrixElements[2];
+                transformMatrix.m[0][3] = matrixElements[3];
+                transformMatrix.m[1][0] = matrixElements[4];
+                transformMatrix.m[1][1] = matrixElements[5];
+                transformMatrix.m[1][2] = matrixElements[6];
+                transformMatrix.m[1][3] = matrixElements[7];
+                transformMatrix.m[2][0] = matrixElements[8];
+                transformMatrix.m[2][1] = matrixElements[9];
+                transformMatrix.m[2][2] = matrixElements[10];
+                transformMatrix.m[2][3] = matrixElements[11];
                 
 
-            // Update overlay position
-            overlayInterface.SetOverlayPosition(overlayHandle, transformMatrix);
-            //cout << "Overlay position updated" << endl;
+                // Update overlay position
+                overlayInterface.SetOverlayPosition(overlayHandle, transformMatrix);
+                //cout << "Overlay position updated" << endl;
+                lastValidMatrix = matrixElements;
+                lastUpdateTime = now;
+                } else {
+                cerr << "Drastic change detected, update skipped." << endl;
+            }
+
         } else {
             cerr << "Received invalid data format for matrix." << endl;
         }

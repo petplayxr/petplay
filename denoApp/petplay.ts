@@ -103,9 +103,9 @@ function processcommand(msgD: string) {
 
 async function beginOverlaystream() {
     while (true) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        //await new Promise((resolve) => setTimeout(resolve, 100));
         actormanager.command(aOverlay, "h_broadcast", null)
-        await new Promise((resolve) => setTimeout(resolve, 12));
+        await new Promise((resolve) => setTimeout(resolve, 50));
     }
 }
 
@@ -136,6 +136,7 @@ const username = Deno.args[0]
 const ownip = Deno.args[1]
 const friendip = Deno.args[2]
 const mode = Deno.args[3]
+const release = Deno.args[4]
 
 const execRunner = new ExecRunner("./dependencies/petplay.exe");
 
@@ -173,7 +174,9 @@ if (import.meta.main) {
     //actual start of the program
 
     //true?
-    execRunner.run(["true", `${ipcport}`]);
+    if (release == "true") {
+        execRunner.run(["true", `${ipcport}`]);
+    }
 
 
     console.log(`Your IP is ${localfullip}`)
