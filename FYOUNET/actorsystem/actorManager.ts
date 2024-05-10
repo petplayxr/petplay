@@ -1,5 +1,5 @@
 import { Actor, Connection, Address, ActorMessage, ActorPayload, isActorId, isActorName, isRemoteActorId } from "./types.ts";
-import {ActorP2P} from "./actorP2P.ts"
+import { ActorP2P } from "./actorP2P.ts"
 import { Message } from "./message.ts";
 import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
 
@@ -54,7 +54,7 @@ export class actorManager extends Actor {
   getlocalActor(actorname: string) {
     const myip = this.localip
     const localActor = Object.values(this.actors).find((actor: Actor) => {
-      
+
       if (actor.publicIp) {
 
         const [ip, port] = actor.publicIp.split(':');
@@ -129,7 +129,16 @@ export class actorManager extends Actor {
         if (actor === undefined) {
           console.error(`Actor with UUID ${addr as string} not found.`);
         } else {
-          await actor[type]?.(this, payload);
+          console.log('Before calling payload:', payload);
+          // Check if payload is a function and adjust the arguments accordingly
+          if (typeof payload === 'function') {
+            // If payload is a function, pass only payload
+            await actor[type]?.(payload);
+          } else {
+            // Otherwise, pass this and payload as before
+            await actor[type]?.(this, payload);
+          }
+          console.log('After calling payload:', payload);
         }
         return;
       }

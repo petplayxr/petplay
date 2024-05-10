@@ -12,6 +12,7 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
     private ovrConnector: IPCOVRConnector;
     private connected: boolean = false;
     private latestCoord: string = "";
+    private ipcconnected: boolean = false;
 
 
     // Constructor for the OverlayActor actor.
@@ -47,11 +48,20 @@ export class OverlayActor extends ActorP2P<OverlayActor> {
         return Promise.resolve();
     }
 
+    async isConnected(callback: (connected: boolean) => void) {
+        if (this.connected && this.ipcconnected) {
+            callback(true);
+        } else {
+            callback(false);
+        }
+    }
+    
     // start ipc
     setupIPCConnector(ipcport:number) {
         this.ovrConnector.connect(ipcport);
 
         this.ovrConnector.subscribe(async (data) => {
+            this.ipcconnected = true;
             try {
                 this.latestCoord = data;
             } catch (error) {

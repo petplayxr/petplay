@@ -100,7 +100,12 @@ function processcommand(msgD: string) {
     }
 }
 
-
+function beginOverlaystream() {
+    while (true) {
+        actormanager.command(aOverlay, "h_broadcast", null)
+    }
+    
+}
 
 //#endregion
 
@@ -163,6 +168,18 @@ if (import.meta.main) {
     actormanager.listactors()
 
     while (true) {
+
+        //fix type
+        actormanager.command(aOverlay, "isConnected", (connected:boolean) => {
+            if (connected) {
+                console.log("OverlayActor is connected.");
+                beginOverlaystream()
+                
+            } else {
+                console.log("OverlayActor is not connected.");
+            }
+        });
+
         const msg = await asyncPrompt() ?? ""
 
         if (msg.startsWith("/")) {
