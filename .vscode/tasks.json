@@ -56,7 +56,7 @@
         },
         {
             "label" : "buildpetplay",
-            "dependsOn": ["cmake-build-debug", "copyRelease",],
+            "dependsOn": ["cmake-build-debug", "copyRelease","builddenoapp"],
 
         }
     ]

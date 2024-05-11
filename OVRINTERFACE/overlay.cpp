@@ -304,7 +304,7 @@ void LogHMDAndControllersPositions(vr::IVRSystem* pVRSystem) {
 
 void OverlayInterface::SetOverlayPosition(vr::VROverlayHandle_t overlayHandle, vr::HmdMatrix34_t overlayPosition) {
 
-    overlayPosition.m[0][3] *= -1;
+    //overlayPosition.m[0][3] *= -1;
 
     // Set the overlay's transform to the controller's transform
     vr::VROverlay()->SetOverlayTransformAbsolute(overlayHandle, vr::TrackingUniverseStanding, &overlayPosition);

@@ -89,7 +89,7 @@ void receiveData(SOCKET socket, OverlayInterface& overlayInterface, vr::VROverla
                 lastValidMatrix = matrixElements;
                 lastUpdateTime = now;
                 } else {
-                cerr << "Drastic change detected, update skipped." << endl;
+                //cerr << "Drastic change detected, update skipped." << endl;
             }
 
         } else {

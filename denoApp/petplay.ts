@@ -14,24 +14,46 @@ class ExecRunner {
         const command = new Deno.Command(this.executablePath, {
             args: args,
             stdout: "piped",
-            stderr: "piped",
+            stderr: "piped"
         });
 
-        // Wait for the command to finish and collect its output
-        const { code, stdout, stderr } = await command.output();
+        const child = command.spawn();
+        console.log(`Spawned child pid: ${child.pid}`);
 
-        // Log stdout and stderr separately
-        console.log("Standard Output:");
-        console.log(new TextDecoder().decode(stdout));
-        console.log("Standard Error:");
-        console.log(new TextDecoder().decode(stderr));
+        // Function to handle continuous stream reading and logging
+        const continuouslyLogStream = async (stream: ReadableStream<Uint8Array>, label: string) => {
+            const reader = stream.getReader();
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const text = new TextDecoder().decode(value);
+                    console.log(`${label}: ${text}`);
+                }
+            } catch (err) {
+                console.error(`Error reading from ${label}:`, err);
+            } finally {
+                reader.releaseLock();
+            }
+        };
 
-        if (code !== 0) {
-            console.log("ovrcrashed with", code);
-            //throw new Error(`Command failed with exit code ${code}: ${new TextDecoder().decode(stderr)}`);
+        // Start reading and logging stdout and stderr without waiting for them to finish
+        continuouslyLogStream(child.stdout, "Standard Output");
+        continuouslyLogStream(child.stderr, "Standard Error");
+
+        // Monitor the process exit status in the background
+        const status = await child.status;
+        if (status.code !== 0) {
+            console.error(`Process exited with code ${status.code}`);
         }
+
+        // Ensure resources are cleaned up
+        child.stdout.cancel(); // Cancel the stream to prevent memory leaks
+        child.stderr.cancel();
+        console.log("Resources have been cleaned up.");
     }
 }
+
 
 
 //#endregion
@@ -103,7 +125,7 @@ function processcommand(msgD: string) {
 
 async function beginOverlaystream() {
     while (true) {
-        //await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         actormanager.command(aOverlay, "h_broadcast", null)
         await new Promise((resolve) => setTimeout(resolve, 50));
     }
