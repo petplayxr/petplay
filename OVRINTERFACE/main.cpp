@@ -15,12 +15,6 @@
 using namespace std;
 
 
-
-
-class overlay {
-    // Existing class definition remains unchanged
-};
-
 void sendPositions(SOCKET socket, const std::string& serializedData) {
     int sendResult = send(socket, serializedData.c_str(), serializedData.size(), 0);
     if (sendResult == SOCKET_ERROR) {
@@ -101,6 +95,7 @@ void receiveData(SOCKET socket, OverlayInterface& overlayInterface, vr::VROverla
         cerr << "recv failed with error: " << WSAGetLastError() << endl;
     }
 }
+
 int main(int argc, char* argv[]) {
 
     if (argc < 2) {

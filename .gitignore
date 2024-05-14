@@ -3,3 +3,5 @@ openvr/**
 out/**
 OVRINTERFACE/out/**
 /denoApp/out/
+OVRINTERFACE/vcpkg_installed/**
+OVRINTERFACE/CMakeUserPresets.json

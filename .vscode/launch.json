@@ -17,6 +17,18 @@
             "preLaunchTask": "cmake-build-debug"
         },
         {
+            "name": "DebugCPPPIPE",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/OVRINTERFACE/out/build/user/Debug/petplay.exe",
+            "args": ["\\\\?\\pipe\\Overlay1"],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}/OVRINTERFACE",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "cmake-build-debug"
+        },
+        {
             "name": "DebugPETPLAYcpp2",
             "type": "cppvsdbg",
             "request": "launch",
@@ -131,6 +143,26 @@
                 "172.26.159.31:25565",
                 "p1",
                 "false"
+            ],
+            "attachSimplePort": 9228
+        },
+        {
+            "request": "launch",
+            "name": "debugovrmodtest",
+            "type": "node",
+            "cwd": "${workspaceFolder}/FYOUNET/",
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect=0.0.0.0:9228",
+                "--inspect-wait",
+                "--unstable",
+                "--allow-ffi",
+                "--allow-net",
+                
+                "--allow-run",
+                "testspawner.ts",
             ],
             "attachSimplePort": 9228
         },

@@ -170,6 +170,56 @@ vr::VROverlayHandle_t OverlayInterface::CreateAlignmentOverlay(bool mode)
 	return m_ulOverlayHandle;
 }
 
+vr::VROverlayHandle_t OverlayInterface::CreateBasicOverlay(const std::string& overlayName, const std::string& texpath )
+{
+	bool bSuccess = true;
+
+    m_strName = overlayName;
+
+    bSuccess = ConnectToVRRuntime();
+
+    bSuccess = bSuccess && vr::VRCompositor() != NULL;
+
+    // Create the overlay
+    if( vr::VROverlay() )
+	{
+       // vr::VROverlayHandle_t m_ulOverlayThumbnailHandle;
+
+        std::string sKey = std::string( "sample." ) + m_strName;
+        vr::VROverlayError overlayError = vr::VROverlay()->CreateOverlay( sKey.c_str(), m_strName.c_str(), &m_ulOverlayHandle );
+		bSuccess = bSuccess && overlayError == vr::VROverlayError_None;
+	}
+    // if successful, set overlay properties
+	if ( bSuccess )
+    {
+        vr::VROverlay()->SetOverlayWidthInMeters(m_ulOverlayHandle, 0.2f);
+		vr::VROverlay()->SetOverlayInputMethod(m_ulOverlayHandle, vr::VROverlayInputMethod_Mouse);
+        /* vr::VROverlay()->SetOverlayColor(m_ulOverlayHandle, 1.0f, 0.0f, 1.0f); */
+
+
+
+        fs::path absolutePath = texpath;
+
+        if (fs::exists(absolutePath)) {
+            vr::VROverlay()->SetOverlayFromFile(m_ulOverlayHandle, absolutePath.string().c_str());
+        } else {
+            std::cerr << "File not found at: " << absolutePath << std::endl;
+        }
+
+
+        HmdMatrix34_t transformMatrix;
+		
+        // Set the values of the matrix to represent your desired transformation
+        // For example, to set the matrix to the identity matrix (no transformation)
+        transformMatrix.m[0][0] = 1.0f; transformMatrix.m[0][1] = 0.0f; transformMatrix.m[0][2] = 0.0f; transformMatrix.m[0][3] = 0.0f;
+        transformMatrix.m[1][0] = 0.0f; transformMatrix.m[1][1] = 1.0f; transformMatrix.m[1][2] = 0.0f; transformMatrix.m[1][3] = 0.0f;
+        transformMatrix.m[2][0] = 0.0f; transformMatrix.m[2][1] = 0.0f; transformMatrix.m[2][2] = 1.0f; transformMatrix.m[2][3] = 0.0f;
+        vr::VROverlay()->SetOverlayTransformAbsolute(m_ulOverlayHandle, vr::TrackingUniverseStanding, &transformMatrix);
+        vr::VROverlay()->ShowOverlay(m_ulOverlayHandle);
+	}
+	return m_ulOverlayHandle;
+}
+
 
 #pragma region helpers
 

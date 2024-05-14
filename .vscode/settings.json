@@ -80,7 +80,8 @@
         "deque": "cpp",
         "shared_mutex": "cpp",
         "stack": "cpp",
-        "queue": "cpp"
+        "queue": "cpp",
+        "valarray": "cpp"
     },
     "C_Cpp.errorSquiggles": "enabled",
     "cmake.sourceDirectory": "${workspaceFolder}/OVRINTERFACE",
