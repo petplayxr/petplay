@@ -186,6 +186,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
         const addr = `${peer}:${this.actorid}` as Address<T>;
         this.onDisconnect(ctx, addr);
       });
+      console.log("added peer ws");
     }
 
     const peers = this.serializePeers(ctx);

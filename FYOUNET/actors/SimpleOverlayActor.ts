@@ -15,11 +15,10 @@ export class SimpleOverlayActor extends ActorP2P<SimpleOverlayActor> {
     
 
 
-    constructor(publicIp: string,name: string, executablePath: string) {
+    constructor(publicIp: string, name: string, executablePath: string) {
         super(name, publicIp);
         this.name = name;
         this.ovrConnector = new OverlayInterface(this.name, executablePath);
-        
     }
 
     async onStart() {

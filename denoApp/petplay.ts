@@ -5,7 +5,7 @@ import * as mod from "jsr:@mys1024/worker-fn@2";
 import { ChatApp } from "../FYOUNET/actors/ChatApp.ts";
 import { OverlayActor } from "../FYOUNET/actors/OverlayActor.ts";
 import { SimpleOverlayActor } from "../FYOUNET/actors/SimpleOverlayActor.ts";
-import { Portal } from "../FYOUNET/actors/PortalActor.ts";
+import { aPortal } from "../FYOUNET/actors/PortalActor.ts";
 
 //#region ovrinterface
 
@@ -186,7 +186,7 @@ const actormanager = new actorManager(localip)
 const aChatApp: Address<ChatApp> = actormanager.add(new ChatApp(localfullip, username, "chat"))
 
 //we create a new portal actor on the localip
-const aPortal: Address<Portal> = actormanager.add(new Portal(`${localip}:25568`, username))
+const aPortal: Address<aPortal> = actormanager.add(new aPortal(`${localip}:25568`, username))
 
 //we create a new overlay actor on the localip
 const aOverlay: Address<SimpleOverlayActor> = actormanager.add(new SimpleOverlayActor(`${localip}:25568`, username,"./dependencies/petplay.exe"))

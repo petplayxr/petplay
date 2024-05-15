@@ -1,4 +1,5 @@
 import { Actor, Connection, Address, ActorMessage, ActorPayload, isActorId, isActorName, isRemoteActorId } from "./types.ts";
+import { aPortal } from "../actors/PortalActor.ts";
 import { ActorP2P } from "./actorP2P.ts"
 import { Message } from "./message.ts";
 import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
@@ -17,6 +18,7 @@ export class actorManager extends Actor {
 
   //uuid: string = crypto.randomUUID();
   peers: Record<string, Connection> = {};
+  public webportals: Record< Address<aPortal>, aPortal > = {};
 
   /**
    * Adds an actor to the actor manager.
@@ -48,15 +50,30 @@ export class actorManager extends Actor {
     delete this.actors[uuid as string];
   }
 
+
+
   //list all actors in actor manager
   listactors() {
   console.log("LISTACTORS:");
   Object.entries(this.actors).forEach(([actorId, actor]) => {
-    console.log(`Actor ID: ${actorId}`);
-    console.log(JSON.stringify(actor));
+      console.log(`Actor ID: ${actorId}`);
+      //;console.log(JSON.stringify(actor));
   });
-}
+  Object.entries(this.webportals).forEach(([RemotePortalAddress, Portal]) => {
+      if (Portal.actorname == "Portal") {
+        console.log("a remote portal: "+ RemotePortalAddress)
+        const addr : Address<aPortal> = RemotePortalAddress as Address<aPortal>;
+        this.command(addr, "h_listactors", this.getLocalPortal())
+      }
 
+  });
+  
+  }
+
+  getLocalPortal(): Address<aPortal> {
+    const portal = Object.values(this.actors).find(actor => actor.actorname === "Portal");
+    return portal? portal.actorid : undefined;
+  }
 
   //correct typechecking to use actorp2p as that has a publicip
   getlocalActor(actorname: string) {

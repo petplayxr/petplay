@@ -5,7 +5,7 @@ import * as mod from "jsr:@mys1024/worker-fn@2";
 import { ChatApp } from "../FYOUNET/actors/ChatApp.ts";
 import { OverlayActor } from "../FYOUNET/actors/OverlayActor.ts";
 import { SimpleOverlayActor } from "../FYOUNET/actors/SimpleOverlayActor.ts";
-import { Portal } from "../FYOUNET/actors/PortalActor.ts";
+import { aPortal } from "../FYOUNET/actors/PortalActor.ts";
 
 //#region ovrinterface
 
@@ -98,13 +98,13 @@ function processcommand(msgD: string) {
                 console.log(`Connecting to ${friendip}...`)
                 //actormanager.command(aChatApp, "h_connect", friendip)
                 //here were technically sharing our portal with friendip
-                actormanager.command(aPortal, "h_connect", friendip)
+                actormanager.command(portalActor, "h_connect", friendip)
             }
             else
             {
             console.log(`Connecting to ${cmd[1]}...`)
-            actormanager.command(aChatApp, "h_connect", cmd[1])
-            actormanager.command(aPortal, "h_connect", cmd[1])
+            //actormanager.command(aChatApp, "h_connect", cmd[1])
+            actormanager.command(portalActor, "h_connect", cmd[1])
             break;
             }
             break
@@ -113,11 +113,25 @@ function processcommand(msgD: string) {
             actormanager.listactors()
             break;
         }
+        case "hlistractors": {
+            const remoteportal = cmd[1] as Address<aPortal>
+            actormanager.command(remoteportal, "h_listactors", portalActor)
+            break;
+        }
+        case "hlistactors": {  
+            actormanager.command(portalActor, "h_listactors", portalActor)
+            break;
+        }
         case "vr": {
             execRunner.run(["true", `${ipcport}`]);
             break
         }
+        case "addoverlay": {
+            const aOverlay: Address<SimpleOverlayActor> = actormanager.add(new SimpleOverlayActor("hmm", "aSimpleOverlay", "./dependencies/petplay.exe"))
 
+            actormanager.command(portalActor, "h_addActor", aOverlay)
+            break
+        }
 
         default: {
             console.log(`Unknown command '/${cmd}'.`)
@@ -177,9 +191,9 @@ else if (mode == "p2") {
 
 //username and ip
 const localfullip = ownip
-const localip = ownip.split(":")[0]
 
-//why do i pass localip here instead of localfullip?
+////why do i pass localip here instead of localfullip?
+//15.05 🤦‍♀️
 const actormanager = new actorManager(localfullip)
 
 //we create a new chatapp actor on the localip with the actor type "chat"
@@ -187,14 +201,21 @@ const actormanager = new actorManager(localfullip)
 /* const aChatApp: Address<ChatApp> = actormanager.add(new ChatApp(localfullip, username, "chat")) */
 
 //we create a new portal actor on the localip
-const aPortal: Address<Portal> = actormanager.add(new Portal(ownip, username))
+const portalActor: Address<aPortal> = actormanager.add(new aPortal(ownip, username))
+
+// here were technically sharing our portal with friendip
+// actormanager.command(aPortal, "h_connect", friendip)
+
+
+//we create a new overlay actor on the localip
 
 
 
-/* //we create a new overlay actor on the localip
-const aOverlay: Address<SimpleOverlayActor> = actormanager.add(new SimpleOverlayActor(`${localip}:25568`, username,"./dependencies/petplay.exe"))
 
-const functionData = "CreateBasicOverlay";
+
+
+
+/* const functionData = "CreateBasicOverlay";
 const overlayName = "exampleOverlay";
 const pathToTexture = "c:/GIT/petplay/denoApp/resources/P1.png";
 
