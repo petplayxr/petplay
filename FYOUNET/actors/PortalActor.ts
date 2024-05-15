@@ -46,6 +46,12 @@ export class aPortal extends ActorP2P<aPortal> {
   
   async h_listactors(ctx : actorManager, addr: Address<aPortal>) {
     console.log("HLISTACTORS:");
+    if (addr = this.actorid as Address<aPortal>) {
+      await Object.entries(this.addressbook).forEach(([actorId, actor]) => {
+      console.log(`Actor ID: ${actorId}`);
+      console.log(JSON.stringify(actor));
+    });
+    }
     await Object.entries(this.addressbook).forEach(([actorId, actor]) => {
         this.broadcast(ctx, "h_receive", 
         {
@@ -68,7 +74,7 @@ export class aPortal extends ActorP2P<aPortal> {
    * 
    * @returns The address of the added actor.
    */
-  h_addActor(_ctx : actorManager, actorAddress: Address<Actor>): void {
+  h_addActor(ctx : actorManager, actorAddress: Address<Actor>): void {
     if (isRemoteActorId(actorAddress)) {
       const split = (actorAddress as string).split("@");
       const actorid = split[0];
@@ -76,7 +82,8 @@ export class aPortal extends ActorP2P<aPortal> {
       this.addressbook[Fip] = actorid;
       console.log("added to addressbook " + actorid)
     }
-    else this.addressbook[this.publicIp2] = actorAddress;
+    //really dirty code
+    else this.addressbook[ctx.getActorPubIp(actorAddress)] = actorAddress;
     console.log("added to addressbook " + actorAddress)
   }
 

@@ -6,6 +6,7 @@ import { ChatApp } from "../FYOUNET/actors/ChatApp.ts";
 import { OverlayActor } from "../FYOUNET/actors/OverlayActor.ts";
 import { SimpleOverlayActor } from "../FYOUNET/actors/SimpleOverlayActor.ts";
 import { aPortal } from "../FYOUNET/actors/PortalActor.ts";
+import { getAvailablePort } from "https://deno.land/x/port/mod.ts"
 
 //#region ovrinterface
 
@@ -85,7 +86,7 @@ async function asyncPrompt(): Promise<string> {
 }
 
 //PROCESS USER COMMAND
-function processcommand(msgD: string) {
+async function processcommand(msgD: string) {
 
     const msg = msgD.replace(/\r/g, '');
 
@@ -127,8 +128,11 @@ function processcommand(msgD: string) {
             break
         }
         case "addoverlay": {
-            const aOverlay: Address<SimpleOverlayActor> = actormanager.add(new SimpleOverlayActor("hmm", "aSimpleOverlay", "./dependencies/petplay.exe"))
+            const aOverlay: Address<SimpleOverlayActor> = actormanager.add(
+                new SimpleOverlayActor(`${localip}:${await getAvailablePort()}`, "aSimpleOverlay", "./dependencies/petplay.exe")
+            );
 
+            //make overlay public?
             actormanager.command(portalActor, "h_addActor", aOverlay)
             break
         }
@@ -191,6 +195,7 @@ else if (mode == "p2") {
 
 //username and ip
 const localfullip = ownip
+const localip = localfullip.split(":")[0]
 
 ////why do i pass localip here instead of localfullip?
 //15.05 🤦‍♀️
@@ -262,7 +267,7 @@ if (import.meta.main) {
 
         if (msg.startsWith("/")) {
             console.log("Command")
-            processcommand(msg)
+            await processcommand(msg)
         } else {
             // clear line
             await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"))

@@ -52,7 +52,7 @@ class WebSocketConnection implements Connection {
 // a networked actor
 export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   private server?: Deno.HttpServer // Optional HTTP server for handling WebSocket connections.
-  private publicIp: string // Public IP address of the portal.
+  public publicIp: string // Public IP address of the portal.
 
   constructor(actorname: string, publicIp: string) {
     super()

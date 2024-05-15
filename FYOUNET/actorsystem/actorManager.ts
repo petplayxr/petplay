@@ -56,12 +56,12 @@ export class actorManager extends Actor {
   listactors() {
   console.log("LISTACTORS:");
   Object.entries(this.actors).forEach(([actorId, actor]) => {
-      console.log(`Actor ID: ${actorId}`);
+      console.log(`LocalActor: ${actorId}`);
       //;console.log(JSON.stringify(actor));
   });
   Object.entries(this.webportals).forEach(([RemotePortalAddress, Portal]) => {
       if (Portal.actorname == "Portal") {
-        console.log("a remote portal: "+ RemotePortalAddress)
+        console.log("RemotePortal: "+ RemotePortalAddress)
         const addr : Address<aPortal> = RemotePortalAddress as Address<aPortal>;
         this.command(addr, "h_listactors", this.getLocalPortal())
       }
@@ -73,6 +73,11 @@ export class actorManager extends Actor {
   getLocalPortal(): Address<aPortal> {
     const portal = Object.values(this.actors).find(actor => actor.actorname === "Portal");
     return portal? portal.actorid : undefined;
+  }
+
+  getActorPubIp(actorid: string): string {
+    const actor = this.actors[actorid];
+    return actor? (actor as ActorP2P).publicIp : undefined;
   }
 
   //correct typechecking to use actorp2p as that has a publicip
