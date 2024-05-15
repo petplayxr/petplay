@@ -1,7 +1,5 @@
 // IPCOVRSpawner.ts
-import {
-    getAvailablePort
-} from "https://deno.land/x/port/mod.ts"
+import { getAvailablePort } from "https://deno.land/x/port/mod.ts"
 
 class ExecRunner {
     constructor(private executablePath: string) { }
@@ -56,6 +54,7 @@ class OverlayInterface {
     private server: Deno.Listener | null = null;
     private execRunner: ExecRunner;
     private conn: Deno.Conn | null = null;
+    private subscribers: ((data: string) => void)[] = [];
 
     constructor(private overlayId: string, private executablePath: string) {
         this.execRunner = new ExecRunner(executablePath);
@@ -63,7 +62,6 @@ class OverlayInterface {
     }
 
     async connect() {
-        // Automatically get an available port
         const availablePort = await getAvailablePort();
         if (availablePort === undefined) {
             throw new Error("Failed to get an available port.");
@@ -71,15 +69,15 @@ class OverlayInterface {
         this.port = availablePort;
         console.log(`Using port: ${this.port}`);
 
-        // Map the port to the overlay ID
         OverlayInterface.overlayPortMap.set(this.overlayId, this.port);
 
-        // Start the executable with the port as an argument
         this.execRunner.run([this.port.toString()]);
 
-        // Establish a connection to the server
         this.conn = await Deno.connect({ hostname: "127.0.0.1", port: this.port });
         console.log(`Connected to server on port ${this.port}`);
+
+        // Start listening for incoming data
+        this.receive();
     }
 
     async send(data: string) {
@@ -104,7 +102,7 @@ class OverlayInterface {
             }
             const message = decoder.decode(buffer.subarray(0, bytesRead));
             console.log(`Received data: ${message}`);
-            // Process the received message
+            this.notifySubscribers(message);
         }
     }
 
@@ -119,6 +117,20 @@ class OverlayInterface {
 
     static getPortByOverlayId(overlayId: string): number | undefined {
         return OverlayInterface.overlayPortMap.get(overlayId);
+    }
+
+    subscribe(callback: (data: string) => void) {
+        this.subscribers.push(callback);
+    }
+
+    unsubscribe(callback: (data: string) => void) {
+        this.subscribers = this.subscribers.filter(sub => sub !== callback);
+    }
+
+    private notifySubscribers(data: string) {
+        for (const subscriber of this.subscribers) {
+            subscriber(data);
+        }
     }
 }
 

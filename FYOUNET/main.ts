@@ -1,13 +1,16 @@
-import { Address } from "./actorsystem/types.ts";
+import { Actor, Address } from "./actorsystem/types.ts";
 import { actorManager } from "./actorsystem/actorManager.ts";
 import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
 import * as mod from "jsr:@mys1024/worker-fn@2";
 import { ChatApp } from "./actors/ChatApp.ts";
 import { OverlayActor } from "./actors/OverlayActor.ts";
+import { ActorP2P } from "./actorsystem/actorP2P.ts";
 
-
+/**
+* A payload type for receiving a message from a named actor
+*/
 export type ReceivePayload = {
-  addr: Address<ChatApp>,
+  addr: Address<ActorP2P>,
   name: string,
 } & ({ msg: string } | { event: "JOIN" | "LEAVE" })
 

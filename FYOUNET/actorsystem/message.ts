@@ -1,6 +1,18 @@
 import { Address } from "./types.ts"
 
+/**
+ * Represents a message within the actor system.
+ * Messages carry data between actors and can be serialized/deserialized for transmission.
+ *
+ * @template T - The generic type parameter representing the type of address associated with the message.
+ */
 export class Message<T> {
+    /**
+     * Constructs a new instance of Message.
+     * @param address - where the message is sent.
+     * @param type - command type.
+     * @param payload - payload associated with the message.
+     */
     constructor(
         public address: Address<T>,
         public type: string,

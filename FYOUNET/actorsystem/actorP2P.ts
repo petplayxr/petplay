@@ -51,20 +51,19 @@ class WebSocketConnection implements Connection {
 
 // a networked actor
 export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
-
   private server?: Deno.HttpServer // Optional HTTP server for handling WebSocket connections.
   private publicIp: string // Public IP address of the portal.
 
-  constructor(name: string, publicIp: string) {
+  constructor(actorname: string, publicIp: string) {
     super()
-    this.actorname = name
+    this.actorname = actorname
     this.actorid
     this.publicIp = publicIp
   }
 
   // Handles adding the portal to the system, setting up the server for WebSocket connections.
   override onAdd(ctx: actorManager) {
-    console.log(`Portal ${this.actorid} added at ${this.publicIp}`)
+    console.log(`Networking an actor ${this.actorid} at ${this.publicIp}`)
     const port = this.publicIp.split(":")[1]
     this.server = Deno.serve({ port: parseInt(port) }, req => {
       if (req.headers.get("upgrade") !== "websocket") {
@@ -73,9 +72,10 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
       }
 
       const { socket, response } = Deno.upgradeWebSocket(req)
-
+      
+      // Handle incoming WebSocket messages.
       socket.onmessage = (event) => {
-        // Handle incoming WebSocket messages.
+        
         const message = Message.deserialize(event.data);
         // deno-lint-ignore no-explicit-any
         (ctx as any).command(message.address, message.type, message.payload);
@@ -143,7 +143,11 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   async h_connect(ctx: actorManager, ip: string) {
     console.log("connecting to", ip);
     const addr = this.actorname as Address<T>;
+
+    //onConnect is implicit here
+    //then we tell the portal to sync peers
     const message = new Message(addr, "h_syncPeers", this.serializePeers(ctx));
+    //create ws with ip and send message to ip
     await WebSocketConnection.create(ip).send(message);
   }
 
@@ -151,7 +155,6 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   async h_syncPeers(ctx: actorManager, ip: Record<string, string>) {
     console.log("SYNCHRONIZE ACTORS: OBJECT KEYS= " + Object.keys(ip));
 
-    //"actorManager:3a5a7a31-8a86-4dff-a3df-e4c43cdf0ae5" : "185.174.27.213:25565"
     const newPeers = Object.keys(ip).map(peer => {
       // Check if the peer's IP address is already in ctx.peers or matches the current actor's IP address.
       if (ctx.peers[peer] || ip[peer] === this.publicIp) {

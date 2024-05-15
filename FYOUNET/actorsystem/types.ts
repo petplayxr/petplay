@@ -1,7 +1,7 @@
 import { actorManager } from "./actorManager.ts";
 import { Message } from "./message.ts";
 
-export type ActorId = string & { __brand: 'ActorId' };
+
 
 export type ActorName = string
 
@@ -59,7 +59,55 @@ export interface Connection {
 
 export type OrNull<T> = T extends NonNullable<unknown> ? T : null
 
+/**
+ * Represents a message key for actors, prefixed with 'h_'.
+ *
+ * This type is used to define keys for messages sent between actors in the system.
+ * Each key must start with 'h_', ensuring uniqueness and consistency across the system.
+ * It leverages TypeScript's conditional types to ensure that only valid message keys,
+ * derived from the properties of the specified type `T`, are allowed.
+ *
+ * @template T - The type of the actor or system defining the message keys.
+ */
 export type ActorMessage<T> = keyof T & `h_${string}`;
-export type ActorPayload<T, K extends ActorMessage<T>> = T[K] extends (ctx: actorManager, payload: infer P) => unknown ? OrNull<P> : never;
 
-export type Address<T> = string & { readonly _: T } & ActorId
+/**
+ * Defines the payload structure for messages sent between actors.
+ *
+ * This generic type allows specifying the type of the message being sent,
+ * along with the specific message key. It infers the payload type from the
+ * function signature expected by the message handler, optionally allowing
+ * for the payload to be nullable.
+ *
+ * @template T - The type of the actor or system sending/receiving the message.
+ * @template K - The specific message key, extending `ActorMessage<T>`. This ensures
+ *               that only valid message keys are used.
+ *
+ * @example
+ * * Example usage
+ * type MyActorMessages = {
+ *   h_myFunction: (ctx: actorManager, payload: string) => void;
+ * };
+ *
+ * * Define a payload type for a specific message
+ * type MyFunctionPayload = ActorPayload<MyActorMessages, 'myFunction'>;
+ *
+ * * Now, MyFunctionPayload would be equivalent to `string | null`, assuming
+ * * the actual function signature matches `(ctx: actorManager, payload: string) => void`.
+ */
+
+export type ActorPayload<T, K extends ActorMessage<T>> = T[K] extends (ctx: actorManager, payload: infer P) => unknown? OrNull<P> : never;
+
+/**
+ * Represents a unique identifier for an actor within the system.
+ * It is a combination of the actor's name and a UUID, separated by a colon.
+ */
+export type ActorId = string & { __brand: 'ActorId' };
+
+/**
+ * Represents an address for an actor, including both its name and a unique identifier.
+ * This type is used to uniquely identify actors across the network, allowing for direct communication.
+ *
+ * @template T - The additional data associated with the address.
+ */
+export type Address<T> = string & { readonly _: T } & ActorId;

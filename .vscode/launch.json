@@ -148,6 +148,28 @@
         },
         {
             "request": "launch",
+            "name": "debugdenoapp2",
+            "type": "node",
+            "cwd": "${workspaceFolder}/denoApp/out",
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect=0.0.0.0:9228",
+                "--allow-net",
+                "--inspect-wait",
+                "--allow-all",
+                "../petplay2.ts",
+                "client1",
+                "127.0.0.1:25567",
+                "127.0.0.1:25565",
+                "p1",
+                "false"
+            ],
+            "attachSimplePort": 9228
+        },
+        {
+            "request": "launch",
             "name": "debugovrmodtest",
             "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET/",

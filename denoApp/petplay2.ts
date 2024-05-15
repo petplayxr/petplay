@@ -96,7 +96,8 @@ function processcommand(msgD: string) {
 
             if (!cmd[1]) {
                 console.log(`Connecting to ${friendip}...`)
-                actormanager.command(aChatApp, "h_connect", friendip)
+                //actormanager.command(aChatApp, "h_connect", friendip)
+                //here were technically sharing our portal with friendip
                 actormanager.command(aPortal, "h_connect", friendip)
             }
             else
@@ -179,16 +180,18 @@ const localfullip = ownip
 const localip = ownip.split(":")[0]
 
 //why do i pass localip here instead of localfullip?
-const actormanager = new actorManager(localip)
+const actormanager = new actorManager(localfullip)
 
 //we create a new chatapp actor on the localip with the actor type "chat"
 //specifying type here is dumb should be changed
-const aChatApp: Address<ChatApp> = actormanager.add(new ChatApp(localfullip, username, "chat"))
+/* const aChatApp: Address<ChatApp> = actormanager.add(new ChatApp(localfullip, username, "chat")) */
 
 //we create a new portal actor on the localip
-const aPortal: Address<Portal> = actormanager.add(new Portal(`${localip}:25568`, username))
+const aPortal: Address<Portal> = actormanager.add(new Portal(ownip, username))
 
-//we create a new overlay actor on the localip
+
+
+/* //we create a new overlay actor on the localip
 const aOverlay: Address<SimpleOverlayActor> = actormanager.add(new SimpleOverlayActor(`${localip}:25568`, username,"./dependencies/petplay.exe"))
 
 const functionData = "CreateBasicOverlay";
@@ -198,7 +201,7 @@ const pathToTexture = "c:/GIT/petplay/denoApp/resources/P1.png";
 
 const message = `${functionData};${overlayName};${pathToTexture};`
 
-actormanager.command(aOverlay, "sendToOverlay", message)
+actormanager.command(aOverlay, "sendToOverlay", message) */
 
 
 //#endregion
@@ -210,9 +213,9 @@ if (import.meta.main) {
     //actual start of the program
 
     //true?
-    if (release == "true") {
+    /* if (release == "true") {
         execRunner.run(["true", `${ipcport}`]);
-    }
+    } */
 
 
     console.log(`Your IP is ${localfullip}`)
@@ -222,14 +225,14 @@ if (import.meta.main) {
     //this func should be improved a bit
     actormanager.listactors()
 
-    while (!(await checkOverlayConnection())) {
+    /* while (!(await checkOverlayConnection())) {
         console.log("Waiting for overlay to connect...");
     }
-    beginOverlaystream();
+    beginOverlaystream(); */
 
     while (true) {
 
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        //await new Promise((resolve) => setTimeout(resolve, 5000));
 
         //fix type
         
@@ -244,7 +247,7 @@ if (import.meta.main) {
             await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"))
 
             //tell chat app to broadcast message
-            actormanager.command(aChatApp, "h_broadcast", msg)
+            //actormanager.command(aChatApp, "h_broadcast", msg)
         }
     }
 }

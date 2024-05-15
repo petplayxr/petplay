@@ -22,6 +22,7 @@ export class actorManager extends Actor {
    * Adds an actor to the actor manager.
    * 
    * @param actor The actor to be added.
+   * 
    * @returns The address of the added actor.
    */
   add<T extends Actor>(actor: T): Address<T> {
@@ -30,10 +31,12 @@ export class actorManager extends Actor {
     return this.addressOf(actor);
   }
 
+  //get full address of an actor by passing the id of the actor
   addressOf<T extends Actor>(actor: T): Address<T> {
     return `${actor.actorid}` as Address<T>;
   }
 
+  //remove actor from our global actor list?
   remove(addr: Address<unknown>): void {
     const split = (addr as string).split(":");
     const uuid = split[1];
@@ -45,9 +48,14 @@ export class actorManager extends Actor {
     delete this.actors[uuid as string];
   }
 
+  //list all actors in actor manager
   listactors() {
-    console.log("LISTACTORS:", JSON.stringify(this.actors));
-  }
+  console.log("LISTACTORS:");
+  Object.entries(this.actors).forEach(([actorId, actor]) => {
+    console.log(`Actor ID: ${actorId}`);
+    console.log(JSON.stringify(actor));
+  });
+}
 
 
   //correct typechecking to use actorp2p as that has a publicip
@@ -57,9 +65,9 @@ export class actorManager extends Actor {
 
       if (actor.publicIp) {
 
-        const [ip, port] = actor.publicIp.split(':');
 
-        return ip === myip;
+
+        return actor.publicIp === myip;
       } else {
 
         return false;
@@ -76,10 +84,11 @@ export class actorManager extends Actor {
   }
 
   /**
-   * Commands an actor to perform an action.
-   * @param addr The address of the actor.
-   * @param type The command.
-   * @param payload The payload associated with the message.
+   * Tell actor to do something
+   * @param addr     :  The address of the actor.
+   * @param type     :  The type of the command.
+   * @param payload  :  The payload associated with the message.
+   * 
    * @returns A promise that resolves when the message is sent.
    */
   async command<T, K extends ActorMessage<T>>(
@@ -100,7 +109,7 @@ export class actorManager extends Actor {
         const Fip = split[1];
         const split2 = Fip.split(":");
         const ip = split2[0];
-        if (ip === this.localip) {
+        if (Fip === this.localip) {
           //deno-lint-ignore no-explicit-any
           const actor = this.actors[actorid as string] as any;
           if (actor === undefined) {
