@@ -104,6 +104,11 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
     return Promise.resolve()
   }
 
+  // Placeholder for starting an actor in cloud
+  onStart(state?: SerializedState<Actor>) {
+
+  }
+
   // Broadcasts a message to all peers connected via WebSocket.
 
   async broadcast<K extends ActorMessage<T>>(
@@ -159,6 +164,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   async h_syncPeers(ctx: actorManager, ip: Record<string, string>) {
     console.log("SYNCHRONIZE ACTORS: OBJECT KEYS= " + Object.keys(ip));
 
+    // see if any new peers?
     const newPeers = Object.keys(ip).map(peer => {
       // Check if the peer's IP address is already in ctx.peers or matches the current actor's IP address.
       if (ctx.peers[peer] || ip[peer] === this.publicIp) {
@@ -169,6 +175,7 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
       return { [peer]: peerFullIp };
     }).filter(Boolean) as { [key: string]: string }[]; // Assert the type here
   
+    //for new peers create a new connection
     for (const peer of newPeers) {
       console.log(`Attempting to open connection to peer: ${peer}`);
       let actorid = null;
@@ -193,8 +200,8 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
       console.log("added peer ws");
     }
 
+    //serialize peers and send them to everyone?
     const peers = this.serializePeers(ctx);
-    //send peers back to all peers?
     const tasks = newPeers.map(async peer => {
       console.log("peer:");
       console.log(peer);

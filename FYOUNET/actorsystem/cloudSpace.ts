@@ -1,4 +1,4 @@
-import { Actor, Connection, Address, CloudAddress, createCloudActorAddress, SerializedState, isActorId, isRemoteAddress, isActorName } from "./types.ts";
+import { Actor, Connection, Address, CloudAddress, createCloudActorAddress, SerializedState, isActorId, isRemoteAddress, } from "./types.ts";
 import { ActorP2P } from "./actorP2P.ts"
 import { Message } from "./message.ts";
 import { actorManager } from "./actorManager.ts";
@@ -21,8 +21,37 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
     super("cloudSpace",localip)
     this.actorname = "actorManager";
     this.username = "cloudSpace";
+    this.cloudLoop();
   }
   
+  cloudLoop() {
+    setInterval(() => {
+      console.log("looping")
+      this.sync();
+    }, 1000);
+  }
+
+  async h_sync(ctx: actorManager) {
+    let addr: Address<ActorP2P> = this.cloudAddress;
+    for (const [key, value] of Object.entries(ctx.peers)) {
+      addr = `${key}@${value}` as Address<ActorP2P>;
+      console.log(addr);
+    }
+    const states = this.getActorStates();
+    const message = new Message(addr, "h_sync", states);
+
+    await this.command(addr, "h_sync", states);
+  }
+
+
+
+  getActorStates() {
+    const states: Record<string, SerializedState<Actor>> = {};
+    for (const [key, value] of Object.entries(this.actors)) {
+      states[key] = value.serialize();
+    }
+    return states;
+  }
 
   /**
    * Adds an actor to the actor manager.
@@ -109,9 +138,11 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
     } as cloudPayload);
   }
 
+  //improve this lol
   async command<T, K extends ActorMessage<T>>(
     addr: Address<T>,
     type: K,
+    //deno-lint-ignore no-explicit-any
     payload: ActorPayload<T, K> | ((...args: any[]) => void),
   ): Promise<void> {
     if (isActorId(addr)) {
@@ -124,10 +155,10 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
         const actorid = split[0];
         const Fip = split[1];
         const split2 = Fip.split(":");
-        const ip = split2[0];
+        const _ip = split2[0];
         if (Fip === this.cloudAddress) {
           //deno-lint-ignore no-explicit-any
-          const actor = this.actors[addr as string] as any;
+          const actor = this.actors[addr as any] as any;
           if (actor === undefined) {
             console.error(`Actor with UUID ${addr as string} not found.`);
           } else {
@@ -150,7 +181,7 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
       }
       else {
         //deno-lint-ignore no-explicit-any
-        const actor = this.actors[addr as string] as any;
+        const actor = this.actors[addr as any] as any;
         if (actor === undefined) {
           console.error(`Actor with UUID ${addr as string} not found.`);
         } else {
@@ -169,17 +200,17 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
       }
 
     }
-    else if (isActorName(addr)) {
+    /* else if (isActorName(addr)) {
       console.log("address has no UUID, assume local actor. insecure true")
       //deno-lint-ignore no-explicit-any
-      const actor = this.getlocalActor(addr as string) as any;
+      const actor = this.getlocalActor(addr as any) as any;
       if (actor === undefined) {
         console.error(`Actor with name ${addr as string} not found.`);
       } else {
         await actor[type]?.(this, payload);
       }
       return;
-    }
+    } */
   }
 
   

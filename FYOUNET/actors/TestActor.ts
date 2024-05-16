@@ -1,8 +1,8 @@
 // OverlayActor.ts
-import { Address, ActorState, Actor, SerializedState } from "../actorsystem/types.ts";
+import { Address, Actor, SerializedState } from "../actorsystem/types.ts";
 import { actorManager } from "../actorsystem/actorManager.ts";
 import { ActorP2P } from "../actorsystem/actorP2P.ts";
-import { OVRInterface } from "../OVRInterface.ts";
+
 
 interface OverlayPayload {
     addr: Address<OverlayPayload>;
@@ -22,7 +22,7 @@ export class aTest extends ActorP2P<aTest> {
         super(actorname, publicIp, state);
     }
 
-    onStart(state?: SerializedState<Actor>) {
+    override onStart(state?: SerializedState<Actor>) {
 
         if (state) {
             const newstate = this.deserialize(state);
