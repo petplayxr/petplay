@@ -27,13 +27,13 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
   cloudLoop() {
     setInterval(() => {
       console.log("looping")
-      this.sync();
+      this.h_sync();
     }, 1000);
   }
 
-  async h_sync(ctx: actorManager) {
+  async h_sync() {
     let addr: Address<ActorP2P> = this.cloudAddress;
-    for (const [key, value] of Object.entries(ctx.peers)) {
+    for (const [key, value] of Object.entries(this.peers)) {
       addr = `${key}@${value}` as Address<ActorP2P>;
       console.log(addr);
     }

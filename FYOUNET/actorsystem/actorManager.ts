@@ -1,4 +1,4 @@
-import { Actor, Connection, Address, ActorMessage, ActorPayload, isActorId, isActorName, isRemoteAddress, CloudAddress } from "./types.ts";
+import { Actor, Connection, Address, ActorMessage, ActorPayload, isActorId, isActorName, isRemoteAddress, CloudAddress, SerializedState } from "./types.ts";
 import { aPortal } from "../actors/PortalActor.ts";
 import { ActorP2P } from "./actorP2P.ts"
 import { Message } from "./message.ts";
@@ -46,21 +46,19 @@ export class actorManager extends Actor {
   // Transfer an actor to the cloudSpace
   async transferToCloudSpace<T extends Address<ActorP2P>>(actor: T, cloudspace: cloudSpace): Promise<CloudAddress<T>> {
     console.log("TRANSEFERRING ACTOR TO CLOUDSPACE")
+
     const localActor = Object.values(this.actors).find((actor) => actor instanceof ActorP2P);
+
     if(localActor) {
+
       const data = localActor?.serialize();
-      
-      //new Promise(resolve => setTimeout(resolve, 5000));
-      //localActor.onRemove();
-
-
-      new Promise(resolve => setTimeout(resolve, 3000));
 
       await this.remove(this.addressOf(localActor));  // Remove from local actor manager
-      new Promise(resolve => setTimeout(resolve, 3000));
-      const cloudAddress = cloudspace.add(localActor as ActorP2P, data) as CloudAddress<T>;  // Add to cloudSpace
+
+      const cloudAddress = cloudspace.add(localActor as ActorP2P, data as SerializedState<ActorP2P>) as CloudAddress<T>;  // Add to cloudSpace
       return cloudAddress;
     }
+    
     else {
       console.error(`Actor with UUID ${actor as string} not found.`);
       throw new Error(`Actor with UUID ${actor as string} not found.`);
