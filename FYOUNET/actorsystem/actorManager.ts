@@ -1,24 +1,22 @@
-import { Actor, Connection, Address, ActorMessage, ActorPayload, isActorId, isActorName, isRemoteActorId } from "./types.ts";
+import { Actor, Connection, Address, ActorMessage, ActorPayload, isActorId, isActorName, isRemoteAddress, CloudAddress } from "./types.ts";
 import { aPortal } from "../actors/PortalActor.ts";
 import { ActorP2P } from "./actorP2P.ts"
 import { Message } from "./message.ts";
-import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
+import { cloudSpace } from "./cloudSpace.ts";
 
 //actor manager actor
 export class actorManager extends Actor {
-  public actors: Record<string, Actor> = {};
+  public actors: Record<string, Actor | ActorP2P> = {};
   private localip: string;
+  peers: Record<string, Connection> = {};
+  public webportals: Record< Address<aPortal>, aPortal > = {};
 
   constructor(localip: string) {
     super()
     this.localip = localip;
     this.actorname = "actorManager";
-    //this.actors[this.actorid] = this;
   }
-
-  //uuid: string = crypto.randomUUID();
-  peers: Record<string, Connection> = {};
-  public webportals: Record< Address<aPortal>, aPortal > = {};
+  
 
   /**
    * Adds an actor to the actor manager.
@@ -33,51 +31,59 @@ export class actorManager extends Actor {
     return this.addressOf(actor);
   }
 
-  //get full address of an actor by passing the id of the actor
-  addressOf<T extends Actor>(actor: T): Address<T> {
-    return `${actor.actorid}` as Address<T>;
-  }
-
   //remove actor from our global actor list?
-  remove(addr: Address<unknown>): void {
-    const split = (addr as string).split(":");
-    const uuid = split[1];
-
-    const actor = this.actors[uuid as string];
-    if (actor !== undefined) {
-      actor.onRemove();
-    }
-    delete this.actors[uuid as string];
-  }
-
-
-
-  //list all actors in actor manager
-  listactors() {
-  console.log("LISTACTORS:");
-  Object.entries(this.actors).forEach(([actorId, actor]) => {
-      console.log(`LocalActor: ${actorId}`);
-      //;console.log(JSON.stringify(actor));
-  });
-  Object.entries(this.webportals).forEach(([RemotePortalAddress, Portal]) => {
-      if (Portal.actorname == "Portal") {
-        console.log("RemotePortal: "+ RemotePortalAddress)
-        const addr : Address<aPortal> = RemotePortalAddress as Address<aPortal>;
-        this.command(addr, "h_listactors", this.getLocalPortal())
-      }
-
-  });
+  async remove(addr: Address<unknown>): Promise<void> {
+    /* const split = (addr as string).split(":");
+    const uuid = split[1]; */
   
+    const actor = this.actors[addr];
+    if (actor!== undefined) {
+      await actor.onRemove();
+    }
+    delete this.actors[addr];
   }
+
+  // Transfer an actor to the cloudSpace
+  async transferToCloudSpace<T extends Address<ActorP2P>>(actor: T, cloudspace: cloudSpace): Promise<CloudAddress<T>> {
+    console.log("TRANSEFERRING ACTOR TO CLOUDSPACE")
+    const localActor = Object.values(this.actors).find((actor) => actor instanceof ActorP2P);
+    if(localActor) {
+      const data = localActor?.serialize();
+      
+      //new Promise(resolve => setTimeout(resolve, 5000));
+      //localActor.onRemove();
+
+
+      new Promise(resolve => setTimeout(resolve, 3000));
+
+      await this.remove(this.addressOf(localActor));  // Remove from local actor manager
+      new Promise(resolve => setTimeout(resolve, 3000));
+      const cloudAddress = cloudspace.add(localActor as ActorP2P, data) as CloudAddress<T>;  // Add to cloudSpace
+      return cloudAddress;
+    }
+    else {
+      console.error(`Actor with UUID ${actor as string} not found.`);
+      throw new Error(`Actor with UUID ${actor as string} not found.`);
+    }
+  }
+
+  
+
+  
+
+  
+  
+
+  //#region extras
 
   getLocalPortal(): Address<aPortal> {
     const portal = Object.values(this.actors).find(actor => actor.actorname === "Portal");
     return portal? portal.actorid : undefined;
   }
 
-  getActorPubIp(actorid: string): string {
-    const actor = this.actors[actorid];
-    return actor? (actor as ActorP2P).publicIp : undefined;
+  //get full address of an actor by passing the id of the actor
+  addressOf<T extends Actor>(actor: T): Address<T> {
+    return `${actor.actorid}` as Address<T>;
   }
 
   //correct typechecking to use actorp2p as that has a publicip
@@ -105,6 +111,31 @@ export class actorManager extends Actor {
     return undefined;
   }
 
+  getActorPubIp(actorid: string): string {
+    const actor = this.actors[actorid];
+    return actor? (actor as ActorP2P).publicIp : undefined;
+  }
+
+  //list all actors in actor manager
+  listactors() {
+    console.log("LISTACTORS:");
+    Object.entries(this.actors).forEach(([actorId, _actor]) => {
+        console.log(`LocalActor: ${actorId}`);
+        //;console.log(JSON.stringify(actor));
+    });
+    Object.entries(this.webportals).forEach(([RemotePortalAddress, Portal]) => {
+        if (Portal.actorname == "Portal") {
+          console.log("RemotePortal: "+ RemotePortalAddress)
+          const addr : Address<aPortal> = RemotePortalAddress as Address<aPortal>;
+          this.command(addr, "h_listactors", this.getLocalPortal())
+        }
+
+    });
+  }
+
+
+  //#endregion
+
   /**
    * Tell actor to do something
    * @param addr     :  The address of the actor.
@@ -116,12 +147,10 @@ export class actorManager extends Actor {
   async command<T, K extends ActorMessage<T>>(
     addr: Address<T>,
     type: K,
-    payload: ActorPayload<T, K>
+    payload: ActorPayload<T, K> | ((...args: any[]) => void),
   ): Promise<void> {
-
-
     if (isActorId(addr)) {
-      if (isRemoteActorId(addr)) {
+      if (isRemoteAddress(addr)) {
         //console.log("remoteactor")
 
         const message = new Message(addr, type, payload);

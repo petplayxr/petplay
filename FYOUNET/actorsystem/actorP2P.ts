@@ -1,9 +1,10 @@
 // Import custom types from a local module for actor payloads and messages.
-import { ActorPayload } from "./types.ts";
+import { ActorPayload, ActorState, SerializedState, isCloudActorAddress } from "./types.ts";
 import { ActorMessage } from "./types.ts";
 import { Actor, Connection, Address } from "./types.ts"
 import { actorManager } from "./actorManager.ts";
 import { Message } from "./message.ts";
+import { cloudSpace } from "./cloudSpace.ts";
 
 
 type RPortalP2P = ActorP2P
@@ -51,21 +52,23 @@ class WebSocketConnection implements Connection {
 
 // a networked actor
 export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
-  private server?: Deno.HttpServer // Optional HTTP server for handling WebSocket connections.
-  public publicIp: string // Public IP address of the portal.
+  private server?: Deno.HttpServer | undefined // Optional HTTP server for handling WebSocket connections.
+  public publicIp: string // Public IP .
+  
 
-  constructor(actorname: string, publicIp: string) {
-    super()
+  constructor(actorname: string, publicIp: string, state?: SerializedState<Actor>) {
+    super(state)
     this.actorname = actorname
     this.actorid
     this.publicIp = publicIp
   }
 
   // Handles adding the portal to the system, setting up the server for WebSocket connections.
-  override onAdd(ctx: actorManager) {
+  override async onAdd(ctx: actorManager | cloudSpace) {
     console.log(`Networking an actor ${this.actorid} at ${this.publicIp}`)
     const port = this.publicIp.split(":")[1]
-    this.server = Deno.serve({ port: parseInt(port) }, req => {
+    this.server = Deno.serve({ port: parseInt(port)}, req => {
+      console.log(`Received request: ${req.url}`);
       if (req.headers.get("upgrade") !== "websocket") {
         // If the request is not trying to upgrade to WebSocket, return 501 Not Implemented.
         return new Response(null, { status: 501 });
@@ -86,24 +89,25 @@ export class ActorP2P<T extends ActorP2P = RPortalP2P> extends Actor {
   }
 
   // Cleans up resources when the portal is removed from the system.
-  override onRemove() {
-    this.server?.shutdown()
+  override async onRemove() {
+    await this.server?.shutdown()
+    await this.server?.finished
   }
 
   // Placeholder for connection handling.
-  onConnect(_ctx: actorManager, _addr: Address<T>): Promise<void> {
+  onConnect(_ctx: actorManager | cloudSpace, _addr: Address<T>): Promise<void> {
     return Promise.resolve()
   }
 
   // Placeholder for disconnection handling.
-  onDisconnect(_ctx: actorManager, _addr: Address<T>): Promise<void> {
+  onDisconnect(_ctx: actorManager | cloudSpace, _addr: Address<T>): Promise<void> {
     return Promise.resolve()
   }
 
   // Broadcasts a message to all peers connected via WebSocket.
 
   async broadcast<K extends ActorMessage<T>>(
-    ctx: actorManager,
+    ctx: actorManager | cloudSpace ,
     type: K,
     payload: ActorPayload<T, K>
   ) {

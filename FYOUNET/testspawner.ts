@@ -1,10 +1,10 @@
-import { OverlayInterface } from "./OVRInterface.ts";
+import { OVRInterface } from "./OVRInterface.ts";
 
 
 async function spawn() {
     const overlayId = "Overlay1";
     const executablePath = "c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/ovrinput.exe";
-    const OVR = new OverlayInterface(overlayId, executablePath);
+    const OVR = new OVRInterface(overlayId, executablePath);
     await OVR.connect();
 
     const functionData = "CreateBasicOverlay";

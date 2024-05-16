@@ -1,37 +1,111 @@
 import { actorManager } from "./actorManager.ts";
+import { cloudSpace } from "./cloudSpace.ts";
 import { Message } from "./message.ts";
 
+// types
+
+//simplest type
+export type ActorName = string & { __brand: 'ActorName' };
+
+/**
+ * Represents a unique identifier for an actor within the system.
+ * It is a combination of the actor's name and a UUID, separated by a colon.
+ */
+//ActorId an actor name an an uuid:string
+export type ActorId =  string & {string: ActorName} & { __brand: 'ActorId' }
+
+/**
+ * Represents an address for an actor, including both its name and a unique identifier.
+ * This type is used to uniquely identify actors across the network, allowing for direct communication.
+ *
+ * @template T - The additional data associated with the address.
+ */
+//Address is an an actorId with the actor instance as a property
+export type Address<Actor> = { readonly _: Actor } & ActorId;
+
+/**
+ * Represents a remote address for an actor, including its network location.
+ * This type is used to uniquely identify and communicate with remote actors.
+ *
+ * @template T - The additional data associated with the address.
+ */
+//Remote Address is combination of an ip and an actoraddress
+export type RemoteAddress<ActorP2P> = Address<Actor> & { readonly _: ActorP2P } & { readonly isRemote: true };
+
+/**
+ * Represents a cloud address for an actor, indicating it is managed by a cloudSpace actor.
+ * This type is used to uniquely identify and communicate with actors in the cloud.
+ *
+ * @template T - The additional data associated with the address.
+ */
+//CloudAddress is a combination of an Address of the cloudspace and the actors id
+export type CloudAddress<ActorP2P> = Address<cloudSpace> & { readonly _: ActorP2P } & ActorId & { readonly isCloud: true };
 
 
-export type ActorName = string
 
-function createActorId(actorname: string, uuid: string): ActorId {
+
+// create types
+
+function createActorId(actorname: ActorName, uuid: string): ActorId {
   return `${actorname}:${uuid}` as ActorId;
+}
+
+export function createRemoteAddress<ActorP2P>(ip:string, actorid:ActorId): RemoteAddress<ActorP2P> {
+  return `${ip}@${actorid}` as RemoteAddress<ActorP2P>;
+}
+
+export function createCloudActorAddress<ActorP2P>(cloudAddress : Address<cloudSpace>, ActorAddress: ActorId): CloudAddress<ActorP2P> {
+
+  return `${ActorAddress}@${cloudAddress}` as CloudAddress<T>;
+}
+
+//manual type guards?
+
+export function isActorName(value: string): value is ActorName {
+  return !value.includes(":");
 }
 
 export function isActorId(value: string): value is ActorId {
   return value.includes(":");
 }
 
-export function isRemoteActorId(value: string): value is Address<any> {
+export function isAddress(value: string): value is Address<Actor> {
+  return isActorId(value);
+}
+
+export function isRemoteAddress(value: string): value is Address<Actor> {
   return value.includes("@");
 }
 
-export function isActorName(value: string): value is ActorName {
-  return !value.includes(":");
+export function isCloudActorAddress(value: string): value is CloudAddress<Actor> {
+  return value.includes("@") && isActorId(value);
 }
+
+export type ActorState<T> = Record<string, unknown> & { readonly _: T };
+
+export type SerializedState<T> = {
+  actorid: ActorId;
+  actorname: ActorName;
+  uuid: string;
+  state: ActorState<T>;
+};
 
 export class Actor {
   protected _uuid: string = crypto.randomUUID();
-  protected _actorname: ActorName = "BaseActor";
+  protected _actorname: ActorName = "BaseActor" as ActorName;
   protected _actorid: ActorId;
+  protected _state: ActorState<Actor>; // Internal state
 
-  constructor() {
+  constructor(state?: SerializedState<Actor>) {
     this._actorid = createActorId(this._actorname, this._uuid);
+    if (state) {
+      this.deserialize(state);
+    }
+    this._state = { _: this } as ActorState<Actor>;
   }
 
   public set actorname(actorName: string) {
-    this._actorname = actorName;
+    this._actorname = actorName as ActorName;
     // Update the combined ID property when the actorName changes
     this._actorid = createActorId(this._actorname, this._uuid);
   }
@@ -43,12 +117,39 @@ export class Actor {
     return this._actorid;
   }
 
-  onAdd(_: actorManager) {}
+  public get state(): ActorState<Actor> {
+    return this._state;
+  }
+
+  public set state(newState: ActorState<Actor>) {
+    this._state = newState;
+  }
+
+  // Serialize the actor's state
+  serialize(): SerializedState<Actor> {
+    return {
+      actorid: this._actorid,
+      actorname: this._actorname,
+      uuid: this._uuid,
+      state: this._state
+    };
+  }
+
+  // Deserialize the actor's state
+  deserialize(data: SerializedState<Actor>): ActorState<Actor> {
+    this._actorid = data.actorid;
+    this._actorname = data.actorname;
+    this._uuid = data.uuid;
+    this._state = data.state;
+  
+    // Return the deserialized state
+    return this._state;
+  }
+
+  onAdd(_: actorManager | cloudSpace) {}
 
   onRemove() {}
 }
-
-
 
 export interface Connection {
   send<T>(message: Message<T>): Promise<void>;
@@ -98,16 +199,6 @@ export type ActorMessage<T> = keyof T & `h_${string}`;
 
 export type ActorPayload<T, K extends ActorMessage<T>> = T[K] extends (ctx: actorManager, payload: infer P) => unknown? OrNull<P> : never;
 
-/**
- * Represents a unique identifier for an actor within the system.
- * It is a combination of the actor's name and a UUID, separated by a colon.
- */
-export type ActorId = string & { __brand: 'ActorId' };
 
-/**
- * Represents an address for an actor, including both its name and a unique identifier.
- * This type is used to uniquely identify actors across the network, allowing for direct communication.
- *
- * @template T - The additional data associated with the address.
- */
-export type Address<T> = string & { readonly _: T } & ActorId;
+
+

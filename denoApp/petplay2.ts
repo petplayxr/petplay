@@ -1,68 +1,15 @@
 import { Address } from "../FYOUNET/actorsystem/types.ts";
 import { actorManager } from "../FYOUNET/actorsystem/actorManager.ts";
-import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
-import * as mod from "jsr:@mys1024/worker-fn@2";
 import { ChatApp } from "../FYOUNET/actors/ChatApp.ts";
 import { OverlayActor } from "../FYOUNET/actors/OverlayActor.ts";
 import { SimpleOverlayActor } from "../FYOUNET/actors/SimpleOverlayActor.ts";
 import { aPortal } from "../FYOUNET/actors/PortalActor.ts";
-import { getAvailablePort } from "https://deno.land/x/port/mod.ts"
+import { getAvailablePort } from "https://deno.land/x/port@1.0.0/mod.ts"
+import { aOVRInput } from "../FYOUNET/actors/OVRInput.ts";
+import { aTest } from "../FYOUNET/actors/TestActor.ts";
+import { cloudSpace } from "../FYOUNET/actorsystem/cloudSpace.ts";
 
-//#region ovrinterface
-
-class ExecRunner {
-    constructor(private executablePath: string) { }
-
-    async run(args: string[]) {
-        const command = new Deno.Command(this.executablePath, {
-            args: args,
-            stdout: "piped",
-            stderr: "piped"
-        });
-
-        const child = command.spawn();
-        console.log(`Spawned child pid: ${child.pid}`);
-
-        // Function to handle continuous stream reading and logging
-        const continuouslyLogStream = async (stream: ReadableStream<Uint8Array>, label: string) => {
-            const reader = stream.getReader();
-            try {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    const text = new TextDecoder().decode(value);
-                    console.log(`${label}: ${text}`);
-                }
-            } catch (err) {
-                console.error(`Error reading from ${label}:`, err);
-            } finally {
-                reader.releaseLock();
-            }
-        };
-
-        // Start reading and logging stdout and stderr without waiting for them to finish
-        continuouslyLogStream(child.stdout, "Standard Output");
-        continuouslyLogStream(child.stderr, "Standard Error");
-
-        // Monitor the process exit status in the background
-        const status = await child.status;
-        if (status.code !== 0) {
-            console.error(`Process exited with code ${status.code}`);
-        }
-
-        // Ensure resources are cleaned up
-        child.stdout.cancel(); // Cancel the stream to prevent memory leaks
-        child.stderr.cancel();
-        console.log("Resources have been cleaned up.");
-    }
-}
-
-
-
-//#endregion
-
-//#region petplay stuff
-
+//#region why are these here
 export type ReceivePayload = {
     addr: Address<ChatApp>,
     name: string,
@@ -72,9 +19,39 @@ export type ReceiveCoord = {
     addr: Address<OverlayActor>,
     name: string,
 } & ({ data: string } | { event: "JOIN" | "LEAVE" })
+//#endregion
 
+//#region consts
 
 const stream = Deno.stdin.readable.values()
+
+console.log("runtime args: " + Deno.args); // ['one, 'two', 'three']
+const username = Deno.args[0]
+const ownip = Deno.args[1]
+const friendip = Deno.args[2]
+const mode = Deno.args[3]
+
+let ipcport = 27015
+if (mode == "p1") {
+    console.log("p1")
+    ipcport = 27015
+}
+else if (mode == "p2") {
+    console.log("p2")
+    ipcport = 27016
+}
+
+//username and ip
+const localfullip = ownip
+const localip = localfullip.split(":")[0]
+
+
+
+
+//#endregion
+
+
+//PROGRAM STARTS HERE
 
 async function asyncPrompt(): Promise<string> {
     const next = await stream.next()
@@ -85,7 +62,7 @@ async function asyncPrompt(): Promise<string> {
     }
 }
 
-//PROCESS USER COMMAND
+
 async function processcommand(msgD: string) {
 
     const msg = msgD.replace(/\r/g, '');
@@ -115,6 +92,7 @@ async function processcommand(msgD: string) {
             break;
         }
         case "hlistractors": {
+            //control a remote actor 🤯
             const remoteportal = cmd[1] as Address<aPortal>
             actormanager.command(remoteportal, "h_listactors", portalActor)
             break;
@@ -123,17 +101,13 @@ async function processcommand(msgD: string) {
             actormanager.command(portalActor, "h_listactors", portalActor)
             break;
         }
-        case "vr": {
-            execRunner.run(["true", `${ipcport}`]);
-            break
-        }
         case "addoverlay": {
             const aOverlay: Address<SimpleOverlayActor> = actormanager.add(
-                new SimpleOverlayActor(`${localip}:${await getAvailablePort()}`, "aSimpleOverlay", "./dependencies/petplay.exe")
+                new SimpleOverlayActor(await IP(), "aSimpleOverlay", "./dependencies/petplay.exe")
             );
 
             //make overlay public?
-            actormanager.command(portalActor, "h_addActor", aOverlay)
+            actormanager.command(portalActor, "h_recordAddress", aOverlay)
             break
         }
 
@@ -144,124 +118,51 @@ async function processcommand(msgD: string) {
     }
 }
 
-async function beginOverlaystream() {
-    while (true) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        actormanager.command(aOverlay, "h_broadcast", null)
-        await new Promise((resolve) => setTimeout(resolve, 50));
-    }
+async function IP() {
+
+    return `${localip}:${await getAvailablePort()}`
+
 }
 
-async function checkOverlayConnection() {
-    return new Promise((resolve) => {
-        actormanager.command(aOverlay, "isConnected", (connected) => {
-            if (connected) {
-                console.log("OverlayActor is connected.");
-                resolve(true);
-            } else {
-                console.log("OverlayActor is not connected.");
-                setTimeout(() => resolve(false), 3000); // Retry after 1 second
-            }
-        });
-    });
+async function wait(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-//#endregion
-
-//#region start petplay
-
-
-
-//#region consts
-
-console.log("runtime args: " + Deno.args); // ['one, 'two', 'three']
-const username = Deno.args[0]
-const ownip = Deno.args[1]
-const friendip = Deno.args[2]
-const mode = Deno.args[3]
-const release = Deno.args[4]
-
-const execRunner = new ExecRunner("./dependencies/petplay.exe");
-
-let ipcport = 27015
-if (mode == "p1") {
-    console.log("p1")
-    ipcport = 27015
-}
-else if (mode == "p2") {
-    console.log("p2")
-    ipcport = 27016
-}
-
-//username and ip
-const localfullip = ownip
-const localip = localfullip.split(":")[0]
-
-////why do i pass localip here instead of localfullip?
-//15.05 🤦‍♀️
+//create actormanager
 const actormanager = new actorManager(localfullip)
+const cloud = new cloudSpace(localfullip)
 
-//we create a new chatapp actor on the localip with the actor type "chat"
-//specifying type here is dumb should be changed
-/* const aChatApp: Address<ChatApp> = actormanager.add(new ChatApp(localfullip, username, "chat")) */
+const testactor = actormanager.add(new aTest("testactor",await IP()))
 
-//we create a new portal actor on the localip
-const portalActor: Address<aPortal> = actormanager.add(new aPortal(ownip, username))
+actormanager.command(testactor, "h_logstate", null)
 
-// here were technically sharing our portal with friendip
-// actormanager.command(aPortal, "h_connect", friendip)
+actormanager.command(testactor, "h_test", null)
 
+actormanager.command(testactor, "h_logstate", null)
 
-//we create a new overlay actor on the localip
+const testactor2 = await actormanager.transferToCloudSpace(testactor, cloud)
 
+cloud.command(testactor2, "h_logstate", null)
 
+//create a portal actor, essentially a public endpoint of an user, contains an addressbook where actor addresses can be added
+/* const portalActor: Address<aPortal> = actormanager.add(new aPortal(ownip, username))
 
+//create a more functional actor, in this case the actor connects to the vr system and can be queried for data
+const ovrInput  = actormanager.add(new aOVRInput(await IP(), "c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/ovrinput.exe"))
 
+//query some vr data
+actormanager.command(ovrInput, "h_getOVRData", (data:string) => {console.log(data)});
 
-
-
-/* const functionData = "CreateBasicOverlay";
-const overlayName = "exampleOverlay";
-const pathToTexture = "c:/GIT/petplay/denoApp/resources/P1.png";
-
-
-const message = `${functionData};${overlayName};${pathToTexture};`
-
-actormanager.command(aOverlay, "sendToOverlay", message) */
-
-
-//#endregion
+//record the address of the vr actor
+actormanager.command(portalActor, "h_recordAddress", ovrInput) */
 
 
 if (import.meta.main) {
-   
 
-    //actual start of the program
-
-    //true?
-    /* if (release == "true") {
-        execRunner.run(["true", `${ipcport}`]);
-    } */
-
-
-    console.log(`Your IP is ${localfullip}`)
-
-    
-
-    //this func should be improved a bit
-    actormanager.listactors()
-
-    /* while (!(await checkOverlayConnection())) {
-        console.log("Waiting for overlay to connect...");
-    }
-    beginOverlaystream(); */
+    /* console.log(`Your IP is ${localfullip}`) */
 
     while (true) {
 
-        //await new Promise((resolve) => setTimeout(resolve, 5000));
-
-        //fix type
-        
 
         const msg = await asyncPrompt() ?? ""
 
@@ -271,12 +172,9 @@ if (import.meta.main) {
         } else {
             // clear line
             await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"))
-
-            //tell chat app to broadcast message
-            //actormanager.command(aChatApp, "h_broadcast", msg)
         }
+
+
+
     }
 }
-
-// Instantiate the runner with the path to the executable
-

@@ -1,5 +1,5 @@
 // IPCOVRSpawner.ts
-import { getAvailablePort } from "https://deno.land/x/port/mod.ts"
+import { getAvailablePort } from "https://deno.land/x/port@1.0.0/mod.ts"
 
 class ExecRunner {
     constructor(private executablePath: string) { }
@@ -48,7 +48,7 @@ class ExecRunner {
     }
 }
 
-class OverlayInterface {
+class OVRInterface {
     private static overlayPortMap: Map<string, number> = new Map();
     private port: number;
     private server: Deno.Listener | null = null;
@@ -69,7 +69,7 @@ class OverlayInterface {
         this.port = availablePort;
         console.log(`Using port: ${this.port}`);
 
-        OverlayInterface.overlayPortMap.set(this.overlayId, this.port);
+        OVRInterface.overlayPortMap.set(this.overlayId, this.port);
 
         this.execRunner.run([this.port.toString()]);
 
@@ -101,7 +101,7 @@ class OverlayInterface {
                 break;
             }
             const message = decoder.decode(buffer.subarray(0, bytesRead));
-            console.log(`Received data: ${message}`);
+            //console.log(`Received data: ${message}`);
             this.notifySubscribers(message);
         }
     }
@@ -111,12 +111,12 @@ class OverlayInterface {
             this.conn.close();
             this.conn = null;
         }
-        OverlayInterface.overlayPortMap.delete(this.overlayId);
+        OVRInterface.overlayPortMap.delete(this.overlayId);
         console.log("TCP connection has been closed and port mapping removed.");
     }
 
     static getPortByOverlayId(overlayId: string): number | undefined {
-        return OverlayInterface.overlayPortMap.get(overlayId);
+        return OVRInterface.overlayPortMap.get(overlayId);
     }
 
     subscribe(callback: (data: string) => void) {
@@ -134,4 +134,4 @@ class OverlayInterface {
     }
 }
 
-export { OverlayInterface };
+export { OVRInterface };

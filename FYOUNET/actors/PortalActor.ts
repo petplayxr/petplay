@@ -1,7 +1,7 @@
 import { actorManager} from "../actorsystem/actorManager.ts";
 import { ActorP2P } from "../actorsystem/actorP2P.ts";
 import { ReceivePayload } from "../main.ts";
-import { Actor, Address, isRemoteActorId } from "../actorsystem/types.ts";
+import { Actor, Address, isRemoteAddress } from "../actorsystem/types.ts";
 
 
 export class aPortal extends ActorP2P<aPortal> {
@@ -74,8 +74,8 @@ export class aPortal extends ActorP2P<aPortal> {
    * 
    * @returns The address of the added actor.
    */
-  h_addActor(ctx : actorManager, actorAddress: Address<Actor>): void {
-    if (isRemoteActorId(actorAddress)) {
+  h_recordAddress(ctx : actorManager, actorAddress: Address<Actor>): void {
+    if (isRemoteAddress(actorAddress)) {
       const split = (actorAddress as string).split("@");
       const actorid = split[0];
       const Fip = split[1];
@@ -89,7 +89,7 @@ export class aPortal extends ActorP2P<aPortal> {
 
   h_receive(ctx: actorManager, msg: ReceivePayload) {
 
-    if (isRemoteActorId(msg.addr)) {
+    if (isRemoteAddress(msg.addr)) {
       const split = (msg.addr as string).split("@");
       const actorid = split[0];
       const Fip = split[1];

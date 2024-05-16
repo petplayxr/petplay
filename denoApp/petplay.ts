@@ -215,7 +215,7 @@ if (import.meta.main) {
     }
 
 
-    console.log(`Your IP is ${localfullip}`)
+    /* console.log(`Your IP is ${localfullip}`) */
 
     
 
