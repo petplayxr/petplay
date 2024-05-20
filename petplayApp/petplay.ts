@@ -9,7 +9,7 @@ import { aOVRInput } from "../FYOUNET/actors/OVRInput.ts";
 import { aTest } from "../FYOUNET/actors/TestActor.ts";
 import { cloudSpace } from "../FYOUNET/actorsystem/cloudActorManager.ts";
 
-//#region why are these here
+//#region actor payload types
 export type ReceivePayload = {
     addr: Address<ChatApp>,
     name: string,
@@ -20,7 +20,6 @@ export type ReceiveCoord = {
     name: string,
 } & ({ data: string } | { event: "JOIN" | "LEAVE" })
 //#endregion
-
 //#region consts
 
 const stream = Deno.stdin.readable.values()
@@ -29,23 +28,18 @@ console.log("runtime args: " + Deno.args); // ['one, 'two', 'three']
 const username = Deno.args[0]
 const ownip = Deno.args[1]
 const friendip = Deno.args[2]
-const mode = Deno.args[3]
 
-// do const value = thing ? 1 : 2
-const ipcport = mode === "p1"? 27015 : mode === "p2"? 27016 : undefined;
-if (ipcport!== undefined) {
-    console.log(mode);
-}
 
 //username and ip
 const localfullip = ownip
 const localip = localfullip.split(":")[0]
 
 
-
-
 //#endregion
-
+//#region helper funcs
+async function IP() {return `${localip}:${await getAvailablePort()}`}
+async function wait(ms: number) {return await new Promise(resolve => setTimeout(resolve, ms));}
+//#endregion
 
 //PROGRAM STARTS HERE
 
@@ -58,7 +52,7 @@ async function asyncPrompt(): Promise<string> {
     }
 }
 
-
+// command processor for petplay terminal commands
 async function processcommand(msgD: string) {
 
     const msg = msgD.replace(/\r/g, '');
@@ -114,53 +108,52 @@ async function processcommand(msgD: string) {
     }
 }
 
-async function IP() {
-
-    return `${localip}:${await getAvailablePort()}`
-
-}
-
-async function wait(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 //create actormanager
 const actormanager = new actorManager(localfullip)
 const cloud : cloudSpace = new cloudSpace(localfullip)
 
+//create test actor
 const testactor: Address<aTest> = actormanager.add(new aTest("testactor",await IP()))
 
+//command test actor to log its internal state
 actormanager.command(testactor, "h_logstate", null)
 
+//change test actors internal state
 actormanager.command(testactor, "h_test", null)
 
+//check test actors internal state again
 actormanager.command(testactor, "h_logstate", null)
 
-const testactor2 : CloudAddress<Address<aTest>> = await actormanager.transferToCloudSpace(testactor, cloud)
+//transfer test actor to cloud space
+const cloudtestactor : CloudAddress<Address<aTest>> = await actormanager.transferToCloudSpace(testactor, cloud)
 
-cloud.command(testactor2, "h_logstate", null)
-
-const portal = actormanager.add(new aPortal(localfullip, username))
+//check test actors internal state in the cloud
+cloud.command(cloudtestactor, "h_logstate", null)
 
 //create a portal actor, essentially a public endpoint of an user, contains an addressbook where actor addresses can be added
-/* const portalActor: Address<aPortal> = actormanager.add(new aPortal(ownip, username))
+const portalActor: Address<aPortal> = actormanager.add(new aPortal(ownip, username))
 
-//create a more functional actor, in this case the actor connects to the vr system and can be queried for data
-const ovrInput  = actormanager.add(new aOVRInput(await IP(), "c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/ovrinput.exe"))
+//record the address of the vr actor to our portals address book for external access
+actormanager.command(portalActor, "h_recordAddress", cloudtestactor)
 
-//query some vr data
+
+//this should probably list actors in cloudspace
+actormanager.listactors()
+
+
+//do same with a vr actor
+/* const ovrInput  = actormanager.add(new aOVRInput(await IP(), "c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/ovrinput.exe"))
 actormanager.command(ovrInput, "h_getOVRData", (data:string) => {console.log(data)});
-
-//record the address of the vr actor
 actormanager.command(portalActor, "h_recordAddress", ovrInput) */
+
 
 
 if (import.meta.main) {
 
-    /* console.log(`Your IP is ${localfullip}`) */
+    console.log(`Your IP is ${await IP()}`)
 
     while (true) {
-
 
         const msg = await asyncPrompt() ?? ""
 
@@ -171,8 +164,5 @@ if (import.meta.main) {
             // clear line
             await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"))
         }
-
-
-
     }
 }

@@ -21,7 +21,7 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
     super("cloudSpace",localip)
     this.actorname = "actorManager";
     this.username = "cloudSpace";
-    this.cloudLoop();
+    //this.cloudLoop();
   }
   
   cloudLoop() {
@@ -141,9 +141,9 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
   //improve this lol
   async command<T, K extends ActorMessage<T>>(
     addr: Address<T>,
-    type: K,
+    type: K | string,
     //deno-lint-ignore no-explicit-any
-    payload: ActorPayload<T, K> | ((...args: any[]) => void),
+    payload: ActorPayload<T, K> | ((...args: any[]) => void ) | null,
   ): Promise<void> {
     if (isActorId(addr)) {
       if (isRemoteAddress(addr)) {

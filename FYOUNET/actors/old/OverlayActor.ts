@@ -1,7 +1,7 @@
 import { Address } from "../../actorsystem/types.ts";
 import { actorManager } from "../../actorsystem/actorManager.ts";
 import { ActorP2P } from "../../actorsystem/actorP2P.ts";
-import { ReceiveCoord } from "../../OLDmain.ts";
+import { ReceiveCoord } from "../../../petplayApp/bruh/OLDmain.ts";
 
 // Import the IPCOVRConnector if it's part of another module
 import { IPCOVRConnector } from "../helpermodules/IPCOVRConnector.ts";

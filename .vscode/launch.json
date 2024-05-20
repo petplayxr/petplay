@@ -117,11 +117,10 @@
             ],
             "attachSimplePort": 9229
         },
-        {   "name": "debugdenoapp",
+        {   "name": "RUN PETPLAY",
             "request": "launch",
             "type": "node",
-            "cwd": "${workspaceFolder}/denoApp/out",
-            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/petplayApp/out",
             "runtimeExecutable": "deno",
             "runtimeArgs": [
                 "run",
@@ -130,11 +129,9 @@
                 "--inspect-wait",
                 "--allow-all",
                 "../petplay.ts",
-                "client1",
+                "MyUsername",
                 "172.26.187.120:25567",
                 "172.26.159.31:25565",
-                "p1",
-                "false"
             ],
             "attachSimplePort": 9228
         },
