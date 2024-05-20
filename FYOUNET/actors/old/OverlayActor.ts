@@ -4,7 +4,7 @@ import { ActorP2P } from "../../actorsystem/actorP2P.ts";
 import { ReceiveCoord } from "../../OLDmain.ts";
 
 // Import the IPCOVRConnector if it's part of another module
-import { IPCOVRConnector } from "../../actorsystem/helpermodules/IPCOVRConnector.ts";
+import { IPCOVRConnector } from "../helpermodules/IPCOVRConnector.ts";
 
 export class OverlayActor extends ActorP2P<OverlayActor> {
     private name: string;
