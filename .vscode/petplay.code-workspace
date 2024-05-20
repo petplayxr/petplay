@@ -91,7 +91,10 @@
 			"xtr1common": "cpp",
 			"xtree": "cpp",
 			"xutility": "cpp",
-			"future": "cpp"
+			"future": "cpp",
+			"any": "cpp",
+			"ranges": "cpp",
+			"span": "cpp"
 		},
 		"hide-files.files": [],
 		"files.exclude": {
@@ -103,7 +106,9 @@
 			"**/Thumbs.db": true,
 			".gitignore": true,
 			".gitmodules": true,
-			"**/out": true
+			"**/out": false,
+			"OVRINTERFACE/vcpkg": true,
+			"OVRINTERFACE/vcpkg_installed": true
 		},
 		"explorerExclude.backup": {},
 		"cmake.useCMakePresets": "always"

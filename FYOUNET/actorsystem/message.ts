@@ -1,8 +1,20 @@
-import { Address } from "./types.ts"
+import { Actor, Address } from "./types.ts"
 
-export class Message<T> {
+/**
+ * Represents a message within the actor system.
+ * Messages carry data between actors and can be serialized/deserialized for transmission.
+ *
+ * @template T - The generic type parameter representing the type of address associated with the message.
+ */
+export class Message<Actor> {
+    /**
+     * Constructs a new instance of Message.
+     * @param address - where the message is sent.
+     * @param type - command type.
+     * @param payload - payload associated with the message.
+     */
     constructor(
-        public address: Address<T>,
+        public address: Address<Actor>,
         public type: string,
         public payload: unknown
     ) {}
@@ -11,8 +23,8 @@ export class Message<T> {
         return JSON.stringify(this);
     }
 
-    static deserialize<T>(data: string): Message<T> {
+    static deserialize<Actor>(data: string): Message<Actor> {
         const { address, type, payload } = JSON.parse(data);
-        return new Message<T>(address, type, payload);
+        return new Message<Actor>(address, type, payload);
     }
 }

@@ -4,23 +4,62 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        {
-            "name": "DebugPETPLAYcpp",
+        {   "name": "DebugPETPLAYcpp1",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/OVRINTERFACE/out/build/default/Debug/petplay.exe",
-            "args": [],
+            "args": ["true","27015"],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${workspaceFolder}/OVRINTERFACE",
             "environment": [],
             "console": "integratedTerminal",
             "preLaunchTask": "cmake-build-debug"
         },
-        {
+        {   "name": "DebugCPPPIPE",
+            "type": "cppvsdbg",
             "request": "launch",
-            "name": "DEBUGFYOUNET",
+            "program": "${workspaceFolder}/OVRINTERFACE/out/build/user/Debug/petplay.exe",
+            "args": ["\\\\?\\pipe\\Overlay1"],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}/OVRINTERFACE",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "cmake-build-debug"
+        },
+        {   "name": "DebugPETPLAYcpp2",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/OVRINTERFACE/out/build/default/Debug/petplay.exe",
+            "args": ["false","27016"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/OVRINTERFACE",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "cmake-build-debug"
+        },
+        {   "name": "DEBUGFYOUNET1",
+            "request": "launch",
             "type": "node",
-            "program": "${workspaceFolder}/FYOUNET/main.ts",
+            "cwd": "${workspaceFolder}/FYOUNET",
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect=0.0.0.0:9228",
+                "--allow-net",
+                "--inspect-wait",
+                "--allow-all",
+                "main.ts",
+                "client1",
+                "8080",
+                "71.36.126.225:25565",
+                "p1"
+            ],
+            "attachSimplePort": 9228
+        },
+        {   "name": "DEBUGFYOUNET2",
+            "request": "launch",
+            "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET",
             "console": "integratedTerminal",
             "runtimeExecutable": "deno",
@@ -28,10 +67,171 @@
                 "run",
                 "--allow-net",
                 "--inspect-wait",
-                "--allow-all"
+                "--allow-all",
+                "main.ts",
+                "client2",
+                "8081",
+                "127.0.0.1:8080",
+                "p2"
+
+            ],
+            "attachSimplePort": 9229
+        },
+        {   "name": "DEBUGINTERNET1",
+            "request": "launch",
+            "type": "node",
+            "cwd": "${workspaceFolder}/FYOUNET",
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect=0.0.0.0:9228",
+                "--allow-net",
+                "--inspect-wait",
+                "--allow-all",
+                "TestMultiplayer.ts",
+                "client1",
+                "172.26.187.120:25567",
+                "172.26.159.31:25565",
+                "p1"
+            ],
+            "attachSimplePort": 9228
+        },
+        {   "name": "DEBUGINTERNET2",
+            "request": "launch",
+            "type": "node",
+            "cwd": "${workspaceFolder}/FYOUNET",
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--allow-net",
+                "--inspect-wait",
+                "--allow-all",
+                "TestMultiplayer.ts",
+                "client2",
+                "172.26.159.31:25565",
+                "172.26.187.120:25567",
+                "p2"
+
+            ],
+            "attachSimplePort": 9229
+        },
+        {   "name": "RUN PETPLAY",
+            "request": "launch",
+            "type": "node",
+            "cwd": "${workspaceFolder}/petplayApp/out",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect=0.0.0.0:9228",
+                "--allow-net",
+                "--inspect-wait",
+                "--allow-all",
+                "../petplay.ts",
+                "MyUsername",
+                "172.26.187.120:25567",
+                "172.26.159.31:25565",
+            ],
+            "attachSimplePort": 9228
+        },
+        {   "name": "debugdenoapp2",
+            "request": "launch",
+            "type": "node",
+            "cwd": "${workspaceFolder}/denoApp/out",
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect=0.0.0.0:9228",
+                "--allow-net",
+                "--inspect-wait",
+                "--allow-all",
+                "../petplay2.ts",
+                "client1",
+                "127.0.0.1:25567",
+                "127.0.0.1:25565",
+                "p1",
+                "false"
+            ],
+            "attachSimplePort": 9228
+        },
+        {   "name": "debugovrmodtest",
+            "request": "launch",
+            "type": "node",
+            "cwd": "${workspaceFolder}/FYOUNET/",
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect=0.0.0.0:9228",
+                "--inspect-wait",
+                "--unstable",
+                "--allow-ffi",
+                "--allow-net",
+                
+                "--allow-run",
+                "testspawner.ts",
+            ],
+            "attachSimplePort": 9228
+        },
+        {   "name": "VRCPOSLOGGER",
+            "request": "launch",
+            "type": "node",
+            "program": "${workspaceFolder}/FYOUNET/vrcposLOGGER.ts",
+            "cwd": "${workspaceFolder}",
+            "env": {},
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect-wait",
+                "--allow-all",
+                "--unstable-net"
             ],
             "attachSimplePort": 9229
         }
 
+
+        
+    ],
+    "compounds": [
+        {
+            "name": "DebugFYOUALL",
+            "configurations": [
+                "DEBUGFYOUNET1",
+                "DEBUGFYOUNET2"
+            ]
+        },
+        {
+            "name": "DebugPETPLAYcpp",
+            "configurations": [
+                "DebugPETPLAYcpp1",
+                "DebugPETPLAYcpp2"
+            ]
+        },
+        {
+            "name": "DebugP1",
+            "configurations": [
+                "DebugPETPLAYcpp1",
+                "DEBUGFYOUNET1"
+            ]
+        },
+        {
+            "name": "DebugP2",
+            "configurations": [
+                "DebugPETPLAYcpp2",
+                "DEBUGFYOUNET2"
+            ]
+        },
+        {
+            "name": "DebugALL",
+            "configurations": [
+                "DebugPETPLAYcpp1",
+                "DebugPETPLAYcpp2",
+                "DEBUGFYOUNET1",
+                "DEBUGFYOUNET2"
+            ]
+        }
     ]
 }

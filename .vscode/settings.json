@@ -65,9 +65,34 @@
         "xstring": "cpp",
         "xtr1common": "cpp",
         "xtree": "cpp",
-        "xutility": "cpp"
+        "xutility": "cpp",
+        "array": "cpp",
+        "fstream": "cpp",
+        "functional": "cpp",
+        "numeric": "cpp",
+        "set": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "xhash": "cpp",
+        "codecvt": "cpp",
+        "condition_variable": "cpp",
+        "cstdarg": "cpp",
+        "deque": "cpp",
+        "shared_mutex": "cpp",
+        "stack": "cpp",
+        "queue": "cpp",
+        "valarray": "cpp"
     },
     "C_Cpp.errorSquiggles": "enabled",
     "cmake.sourceDirectory": "${workspaceFolder}/OVRINTERFACE",
-    "deno.enable": true
+    "deno.enable": true,
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        "**/vcpkg_installed": true
+    }
 }

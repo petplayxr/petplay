@@ -6,9 +6,13 @@
 #include <map>
 #include <iostream>
 #include <filesystem>  // Make sure this is correctly included
+#include <sstream>
+#include <string>
 
 namespace fs = std::filesystem;
 using namespace vr;
+
+#pragma region init
 
 OverlayInterface *s_pSharedVRController = NULL;
 
@@ -36,28 +40,13 @@ OverlayInterface::~OverlayInterface()
 {
 }
 
+#pragma endregion
 
-std::string GetTrackedDeviceString(vr::IVRSystem *pHmd, vr::TrackedDeviceIndex_t unDevice, vr::TrackedDeviceProperty prop)
-{
-	char buf[128];
-	vr::TrackedPropertyError err;
-	pHmd->GetStringTrackedDeviceProperty( unDevice, prop, buf, sizeof( buf ), &err );
-	if (err != vr::TrackedProp_Success)
-	{
-		return std::string("Error Getting String: ") + pHmd->GetPropErrorNameFromEnum(err);
-	}
-	else
-	{
-		return buf;
-	}
-}
-
-
-vr::VROverlayHandle_t OverlayInterface::Init()
+vr::VROverlayHandle_t OverlayInterface::CreateInteractiveOverlay(const std::string& overlayName)
 {
 	bool bSuccess = true;
 
-    m_strName = "systemoverlay";
+    m_strName = overlayName;
 
     bSuccess = ConnectToVRRuntime();
 
@@ -111,12 +100,145 @@ vr::VROverlayHandle_t OverlayInterface::Init()
 	return m_ulOverlayHandle;
 }
 
-/** Get the transform in 3d space associated with a specific 2d point in the overlay's coordinate space (where 0,0 is the lower left). -Z points out of the overlay */
-/* 		virtual EVROverlayError GetTransformForOverlayCoordinates( VROverlayHandle_t ulOverlayHandle, ETrackingUniverseOrigin eTrackingOrigin, HmdVector2_t coordinatesInOverlay, HmdMatrix34_t *pmatTransform ) = 0; */
-/* struct HmdMatrix34_t
+vr::VROverlayHandle_t OverlayInterface::CreateAlignmentOverlay(bool mode)
 {
-	float m[3][4];
-}; */
+    if (mode) {
+        std::cout << "p1" << std::endl;
+    } else {
+        std::cout << "p2" << std::endl;
+    }
+	bool bSuccess = true;
+
+    m_strName = "alignmentoverlay";
+
+    bSuccess = ConnectToVRRuntime();
+
+    bSuccess = bSuccess && vr::VRCompositor() != NULL;
+
+    if( vr::VROverlay() )
+	{
+       // vr::VROverlayHandle_t m_ulOverlayThumbnailHandle;
+
+        std::string sKey = std::string( "sample." ) + m_strName;
+        vr::VROverlayError overlayError = vr::VROverlay()->CreateOverlay( sKey.c_str(), m_strName.c_str(), &m_ulOverlayHandle );
+		bSuccess = bSuccess && overlayError == vr::VROverlayError_None;
+	}
+
+	if ( bSuccess )
+    {
+        vr::VROverlay()->SetOverlayWidthInMeters(m_ulOverlayHandle, 0.2f);
+		vr::VROverlay()->SetOverlayInputMethod(m_ulOverlayHandle, vr::VROverlayInputMethod_Mouse);
+        /* vr::VROverlay()->SetOverlayColor(m_ulOverlayHandle, 1.0f, 0.0f, 1.0f); */
+
+        std::string relativePath = "";
+
+        if (mode) {
+            relativePath = "../resources/P1.png";
+        } else {
+            relativePath = "../resources/P2.png";
+        }
+        
+
+
+        try {
+            fs::path absolutePath = fs::absolute(relativePath);
+
+            if (fs::exists(absolutePath)) {
+                std::cout << "Absolute path: " << absolutePath << std::endl;
+                // Correct usage of SetOverlayFromFile if it takes two arguments
+                vr::VROverlay()->SetOverlayFromFile(m_ulOverlayHandle, absolutePath.string().c_str());
+            } else {
+                std::cout << "File not found at: " << absolutePath << std::endl;
+            }
+        } catch (const fs::filesystem_error& e) {
+            std::cerr << "Filesystem error: " << e.what() << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "General error: " << e.what() << std::endl;
+        }
+
+
+        HmdMatrix34_t transformMatrix;
+		//vr::VROverlay()->ShowKeyboardForOverlay(m_ulOverlayHandle, vr::EGamepadTextInputMode::k_EGamepadTextInputModeNormal, vr::EGamepadTextInputLineMode::k_EGamepadTextInputLineModeSingleLine);
+
+        // ALIGNMENT MATRIX
+        transformMatrix.m[0][0] = 1.0f; transformMatrix.m[0][1] = 0.0f; transformMatrix.m[0][2] = 0.0f; transformMatrix.m[0][3] = 0.0f;
+        transformMatrix.m[1][0] = 0.0f; transformMatrix.m[1][1] = 0.0f; transformMatrix.m[1][2] = 0.0f; transformMatrix.m[1][3] = 0.0f;
+        transformMatrix.m[2][0] = 0.0f; transformMatrix.m[2][1] = -1.0f; transformMatrix.m[2][2] = 1.0f; transformMatrix.m[2][3] = 0.0f;
+        vr::VROverlay()->SetOverlayTransformAbsolute(m_ulOverlayHandle, vr::TrackingUniverseStanding, &transformMatrix);
+        vr::VROverlay()->ShowOverlay(m_ulOverlayHandle);
+	}
+	return m_ulOverlayHandle;
+}
+
+vr::VROverlayHandle_t OverlayInterface::CreateBasicOverlay(const std::string& overlayName, const std::string& texpath )
+{
+	bool bSuccess = true;
+
+    m_strName = overlayName;
+
+    bSuccess = ConnectToVRRuntime();
+
+    bSuccess = bSuccess && vr::VRCompositor() != NULL;
+
+    // Create the overlay
+    if( vr::VROverlay() )
+	{
+       // vr::VROverlayHandle_t m_ulOverlayThumbnailHandle;
+
+        std::string sKey = std::string( "sample." ) + m_strName;
+        vr::VROverlayError overlayError = vr::VROverlay()->CreateOverlay( sKey.c_str(), m_strName.c_str(), &m_ulOverlayHandle );
+		bSuccess = bSuccess && overlayError == vr::VROverlayError_None;
+	}
+    // if successful, set overlay properties
+	if ( bSuccess )
+    {
+        vr::VROverlay()->SetOverlayWidthInMeters(m_ulOverlayHandle, 0.2f);
+		vr::VROverlay()->SetOverlayInputMethod(m_ulOverlayHandle, vr::VROverlayInputMethod_Mouse);
+        /* vr::VROverlay()->SetOverlayColor(m_ulOverlayHandle, 1.0f, 0.0f, 1.0f); */
+
+
+
+        fs::path absolutePath = texpath;
+
+        if (fs::exists(absolutePath)) {
+            vr::VROverlay()->SetOverlayFromFile(m_ulOverlayHandle, absolutePath.string().c_str());
+        } else {
+            std::cerr << "File not found at: " << absolutePath << std::endl;
+        }
+
+
+        HmdMatrix34_t transformMatrix;
+		
+        // Set the values of the matrix to represent your desired transformation
+        // For example, to set the matrix to the identity matrix (no transformation)
+        transformMatrix.m[0][0] = 1.0f; transformMatrix.m[0][1] = 0.0f; transformMatrix.m[0][2] = 0.0f; transformMatrix.m[0][3] = 0.0f;
+        transformMatrix.m[1][0] = 0.0f; transformMatrix.m[1][1] = 1.0f; transformMatrix.m[1][2] = 0.0f; transformMatrix.m[1][3] = 0.0f;
+        transformMatrix.m[2][0] = 0.0f; transformMatrix.m[2][1] = 0.0f; transformMatrix.m[2][2] = 1.0f; transformMatrix.m[2][3] = 0.0f;
+        vr::VROverlay()->SetOverlayTransformAbsolute(m_ulOverlayHandle, vr::TrackingUniverseStanding, &transformMatrix);
+        vr::VROverlay()->ShowOverlay(m_ulOverlayHandle);
+	}
+	return m_ulOverlayHandle;
+}
+
+
+#pragma region helpers
+
+std::string GetTrackedDeviceString(vr::IVRSystem *pHmd, vr::TrackedDeviceIndex_t unDevice, vr::TrackedDeviceProperty prop)
+{
+	char buf[128];
+	vr::TrackedPropertyError err;
+	pHmd->GetStringTrackedDeviceProperty( unDevice, prop, buf, sizeof( buf ), &err );
+	if (err != vr::TrackedProp_Success)
+	{
+		return std::string("Error Getting String: ") + pHmd->GetPropErrorNameFromEnum(err);
+	}
+	else
+	{
+		return buf;
+	}
+}
+
+#pragma endregion
 
 #pragma region overlay movement
 
@@ -225,12 +347,18 @@ void LogHMDAndControllersPositions(vr::IVRSystem* pVRSystem) {
             vr::HmdVector3_t position = {pose.mDeviceToAbsoluteTracking.m[0][3], pose.mDeviceToAbsoluteTracking.m[1][3], pose.mDeviceToAbsoluteTracking.m[2][3]};
 
             // Log the position with the device type
-            std::cout << deviceType << " Position: (" << position.v[0] << ", " << position.v[1] << ", " << position.v[2] << ")" << std::endl;
+            //std::cout << deviceType << " Position: (" << position.v[0] << ", " << position.v[1] << ", " << position.v[2] << ")" << std::endl;
         }
     }
 }
 
+void OverlayInterface::SetOverlayPosition(vr::VROverlayHandle_t overlayHandle, vr::HmdMatrix34_t overlayPosition) {
 
+    //overlayPosition.m[0][3] *= -1;
+
+    // Set the overlay's transform to the controller's transform
+    vr::VROverlay()->SetOverlayTransformAbsolute(overlayHandle, vr::TrackingUniverseStanding, &overlayPosition);
+}
 
 void OverlayInterface::SetOverlayPositionToController(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle, vr::TrackedDeviceIndex_t controllerIndex) {
     LogHMDAndControllersPositions(pVRSystem); // Log all device positions (for debugging purposes)
@@ -438,6 +566,81 @@ bool OverlayInterface::IsControllerCloseToOverlay(vr::IVRSystem* pVRSystem, vr::
 
 #pragma endregion overlay movement
 
+#pragma region overlay networking
+
+vr::HmdMatrix34_t OverlayInterface::GetOverlayPositionAbsolute(vr::IVRSystem* pVRSystem, vr::VROverlayHandle_t overlayHandle) {
+    vr::HmdMatrix34_t transformMatrix;
+    vr::ETrackingUniverseOrigin trackingOrigin;
+
+
+    vr::EVROverlayError error = vr::VROverlay()->GetOverlayTransformAbsolute(overlayHandle, &trackingOrigin, &transformMatrix);
+    if (error != vr::VROverlayError_None) {
+        std::cerr << "Error getting overlay transform in absolute terms: " << error << std::endl;
+        // Initialize the matrix to identity if there is an error
+        transformMatrix.m[0][0] = 1.0f; transformMatrix.m[0][1] = 0.0f; transformMatrix.m[0][2] = 0.0f; transformMatrix.m[0][3] = 0.0f;
+        transformMatrix.m[1][0] = 0.0f; transformMatrix.m[1][1] = 1.0f; transformMatrix.m[1][2] = 0.0f; transformMatrix.m[1][3] = 0.0f;
+        transformMatrix.m[2][0] = 0.0f; transformMatrix.m[2][1] = 0.0f; transformMatrix.m[2][2] = 1.0f; transformMatrix.m[2][3] = 0.0f;
+    }
+
+    return transformMatrix;
+}
+
+vr::HmdVector3_t OverlayInterface::GetHMDPositionRelativeToTrackingUniverseOrigin(vr::IVRSystem* pVRSystem) {
+    // Define the tracking universe origin
+    vr::ETrackingUniverseOrigin eTrackingOrigin = vr::ETrackingUniverseOrigin::TrackingUniverseStanding;
+
+    // Define the prediction time (0 for the most current data)
+    float fPredictionTime = 0.0f;
+
+    // Allocate an array to hold the poses
+    vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
+
+    // Get the poses for all devices
+    pVRSystem->GetDeviceToAbsoluteTrackingPose(eTrackingOrigin, fPredictionTime, poses, vr::k_unMaxTrackedDeviceCount);
+
+    // Get the HMD index
+    vr::TrackedDeviceIndex_t hmdIndex = vr::k_unTrackedDeviceIndex_Hmd;
+
+    // Check if the HMD is valid
+    if (!pVRSystem->IsTrackedDeviceConnected(hmdIndex)) {
+        std::cerr << "HMD not connected." << std::endl;
+        return {0, 0, 0}; // Return a zero vector if the HMD is not connected
+    }
+
+    // Get the pose for the HMD
+    vr::TrackedDevicePose_t& hmdPose = poses[hmdIndex];
+
+    // Check if the pose is valid
+    if (!hmdPose.bPoseIsValid) {
+        std::cerr << "HMD pose not valid." << std::endl;
+        return {0, 0, 0}; // Return a zero vector if the pose is not valid
+    }
+
+    // Extract the position from the pose
+    vr::HmdVector3_t position = {hmdPose.mDeviceToAbsoluteTracking.m[0][3], hmdPose.mDeviceToAbsoluteTracking.m[1][3], hmdPose.mDeviceToAbsoluteTracking.m[2][3]};
+
+    return position;
+}
+
+std::string OverlayInterface::serializePositions(const vr::HmdMatrix34_t& overlayPosition, const vr::HmdVector3_t& hmdPosition) {
+    std::stringstream ss;
+    // Serialize overlay position
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            ss << overlayPosition.m[i][j] << " ";
+        }
+    }
+    // Serialize HMD position
+    for (int i = 0; i < 3; ++i) {
+        ss << hmdPosition.v[i] << " ";
+    }
+    return ss.str();
+}
+
+#pragma endregion 
+
+#pragma region init stuff
+
 void OverlayInterface::Shutdown()
 {
 	DisconnectFromVRRuntime();
@@ -498,4 +701,4 @@ vr::HmdError OverlayInterface::GetLastHmdError()
 	return m_eLastHmdError;
 }
 
-
+#pragma endregion

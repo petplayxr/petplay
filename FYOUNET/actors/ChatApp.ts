@@ -1,17 +1,20 @@
 import { Address } from "../actorsystem/types.ts";
 import { actorManager } from "../actorsystem/actorManager.ts";
 import { ActorP2P } from "../actorsystem/actorP2P.ts";
-import { ReceivePayload } from "../main.ts";
+import { ReceivePayload } from "../../petplayApp/bruh/OLDmain.ts";
 
-//why should we extend networked version of actor instead of normal actor?
+
 export class ChatApp extends ActorP2P<ChatApp> {
   private name: string;
   private messages: string[] = [];
   private names: Record<string, string> = {};
+  
 
-  constructor(publicIp: string, name: string) {
-    super("chat", publicIp);
-    this.name = name;
+  // Constructor for the ChatApp actor.
+  constructor(publicIp: string, username: string, actorname: string) {
+    super(actorname, publicIp);
+    console.log(this.actorid)
+    this.name = username;
   }
 
   override async onConnect(ctx: actorManager, addr: Address<ChatApp>): Promise<void> {
@@ -49,13 +52,14 @@ export class ChatApp extends ActorP2P<ChatApp> {
       }
     } else {
       this.messages.push(`<${msg.name}> ${msg.msg}`);
-      console.log(`<${msg.name}> ${msg.msg}`);
+      //console.log(`<${msg.name}> ${msg.msg}`);
     }
   }
 
   async h_broadcast(ctx: actorManager, msg: string) {
     this.messages.push(`<${this.name}> ${msg}`);
-    console.log(`<${this.name}> ${msg}`);
+    //console.log(`<${this.name}> ${msg}`);
+    console.log(this.actorid)
 
     await this.broadcast(ctx, "h_receive", {
       addr: ctx.addressOf(this),

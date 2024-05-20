@@ -1,0 +1,8 @@
+{
+    "dependencies": [
+      "zeromq",
+      "cppzmq",
+      "openvr",
+      "nlohmann-json"
+    ]
+}

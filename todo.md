@@ -1,1 +1,5 @@
-- Add SteamVR controller profiles. 
+- steamvr controller profiles
+- vrchat positioning module
+- vr input module
+- simple overlay module
+- more complex overlay module based on puppeteerStream
