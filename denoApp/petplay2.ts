@@ -1,13 +1,13 @@
-import { Address } from "../FYOUNET/actorsystem/types.ts";
+import { Address, CloudAddress } from "../FYOUNET/actorsystem/types.ts";
 import { actorManager } from "../FYOUNET/actorsystem/actorManager.ts";
 import { ChatApp } from "../FYOUNET/actors/ChatApp.ts";
-import { OverlayActor } from "../FYOUNET/actors/OverlayActor.ts";
+import { OverlayActor } from "../FYOUNET/actors/old/OverlayActor.ts";
 import { SimpleOverlayActor } from "../FYOUNET/actors/SimpleOverlayActor.ts";
 import { aPortal } from "../FYOUNET/actors/PortalActor.ts";
 import { getAvailablePort } from "https://deno.land/x/port@1.0.0/mod.ts"
 import { aOVRInput } from "../FYOUNET/actors/OVRInput.ts";
 import { aTest } from "../FYOUNET/actors/TestActor.ts";
-import { cloudSpace } from "../FYOUNET/actorsystem/cloudSpace.ts";
+import { cloudSpace } from "../FYOUNET/actorsystem/cloudActorManager.ts";
 
 //#region why are these here
 export type ReceivePayload = {
@@ -31,14 +31,10 @@ const ownip = Deno.args[1]
 const friendip = Deno.args[2]
 const mode = Deno.args[3]
 
-let ipcport = 27015
-if (mode == "p1") {
-    console.log("p1")
-    ipcport = 27015
-}
-else if (mode == "p2") {
-    console.log("p2")
-    ipcport = 27016
+// do const value = thing ? 1 : 2
+const ipcport = mode === "p1"? 27015 : mode === "p2"? 27016 : undefined;
+if (ipcport!== undefined) {
+    console.log(mode);
 }
 
 //username and ip
@@ -130,9 +126,9 @@ async function wait(ms: number) {
 
 //create actormanager
 const actormanager = new actorManager(localfullip)
-const cloud = new cloudSpace(localfullip)
+const cloud : cloudSpace = new cloudSpace(localfullip)
 
-const testactor = actormanager.add(new aTest("testactor",await IP()))
+const testactor: Address<aTest> = actormanager.add(new aTest("testactor",await IP()))
 
 actormanager.command(testactor, "h_logstate", null)
 
@@ -140,9 +136,11 @@ actormanager.command(testactor, "h_test", null)
 
 actormanager.command(testactor, "h_logstate", null)
 
-const testactor2 = await actormanager.transferToCloudSpace(testactor, cloud)
+const testactor2 : CloudAddress<Address<aTest>> = await actormanager.transferToCloudSpace(testactor, cloud)
 
 cloud.command(testactor2, "h_logstate", null)
+
+const portal = actormanager.add(new aPortal(localfullip, username))
 
 //create a portal actor, essentially a public endpoint of an user, contains an addressbook where actor addresses can be added
 /* const portalActor: Address<aPortal> = actormanager.add(new aPortal(ownip, username))

@@ -1,3 +1,3 @@
-[submodule "openvr"]
-	path = openvr
-	url = https://github.com/ValveSoftware/openvr.git
+[submodule "OVRINTERFACE/vcpkg"]
+	path = OVRINTERFACE/vcpkg
+	url = https://github.com/microsoft/vcpkg.git

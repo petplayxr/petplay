@@ -4,7 +4,7 @@ import { ActorMessage } from "./types.ts";
 import { Actor, Connection, Address } from "./types.ts"
 import { actorManager } from "./actorManager.ts";
 import { Message } from "./message.ts";
-import { cloudSpace } from "./cloudSpace.ts";
+import { cloudSpace } from "./cloudActorManager.ts";
 
 
 type RPortalP2P = ActorP2P

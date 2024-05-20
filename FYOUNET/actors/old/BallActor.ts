@@ -1,7 +1,7 @@
-import { Actor, Address } from "../actorsystem/types.ts";
-import { actorManager } from "../actorsystem/actorManager.ts";
-import { Message } from "../actorsystem/message.ts";
-import { ActorP2P } from "../actorsystem/actorP2P.ts";
+import { Actor, Address } from "../../actorsystem/types.ts";
+import { actorManager } from "../../actorsystem/actorManager.ts";
+import { Message } from "../../actorsystem/message.ts";
+import { ActorP2P } from "../../actorsystem/actorP2P.ts";
 
 type BallPosition = {
   x: number;

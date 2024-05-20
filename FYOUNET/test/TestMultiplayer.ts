@@ -1,16 +1,13 @@
-import { Actor, Address } from "./actorsystem/types.ts";
-import { actorManager } from "./actorsystem/actorManager.ts";
+import { Address } from "../actorsystem/types.ts";
+import { actorManager } from "../actorsystem/actorManager.ts";
 import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
 import * as mod from "jsr:@mys1024/worker-fn@2";
-import { ChatApp } from "./actors/ChatApp.ts";
-import { OverlayActor } from "./actors/OverlayActor.ts";
-import { ActorP2P } from "./actorsystem/actorP2P.ts";
+import { ChatApp } from "../actors/ChatApp.ts";
+import { OverlayActor } from "../actors/old/OverlayActor.ts";
 
-/**
-* A payload type for receiving a message from a named actor
-*/
+
 export type ReceivePayload = {
-  addr: Address<ActorP2P>,
+  addr: Address<ChatApp>,
   name: string,
 } & ({ msg: string } | { event: "JOIN" | "LEAVE" })
 
@@ -32,33 +29,51 @@ async function asyncPrompt(): Promise<string> {
 }
 
 if (import.meta.main) {
-  console.log(Deno.args); // ['one, 'two', 'three']
+  console.log("runtime args: "+Deno.args); // ['one, 'two', 'three']
 
   const name = Deno.args[0]
 
-  const port = Deno.args[1]
+  const ownip = Deno.args[1]
 
-  const ip2 = Deno.args[2]
+  const friendip = Deno.args[2]
 
   const mode = Deno.args[3]
 
+  let ipcport = 1
+
+  if (mode == "p1") {
+    console.log("p1")
+    ipcport = 27015
+  }
+
+  else if (mode == "p2") {
+    console.log("p2")
+    ipcport = 27016
+  }
+
+  //username and ip
   
-  console.log(`Your IP is ${ip}`)
+
+  const fullip = ownip
+  const localip = ownip.split(":")[0]
+  //const fullip = `${localip}:${ownip}`
+  
+  console.log(`Your IP is ${fullip}`)
 
   //create actorManager
-  const actors = new actorManager()
+  const actorBoss = new actorManager(localip)
 
 
 
   //#region overlay
 
 
-  const aOverlay: Address<OverlayActor> = actors.add(new OverlayActor(`127.0.0.1:${port}`, name, ipcport))
+ /*  const aOverlay: Address<OverlayActor> = actors.add(new OverlayActor(`127.0.0.1:${port}`, name, ipcport))
 
   //wait 2 seconds
-  await new Promise(resolve => setTimeout(resolve, 12000))
+  await new Promise(resolve => setTimeout(resolve, 2000))
 
-  actors.command(aOverlay, "h_connect", ip2)
+  actors.command(aOverlay, "h_connect", ip2) */
 
 
   //#endregion
@@ -66,36 +81,38 @@ if (import.meta.main) {
   //#region chatapp
   
 
-  /* const aChatApp : Address<ChatApp> = actors.add(new ChatApp(`127.0.0.1:${port}`, name))
+  const aChatApp : Address<ChatApp> = actorBoss.add(new ChatApp(`${fullip}`, name, "chat"))
 
 
-  actors.command(aChatApp, "h_connect", ip2) */
+  
 
   //#endregion
 
-  actors.listactors()
+  //make this function output readable
+  actorBoss.listactors()
 
-  while (true) {
+  /* while (true) {
     await new Promise(resolve => setTimeout(resolve, 100))
     //console.log("try broadcast")
     actors.command(aOverlay, "h_broadcast", null)
-  }
+  } */
 
 
-  /* while (true) {
+  while (true) {
     const msg = await asyncPrompt() ?? ""
 
     if (msg.startsWith("/")) {
       console.log("Command")
+      actorBoss.command(aChatApp, "h_connect", friendip)
     } else {
       // clear line
       await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"))
 
       //tell chat app to broadcast message
-      actors.command(aChatApp, "h_broadcast", msg)
+      actorBoss.command(aChatApp, "h_broadcast", msg)
       //actors.command(aOverlay, "h_broadcast", null)
     }
-  } */
+  }
 }
 
 

@@ -1,4 +1,4 @@
-import { OVRInterface } from "./OVRInterface.ts";
+import { OVRInterface } from "../actorsystem/helpermodules/OVRInterface.ts";
 
 
 async function spawn() {

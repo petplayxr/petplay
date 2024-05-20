@@ -1,10 +1,10 @@
-import { Address } from "../actorsystem/types.ts";
-import { actorManager } from "../actorsystem/actorManager.ts";
-import { ActorP2P } from "../actorsystem/actorP2P.ts";
-import { ReceiveCoord } from "../main.ts";
+import { Address } from "../../actorsystem/types.ts";
+import { actorManager } from "../../actorsystem/actorManager.ts";
+import { ActorP2P } from "../../actorsystem/actorP2P.ts";
+import { ReceiveCoord } from "../../OLDmain.ts";
 
 // Import the IPCOVRConnector if it's part of another module
-import { IPCOVRConnector } from "../IPCOVRConnector.ts";
+import { IPCOVRConnector } from "../../actorsystem/helpermodules/IPCOVRConnector.ts";
 
 export class OverlayActor extends ActorP2P<OverlayActor> {
     private name: string;

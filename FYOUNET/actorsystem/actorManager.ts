@@ -2,7 +2,7 @@ import { Actor, Connection, Address, ActorMessage, ActorPayload, isActorId, isAc
 import { aPortal } from "../actors/PortalActor.ts";
 import { ActorP2P } from "./actorP2P.ts"
 import { Message } from "./message.ts";
-import { cloudSpace } from "./cloudSpace.ts";
+import { cloudSpace } from "./cloudActorManager.ts";
 
 //actor manager actor
 export class actorManager extends Actor {

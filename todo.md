@@ -1,2 +1,5 @@
-- Add SteamVR controller profiles. 
-- only use 1 petplay instance for testing and 2 fyounet instances 
+- steamvr controller profiles
+- vrchat positioning module
+- vr input module
+- simple overlay module
+- more complex overlay module based on puppeteerStream

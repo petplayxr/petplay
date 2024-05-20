@@ -4,8 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        {
-            "name": "DebugPETPLAYcpp1",
+        {   "name": "DebugPETPLAYcpp1",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/OVRINTERFACE/out/build/default/Debug/petplay.exe",
@@ -16,8 +15,7 @@
             "console": "integratedTerminal",
             "preLaunchTask": "cmake-build-debug"
         },
-        {
-            "name": "DebugCPPPIPE",
+        {   "name": "DebugCPPPIPE",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/OVRINTERFACE/out/build/user/Debug/petplay.exe",
@@ -28,8 +26,7 @@
             "console": "integratedTerminal",
             "preLaunchTask": "cmake-build-debug"
         },
-        {
-            "name": "DebugPETPLAYcpp2",
+        {   "name": "DebugPETPLAYcpp2",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/OVRINTERFACE/out/build/default/Debug/petplay.exe",
@@ -40,9 +37,8 @@
             "console": "integratedTerminal",
             "preLaunchTask": "cmake-build-debug"
         },
-        {
+        {   "name": "DEBUGFYOUNET1",
             "request": "launch",
-            "name": "DEBUGFYOUNET1",
             "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET",
             "console": "integratedTerminal",
@@ -61,9 +57,8 @@
             ],
             "attachSimplePort": 9228
         },
-        {
+        {   "name": "DEBUGFYOUNET2",
             "request": "launch",
-            "name": "DEBUGFYOUNET2",
             "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET",
             "console": "integratedTerminal",
@@ -82,9 +77,8 @@
             ],
             "attachSimplePort": 9229
         },
-        {
+        {   "name": "DEBUGINTERNET1",
             "request": "launch",
-            "name": "DEBUGINTERNET1",
             "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET",
             "console": "integratedTerminal",
@@ -103,9 +97,8 @@
             ],
             "attachSimplePort": 9228
         },
-        {
+        {   "name": "DEBUGINTERNET2",
             "request": "launch",
-            "name": "DEBUGINTERNET2",
             "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET",
             "console": "integratedTerminal",
@@ -124,9 +117,8 @@
             ],
             "attachSimplePort": 9229
         },
-        {
+        {   "name": "debugdenoapp",
             "request": "launch",
-            "name": "debugdenoapp",
             "type": "node",
             "cwd": "${workspaceFolder}/denoApp/out",
             "console": "integratedTerminal",
@@ -146,9 +138,8 @@
             ],
             "attachSimplePort": 9228
         },
-        {
+        {   "name": "debugdenoapp2",
             "request": "launch",
-            "name": "debugdenoapp2",
             "type": "node",
             "cwd": "${workspaceFolder}/denoApp/out",
             "console": "integratedTerminal",
@@ -168,9 +159,8 @@
             ],
             "attachSimplePort": 9228
         },
-        {
+        {   "name": "debugovrmodtest",
             "request": "launch",
-            "name": "debugovrmodtest",
             "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET/",
             "console": "integratedTerminal",
@@ -188,6 +178,23 @@
             ],
             "attachSimplePort": 9228
         },
+        {   "name": "VRCPOSLOGGER",
+            "request": "launch",
+            "type": "node",
+            "program": "${workspaceFolder}/FYOUNET/vrcposLOGGER.ts",
+            "cwd": "${workspaceFolder}",
+            "env": {},
+            "console": "integratedTerminal",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "run",
+                "--inspect-wait",
+                "--allow-all",
+                "--unstable-net"
+            ],
+            "attachSimplePort": 9229
+        }
+
 
         
     ],

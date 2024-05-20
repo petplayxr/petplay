@@ -3,7 +3,7 @@ import { actorManager } from "../FYOUNET/actorsystem/actorManager.ts";
 import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
 import * as mod from "jsr:@mys1024/worker-fn@2";
 import { ChatApp } from "../FYOUNET/actors/ChatApp.ts";
-import { OverlayActor } from "../FYOUNET/actors/OverlayActor.ts";
+import { OverlayActor } from "../FYOUNET/actors/old/OverlayActor.ts";
 import { SimpleOverlayActor } from "../FYOUNET/actors/SimpleOverlayActor.ts";
 import { aPortal } from "../FYOUNET/actors/PortalActor.ts";
 

@@ -1,7 +1,7 @@
 import { Address } from "../actorsystem/types.ts";
 import { actorManager } from "../actorsystem/actorManager.ts";
 import { ActorP2P } from "../actorsystem/actorP2P.ts";
-import { ReceivePayload } from "../main.ts";
+import { ReceivePayload } from "../OLDmain.ts";
 
 
 export class ChatApp extends ActorP2P<ChatApp> {

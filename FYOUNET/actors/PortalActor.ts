@@ -1,6 +1,6 @@
 import { actorManager} from "../actorsystem/actorManager.ts";
 import { ActorP2P } from "../actorsystem/actorP2P.ts";
-import { ReceivePayload } from "../main.ts";
+import { ReceivePayload } from "../OLDmain.ts";
 import { Actor, Address, isRemoteAddress } from "../actorsystem/types.ts";
 
 

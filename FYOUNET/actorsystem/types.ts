@@ -1,5 +1,5 @@
 import { actorManager } from "./actorManager.ts";
-import { cloudSpace } from "./cloudSpace.ts";
+import { cloudSpace } from "./cloudActorManager.ts";
 import { Message } from "./message.ts";
 
 // types
