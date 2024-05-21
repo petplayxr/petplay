@@ -81,7 +81,15 @@
         "shared_mutex": "cpp",
         "stack": "cpp",
         "queue": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "any": "cpp",
+        "csignal": "cpp",
+        "future": "cpp",
+        "random": "cpp",
+        "ranges": "cpp",
+        "regex": "cpp",
+        "span": "cpp",
+        "variant": "cpp"
     },
     "C_Cpp.errorSquiggles": "enabled",
     "cmake.sourceDirectory": "${workspaceFolder}/OVRINTERFACE",
@@ -93,6 +101,7 @@
         "**/CVS": true,
         "**/.DS_Store": true,
         "**/Thumbs.db": true,
-        "**/vcpkg_installed": true
+        "**/vcpkg_installed": false,
+        "petplayApp/bruh": false
     }
 }

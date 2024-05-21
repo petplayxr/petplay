@@ -43,6 +43,9 @@ export class aOVRInput extends ActorP2P<aOVRInput> {
     }
 
     async h_getOVRData(callback: (data : string) => void) { 
+        if (!this.ovrData) {
+            callback("this.ovrData is empty")
+        }
         callback(this.ovrData) 
     };
 }

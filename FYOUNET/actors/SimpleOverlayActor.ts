@@ -9,16 +9,47 @@ interface OverlayPayload {
     data: string;
 }
 
+export interface OverlayCommand {
+    type: string;
+    payload?: CreateBasicOverlayPayload | DelOverlayPayload | MoveOverlayPayload;
+}
+
+interface CreateBasicOverlayPayload {
+    overlayName: string;
+    pathToTexture: string;
+}
+
+interface DelOverlayPayload {
+    // Define properties specific to deleting an overlay
+    overlayName: string;
+}
+
+interface MoveOverlayPayload {
+    // Define properties specific to moving an overlay
+    m34: string;
+}
+
+function format(command: OverlayCommand): string {
+    let result = command.type;
+    if (command.payload) {
+        Object.entries(command.payload).forEach(([_key, value]) => {
+            result += `;${value}`;
+        });
+    }
+    return`${result};`;
+}
+
 export class SimpleOverlayActor extends ActorP2P<SimpleOverlayActor> {
     private name: string; //name of overlay
     private ovrConnector: OVRInterface; //ovr interface
     
-
+    
 
     constructor(publicIp: string, name: string, executablePath: string) {
         super(name, publicIp);
         this.name = name;
         this.ovrConnector = new OVRInterface(this.name, executablePath);
+        this.onStart();
     }
 
     async onStart() {
@@ -30,7 +61,13 @@ export class SimpleOverlayActor extends ActorP2P<SimpleOverlayActor> {
         await this.ovrConnector.disconnect();
     }
 
-    async sendToOverlay(data: string) {
+    async h_sendToOverlay(_ctx: actorManager, data: string | OverlayCommand) {
+
+        if (typeof data !== "string") {
+            data = format(data);
+        }
+
+        //format(data)
         await this.ovrConnector.send(data);
     }
 
@@ -40,7 +77,9 @@ export class SimpleOverlayActor extends ActorP2P<SimpleOverlayActor> {
     }
 
     async receive(ctx: actorManager, msg: OverlayPayload) {
+
+
         console.log(`OverlayActor received message: ${msg.data}`);
-        await this.sendToOverlay(msg.data);
+        await this.h_sendToOverlay(ctx,msg.data);
     }
 }

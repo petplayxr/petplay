@@ -56,7 +56,7 @@ export function createRemoteAddress<ActorP2P>(ip:string, actorid:ActorId): Remot
 
 export function createCloudActorAddress<ActorP2P>(cloudAddress : Address<cloudSpace>, ActorAddress: ActorId): CloudAddress<ActorP2P> {
 
-  return `${ActorAddress}@${cloudAddress}` as CloudAddress<T>;
+  return `${ActorAddress}@${cloudAddress}` as CloudAddress<ActorP2P>;
 }
 
 //manual type guards?
@@ -158,47 +158,50 @@ export interface Connection {
 
 
 
-export type OrNull<T> = T extends NonNullable<unknown> ? T : null
+
+
 
 /**
- * Represents a message key for actors, prefixed with 'h_'.
- *
- * This type is used to define keys for messages sent between actors in the system.
- * Each key must start with 'h_', ensuring uniqueness and consistency across the system.
- * It leverages TypeScript's conditional types to ensure that only valid message keys,
- * derived from the properties of the specified type `T`, are allowed.
- *
- * @template T - The type of the actor or system defining the message keys.
+ * Extracts the keys of the given type `T` that match the pattern `h_${string}`.
+ * 
+ * @template T - The type containing keys to be filtered.
+ * 
+ * @example
+ * type MyActorMessages = {
+ *   h_doSomething: () => void;
+ *   h_anotherAction: (ctx: actorManager, payload: string) => void;
+ *   notIncluded: number;
+ * };
+ * 
+ * type MyMessages = ActorMessage<MyActorMessages>; 
+ * /Result: "h_doSomething" | "h_anotherAction"
  */
 export type ActorMessage<T> = keyof T & `h_${string}`;
 
 /**
- * Defines the payload structure for messages sent between actors.
- *
- * This generic type allows specifying the type of the message being sent,
- * along with the specific message key. It infers the payload type from the
- * function signature expected by the message handler, optionally allowing
- * for the payload to be nullable.
- *
- * @template T - The type of the actor or system sending/receiving the message.
- * @template K - The specific message key, extending `ActorMessage<T>`. This ensures
- *               that only valid message keys are used.
- *
+ * Extracts the payload type from a method in the given type `T` that matches the key `K`.
+ * If the method does not have a payload, returns `null`.
+ * 
+ * @template T - The type containing the method.
+ * @template K - The key of the method in type `T`.
+ * 
  * @example
- * * Example usage
  * type MyActorMessages = {
- *   h_myFunction: (ctx: actorManager, payload: string) => void;
+ *   h_doSomething: (ctx: actorManager, payload: { value: number }) => void;
+ *   h_noPayload: (ctx: actorManager) => void;
  * };
- *
- * * Define a payload type for a specific message
- * type MyFunctionPayload = ActorPayload<MyActorMessages, 'myFunction'>;
- *
- * * Now, MyFunctionPayload would be equivalent to `string | null`, assuming
- * * the actual function signature matches `(ctx: actorManager, payload: string) => void`.
+ * 
+ * type DoSomethingPayload = ActorPayload<MyActorMessages, "h_doSomething">;
+ * / Result: { value: number } | null
+ * 
+ * type NoPayload = ActorPayload<MyActorMessages, "h_noPayload">;
+ * / Result: null
  */
 
 export type ActorPayload<T, K extends ActorMessage<T>> = T[K] extends (ctx: actorManager, payload: infer P) => unknown? OrNull<P> : never;
 
+/* type OrNull<T> = T | null; */
 
+export type OrNull<T> = T extends NonNullable<unknown> ? T : null
 
 
