@@ -121,10 +121,12 @@
             "request": "launch",
             "type": "node",
             "cwd": "${workspaceFolder}/petplayApp/out",
+            "console": "integratedTerminal",
             "runtimeExecutable": "deno",
             "runtimeArgs": [
                 "run",
                 "--inspect=0.0.0.0:9228",
+                "--unstable-net",
                 "--allow-net",
                 "--inspect-wait",
                 "--allow-all",

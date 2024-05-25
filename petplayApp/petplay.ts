@@ -8,6 +8,8 @@ import { getAvailablePort } from "https://deno.land/x/port@1.0.0/mod.ts"
 import { aOVRInput } from "../FYOUNET/actors/OVRInput.ts";
 import { aTest } from "../FYOUNET/actors/TestActor.ts";
 import { cloudSpace } from "../FYOUNET/actorsystem/cloudActorManager.ts";
+import { RelativeOverlayActor } from "../FYOUNET/actors/RelativeOverlayActor.ts";
+import { RelativePositionService } from "../FYOUNET/actors/vrc/relativeposition.ts";
 
 //#region actor payload types
 export type ReceivePayload = {
@@ -147,32 +149,69 @@ actormanager.command(portalActor, "h_recordAddress", cloudtestactor)
 actormanager.listactors() */
 //#endregion
 
-//do same with a vr actor
-/* const ovrInput  = actormanager.add(new aOVRInput(await IP(), "c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/ovrinput.exe"))
+//actormanager.command(ovrInput, "h_getOVRData", (data:string) => {console.log(data)});
+/* actormanager.command(portalActor, "h_recordAddress", ovrInput) */
+
+//CREATE VR INPUT MODULE
+const ovrInput  = actormanager.add(new aOVRInput(await IP(), "c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/ovrinput.exe"))
+
+//CREATE RELATIVE OVERLAY
+const posSer = new RelativePositionService()
+const relativeoverlay1 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay1", 0,posSer,"c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
+const relativeoverlay2 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay2", 1,posSer,"c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
+const relativeoverlay3 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay3", 2,posSer,"c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
+const relativeoverlay4 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay4", 3,posSer,"c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
 
 await wait(3000)
 
-actormanager.command(ovrInput, "h_getOVRData", (data:string) => {console.log(data)}); */
-/* actormanager.command(portalActor, "h_recordAddress", ovrInput) */
-
-
-const aOverlay: Address<SimpleOverlayActor> = actormanager.add(new SimpleOverlayActor(await IP(), "simple overlay","c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
-const aOverlay2: Address<SimpleOverlayActor> = actormanager.add(new SimpleOverlayActor(await IP(), "simple overlay","c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
-
-const createBasicOverlay = {
+const createBasicOverlay1 = {
     type: "CreateBasicOverlay",
     payload: {
         overlayName : "exampleOverlay1",
-        pathToTexture : "c:/GIT/petplay/petplayApp/resources/P1.png",
+        pathToTexture : "c:/GIT/petplay/petplayApp/resources/PetPlay.png",
     }
 };
 const createBasicOverlay2 = {
     type: "CreateBasicOverlay",
     payload: {
         overlayName : "exampleOverlay2",
-        pathToTexture : "c:/GIT/petplay/petplayApp/resources/P2.png",
+        pathToTexture : "c:/GIT/petplay/petplayApp/resources/PetPlay.png",
     }
 };
+const createBasicOverlay3 = {
+    type: "CreateBasicOverlay",
+    payload: {
+        overlayName : "exampleOverlay3",
+        pathToTexture : "c:/GIT/petplay/petplayApp/resources/PetPlay.png",
+    }
+};
+const createBasicOverlay4 = {
+    type: "CreateBasicOverlay",
+    payload: {
+        overlayName : "exampleOverlay4",
+        pathToTexture : "c:/GIT/petplay/petplayApp/resources/PetPlay.png",
+    }
+};
+
+
+
+actormanager.command(relativeoverlay1, "h_sendToOverlay", createBasicOverlay1)
+actormanager.command(relativeoverlay2, "h_sendToOverlay", createBasicOverlay2)
+actormanager.command(relativeoverlay3, "h_sendToOverlay", createBasicOverlay3)
+actormanager.command(relativeoverlay4, "h_sendToOverlay", createBasicOverlay4)
+
+//bind relative overlay to hmd
+actormanager.command(relativeoverlay1, "h_bindToHMD", ovrInput)
+actormanager.command(relativeoverlay2, "h_bindToHMD", ovrInput)
+actormanager.command(relativeoverlay3, "h_bindToHMD", ovrInput)
+actormanager.command(relativeoverlay4, "h_bindToHMD", ovrInput)
+
+
+//const aOverlay: Address<SimpleOverlayActor> = actormanager.add(new SimpleOverlayActor(await IP(), "simple overlay","c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
+//const aOverlay2: Address<SimpleOverlayActor> = actormanager.add(new SimpleOverlayActor(await IP(), "simple overlay","c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
+
+
+
 
 const move = {
     type: "SetOverlayPosition",
@@ -182,15 +221,17 @@ const move = {
 };
 
 
-"SetOverlayPosition"
+//"SetOverlayPosition"
 
 
 await wait(2000)
-actormanager.command(aOverlay, "h_sendToOverlay", createBasicOverlay)
-actormanager.command(aOverlay2, "h_sendToOverlay", createBasicOverlay2)
+
+
+/* actormanager.command(aOverlay, "h_sendToOverlay", createBasicOverlay)
+actormanager.command(aOverlay2, "h_sendToOverlay", createBasicOverlay2) */
 
 await wait(500)
-actormanager.command(aOverlay, "h_sendToOverlay", move)
+//actormanager.command(aOverlay, "h_sendToOverlay", move)
 
 
 

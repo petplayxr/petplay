@@ -86,7 +86,7 @@ class OVRInterface {
         }
         const encoder = new TextEncoder();
         await this.conn.write(encoder.encode(data + "\n"));
-        console.log(`Sent data: ${data}`);
+        //console.log(`Sent data: ${data}`);
     }
 
     async receive() {
