@@ -173,7 +173,7 @@ const relativeoverlay4 = actormanager.add(new RelativeOverlayActor(await IP(), "
 
 await wait(3000)
 
-const absImgPath = `${Deno.cwd()}/../${"../resources/PetPlay.png"}`;
+const absImgPath = `${Deno.cwd()}/../${"../resources/fumo.png"}`;
 
 //#region overlay creation commands
 const createBasicOverlay1 = {
