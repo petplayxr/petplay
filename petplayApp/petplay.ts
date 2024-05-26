@@ -52,6 +52,9 @@ const localfullip = ownip
 const localip = localfullip.split(":")[0]
 
 
+const ovrIPath = `${Deno.cwd()}/../${"../OVRINTERFACE/out/build/user/Debug/ovrinput.exe"}`;
+const ovrPath = `${Deno.cwd()}/../${"../OVRINTERFACE/out/build/user/Debug/petplay.exe"}`;
+
 //#endregion
 //#region helper funcs
 async function IP() {return `${localip}:${await getAvailablePort()}`}
@@ -159,20 +162,18 @@ actormanager.listactors() */
 const actormanager = new actorManager(localfullip) //create actormanager
 
 //CREATE VR INPUT MODULE
-const ovrInput  = actormanager.add(new aOVRInput(await IP(), "c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/ovrinput.exe"))
+const ovrInput  = actormanager.add(new aOVRInput(await IP(), ovrIPath))
 
 //CREATE RELATIVE OVERLAY ACTORS
 const posSer = new RelativePositionService()
-const relativeoverlay1 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay1", 0,posSer,"c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
-const relativeoverlay2 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay2", 1,posSer,"c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
-const relativeoverlay3 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay3", 2,posSer,"c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
-const relativeoverlay4 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay4", 3,posSer,"c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
+const relativeoverlay1 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay1", 0, posSer, ovrPath))
+const relativeoverlay2 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay2", 1, posSer, ovrPath))
+const relativeoverlay3 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay3", 2, posSer, ovrPath))
+const relativeoverlay4 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay4", 3, posSer, ovrPath))
 
 await wait(3000)
 
-const relativeImgPath = "../../resources/PetPlay.png";
-const cwd = Deno.cwd();
-const absImgPath = `${cwd}/${relativeImgPath}`;
+const absImgPath = `${Deno.cwd()}/../${"../resources/PetPlay.png"}`;
 
 //#region overlay creation commands
 const createBasicOverlay1 = {

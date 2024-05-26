@@ -119,7 +119,7 @@ function offset(data: PositionData, hmdpos: number[][]): string {
     const move = {
         type: "SetOverlayPosition",
         payload: {
-            m34: finalPosition.join(' ')
+            m34: finalPosition.join(' ') // or trsfMtx.join(' ')
         }
     };
 
