@@ -1,9 +1,13 @@
 import { Address } from "../actorsystem/types.ts";
 import { actorManager } from "../actorsystem/actorManager.ts";
 import { ActorP2P } from "../actorsystem/actorP2P.ts";
-import { ReceivePayload } from "../../petplayApp/bruh/OLDmain.ts";
+import { ReceivePayload } from "../../petplayApp/petplay.ts";
 
-
+/*
+* ChatApp
+* You can create this actor 
+* TODO THIS DOC
+*/
 export class ChatApp extends ActorP2P<ChatApp> {
   private name: string;
   private messages: string[] = [];

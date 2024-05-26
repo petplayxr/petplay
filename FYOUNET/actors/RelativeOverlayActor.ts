@@ -3,8 +3,8 @@
 import { Address } from "../actorsystem/types.ts";
 import { actorManager } from "../actorsystem/actorManager.ts";
 import { ActorP2P } from "../actorsystem/actorP2P.ts";
-import { OVRInterface } from "./helpermodules/OVRInterface.ts";
-import { RelativePositionService } from "./vrc/relativeposition.ts";
+import { OVRInterface } from "../helper/helpermodules/OVRInterface.ts";
+import { RelativePositionService } from "../helper/vrc/relativeposition.ts";
 import { aOVRInput } from "./OVRInput.ts";
 
 //#region msg types
@@ -34,6 +34,21 @@ interface MoveOverlayPayload {
     m34: string;
 }
 
+//#endregion
+
+//#region functions
+
+//type X Y Z
+type PositionData = [number, number, number];
+
+//type openvrmatrix
+type HMDMatrix = [
+    number, number, number, number,
+    number, number, number, number,
+    number, number, number, number
+];
+
+//turn command into format that can be sent
 function format(command: OverlayCommand): string {
     let result = command.type;
     if (command.payload) {
@@ -44,108 +59,71 @@ function format(command: OverlayCommand): string {
     return`${result};`;
 }
 
-type PositionData = [number, number, number];
-
-function format3(data: PositionData, hmdpos: number[][]): string {
-
-    const scaleX = 1; // Adjust this factor as needed for the x component
-    const scaleY = 1; // Adjust this factor as needed for the y component
-    const scaleZ = 1; // Adjust this factor as needed for the z component
-
-    // Apply individual scaling factors to each component
-    const scaledData = data.map((value, index) => {
-        switch(index) {
-            case 0: // x component
-                return value * scaleX;
-            case 1: // y component
-                return value * scaleY;
-            case 2: // z component
-                return value * scaleZ;
-            default:
-                throw new Error("Invalid component index");
-        }
-    });
-
-    const staticValue1 = 1; // Adjust this value to move the overlay 
-    scaledData[0] += staticValue1;
-    const staticValue2 = 1.2; // Adjust this value to move the overlay
-    scaledData[1] += staticValue2;
-    const staticValue3 = -2.2; // Adjust this value to move the overlay 
-    scaledData[2] += staticValue3;
 
 
+function offset(data: PositionData, hmdpos: number[][]): string {
 
-    // Combine the base HMD position with the scaled position data
-    const finalPosition = [
-        hmdpos[0] + scaledData[0],
-        hmdpos[1] + scaledData[1],
-        hmdpos[2] + scaledData[2]
-    ];
-    
+    //scale data
+    const scaleX = 6; 
+    const scaleY = 6; 
+    const scaleZ = 6; 
 
-    const move = {
-        type: "SetOverlayPosition",
-        payload: {
-            m34: `1 0 0 ${scaledData[0]} 0 1 0 ${scaledData[1]} 0 0 1 ${scaledData[2]}`
-        }
-    };
-
-    const data2 = format(move);
-
-    return data2;
-}
-
-function format2(data: PositionData, hmdpos: number[][]): string {
-
-    const scaleX = 6; // Adjust this factor as needed for the x component
-    const scaleY = 6; // Adjust this factor as needed for the y component
-    const scaleZ = 6; // Adjust this factor as needed for the z component
-
-    // Apply individual scaling factors to each component
-    const scaledData = data.map((value, index) => {
-        switch(index) {
-            case 0: // x component
-                return value * scaleX;
-            case 1: // y component
-                return value * scaleY;
-            case 2: // z component
-                return value * scaleZ;
-            default:
-                throw new Error("Invalid component index");
-        }
-    });
-
-    // Set the static offset values for the overlay position
-    const offsetX = 0;  // No offset in x-direction
-    const offsetY = 0;  // No offset in y-direction
+    //static offset
+    const offsetX = 0;  
+    const offsetY = 0;  
     const offsetZ = -0.2; // Offset in z-direction to move overlay forward
 
-    scaledData[0] += offsetX;
-    scaledData[1] += offsetY;
-    scaledData[2] += offsetZ;
 
-    // Combine the base HMD position with the scaled position data
-    const finalPosition = [
+    //#region hmdoffset
+
+    const hmdOffset = [
         hmdpos[0][0] * offsetX + hmdpos[0][1] * offsetY + hmdpos[0][2] * offsetZ + hmdpos[0][3],
         hmdpos[1][0] * offsetX + hmdpos[1][1] * offsetY + hmdpos[1][2] * offsetZ + hmdpos[1][3],
         hmdpos[2][0] * offsetX + hmdpos[2][1] * offsetY + hmdpos[2][2] * offsetZ + hmdpos[2][3]
     ];
 
-
     // Construct the transformation matrix for the overlay
-    const tMx = [
-        hmdpos[0][0], hmdpos[0][1], hmdpos[0][2], finalPosition[0],
-        hmdpos[1][0], hmdpos[1][1], hmdpos[1][2], finalPosition[1],
-        hmdpos[2][0], hmdpos[2][1], hmdpos[2][2], finalPosition[2]
+    const trsfMtx: HMDMatrix = [
+        hmdpos[0][0], hmdpos[0][1], hmdpos[0][2], hmdOffset[0],
+        hmdpos[1][0], hmdpos[1][1], hmdpos[1][2], hmdOffset[1],
+        hmdpos[2][0], hmdpos[2][1], hmdpos[2][2], hmdOffset[2]
     ];
 
+    //#endregion
+    
+    //#region applyvrc offset
+
+    //this part is still broken
+
+    data[0] *= scaleX + offsetX;
+    data[1] *= scaleY + offsetY;
+    data[2] *= scaleZ + offsetZ;
+
+    const hmdOffsett = [
+        trsfMtx[0] * data[0] + trsfMtx[1] * data[1] + trsfMtx[2] * data[2]+ trsfMtx[3],
+        trsfMtx[4] * data[0] + trsfMtx[5] * data[1] + trsfMtx[6] * data[2]+ trsfMtx[7],
+        trsfMtx[8] * data[0] + trsfMtx[9] * data[1] + trsfMtx[10]* data[2]+ trsfMtx[1]
+    ];
+
+    const finalPosition: HMDMatrix = [
+        trsfMtx[0], trsfMtx[1], trsfMtx[2], hmdOffsett[0],
+        trsfMtx[4], trsfMtx[5], trsfMtx[6], hmdOffsett[1],
+        trsfMtx[8], trsfMtx[9], trsfMtx[10], hmdOffsett[2]
+    ];
+    
+
+    //#endregion
+
+    
+    //construct message
     const move = {
         type: "SetOverlayPosition",
         payload: {
-            m34: tMx.join(' ')
+            m34: finalPosition.join(' ')
         }
     };
 
+    //format message
     const data2 = format(move);
 
     return data2;
@@ -154,6 +132,11 @@ function format2(data: PositionData, hmdpos: number[][]): string {
 
 //#endregion
 
+/*
+* RelativeOverlayActor
+* You can create this actor 
+* TODO: THIS docstring
+*/
 export class RelativeOverlayActor extends ActorP2P<RelativeOverlayActor> {
     private name: string; //name of overlay
     private ovrConnector: OVRInterface; //ovr interface
@@ -191,7 +174,7 @@ export class RelativeOverlayActor extends ActorP2P<RelativeOverlayActor> {
             
 
             //position of one of the balls
-            const posf = format2(position[this.ballNum], hmdpos);
+            const posf = offset(position[this.ballNum], hmdpos);
             await this.ovrConnector.send(posf);
         });
     }

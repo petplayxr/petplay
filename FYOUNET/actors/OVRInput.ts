@@ -2,7 +2,7 @@
 import { Address } from "../actorsystem/types.ts";
 import { actorManager } from "../actorsystem/actorManager.ts";
 import { ActorP2P } from "../actorsystem/actorP2P.ts";
-import { OVRInterface } from "./helpermodules/OVRInterface.ts";
+import { OVRInterface } from "../helper/helpermodules/OVRInterface.ts";
 
 interface OverlayPayload {
     addr: Address<OverlayPayload>;

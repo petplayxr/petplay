@@ -1,24 +1,36 @@
-import { Address, CloudAddress } from "../FYOUNET/actorsystem/types.ts";
-import { actorManager } from "../FYOUNET/actorsystem/actorManager.ts";
-import { ChatApp } from "../FYOUNET/actors/ChatApp.ts";
-import { OverlayActor } from "../FYOUNET/actors/old/OverlayActor.ts";
-import { SimpleOverlayActor, OverlayCommand } from "../FYOUNET/actors/SimpleOverlayActor.ts";
-import { aPortal } from "../FYOUNET/actors/PortalActor.ts";
+//#region imports
+//helpers
 import { getAvailablePort } from "https://deno.land/x/port@1.0.0/mod.ts"
-import { aOVRInput } from "../FYOUNET/actors/OVRInput.ts";
+
+//classes
+import { RelativePositionService } from "../FYOUNET/helper/vrc/relativeposition.ts";
+
+//actorSystem
+import { Actor, Address, CloudAddress } from "../FYOUNET/actorsystem/types.ts";
+import { actorManager } from "../FYOUNET/actorsystem/actorManager.ts"; //main system
+import { cloudSpace } from "../FYOUNET/actorsystem/cloudActorManager.ts"; //cloud networking system
+import { aPortal } from "../FYOUNET/actors/PortalActor.ts"; //helper actor for addressmanagement
+
+//generic actors
 import { aTest } from "../FYOUNET/actors/TestActor.ts";
-import { cloudSpace } from "../FYOUNET/actorsystem/cloudActorManager.ts";
+import { ChatApp } from "../FYOUNET/actors/ChatApp.ts";
+
+//vr actors
+import { aOVRInput } from "../FYOUNET/actors/OVRInput.ts";
+import { SimpleOverlayActor } from "../FYOUNET/actors/SimpleOverlayActor.ts";
 import { RelativeOverlayActor } from "../FYOUNET/actors/RelativeOverlayActor.ts";
-import { RelativePositionService } from "../FYOUNET/actors/vrc/relativeposition.ts";
+import { ActorP2P } from "../FYOUNET/actorsystem/actorP2P.ts";
+
+//#endregion
 
 //#region actor payload types
 export type ReceivePayload = {
-    addr: Address<ChatApp>,
+    addr: Address<ActorP2P>,
     name: string,
 } & ({ msg: string } | { event: "JOIN" | "LEAVE" })
 
 export type ReceiveCoord = {
-    addr: Address<OverlayActor>,
+    addr: Address<SimpleOverlayActor>,
     name: string,
 } & ({ data: string } | { event: "JOIN" | "LEAVE" })
 
@@ -44,10 +56,6 @@ const localip = localfullip.split(":")[0]
 //#region helper funcs
 async function IP() {return `${localip}:${await getAvailablePort()}`}
 async function wait(ms: number) {return await new Promise(resolve => setTimeout(resolve, ms));}
-//#endregion
-
-//PROGRAM STARTS HERE
-
 async function asyncPrompt(): Promise<string> {
     const next = await stream.next()
     if ('done' in next && next.done) {
@@ -56,9 +64,8 @@ async function asyncPrompt(): Promise<string> {
         return new TextDecoder().decode(next.value).slice(0, -1)
     }
 }
-
-// command processor for petplay terminal commands
-async function processcommand(msgD: string) {
+//commented out for now
+/* async function processcommand(msgD: string) {
 
     const msg = msgD.replace(/\r/g, '');
 
@@ -111,10 +118,8 @@ async function processcommand(msgD: string) {
             break;
         }
     }
-}
-
-const actormanager = new actorManager(localfullip)
-
+} */
+//#endregion
 //#region old code
 /* //create actormanager
 
@@ -149,13 +154,14 @@ actormanager.command(portalActor, "h_recordAddress", cloudtestactor)
 actormanager.listactors() */
 //#endregion
 
-//actormanager.command(ovrInput, "h_getOVRData", (data:string) => {console.log(data)});
-/* actormanager.command(portalActor, "h_recordAddress", ovrInput) */
+//PROGRAM STARTS HERE
+
+const actormanager = new actorManager(localfullip) //create actormanager
 
 //CREATE VR INPUT MODULE
 const ovrInput  = actormanager.add(new aOVRInput(await IP(), "c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/ovrinput.exe"))
 
-//CREATE RELATIVE OVERLAY
+//CREATE RELATIVE OVERLAY ACTORS
 const posSer = new RelativePositionService()
 const relativeoverlay1 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay1", 0,posSer,"c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
 const relativeoverlay2 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay2", 1,posSer,"c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
@@ -164,37 +170,43 @@ const relativeoverlay4 = actormanager.add(new RelativeOverlayActor(await IP(), "
 
 await wait(3000)
 
+const relativeImgPath = "../../resources/PetPlay.png";
+const cwd = Deno.cwd();
+const absImgPath = `${cwd}/${relativeImgPath}`;
+
+//#region overlay creation commands
 const createBasicOverlay1 = {
     type: "CreateBasicOverlay",
     payload: {
         overlayName : "exampleOverlay1",
-        pathToTexture : "c:/GIT/petplay/petplayApp/resources/PetPlay.png",
+        pathToTexture : absImgPath,
     }
 };
 const createBasicOverlay2 = {
     type: "CreateBasicOverlay",
     payload: {
         overlayName : "exampleOverlay2",
-        pathToTexture : "c:/GIT/petplay/petplayApp/resources/PetPlay.png",
+        pathToTexture : absImgPath,
     }
 };
 const createBasicOverlay3 = {
     type: "CreateBasicOverlay",
     payload: {
         overlayName : "exampleOverlay3",
-        pathToTexture : "c:/GIT/petplay/petplayApp/resources/PetPlay.png",
+        pathToTexture : absImgPath,
     }
 };
 const createBasicOverlay4 = {
     type: "CreateBasicOverlay",
     payload: {
         overlayName : "exampleOverlay4",
-        pathToTexture : "c:/GIT/petplay/petplayApp/resources/PetPlay.png",
+        pathToTexture : absImgPath,
     }
 };
+//#endregion
 
 
-
+//create overlays
 actormanager.command(relativeoverlay1, "h_sendToOverlay", createBasicOverlay1)
 actormanager.command(relativeoverlay2, "h_sendToOverlay", createBasicOverlay2)
 actormanager.command(relativeoverlay3, "h_sendToOverlay", createBasicOverlay3)
@@ -206,35 +218,6 @@ actormanager.command(relativeoverlay2, "h_bindToHMD", ovrInput)
 actormanager.command(relativeoverlay3, "h_bindToHMD", ovrInput)
 actormanager.command(relativeoverlay4, "h_bindToHMD", ovrInput)
 
-
-//const aOverlay: Address<SimpleOverlayActor> = actormanager.add(new SimpleOverlayActor(await IP(), "simple overlay","c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
-//const aOverlay2: Address<SimpleOverlayActor> = actormanager.add(new SimpleOverlayActor(await IP(), "simple overlay","c:/GIT/petplay/OVRINTERFACE/out/build/user/Debug/petplay.exe"))
-
-
-
-
-const move = {
-    type: "SetOverlayPosition",
-    payload: {
-        m34 : "1 0 0 0 0 1 0 0 0 -0.7 1 0"
-    }
-};
-
-
-//"SetOverlayPosition"
-
-
-await wait(2000)
-
-
-/* actormanager.command(aOverlay, "h_sendToOverlay", createBasicOverlay)
-actormanager.command(aOverlay2, "h_sendToOverlay", createBasicOverlay2) */
-
-await wait(500)
-//actormanager.command(aOverlay, "h_sendToOverlay", move)
-
-
-
 if (import.meta.main) {
 
     console.log(`Your IP is ${await IP()}`)
@@ -245,7 +228,7 @@ if (import.meta.main) {
 
         if (msg.startsWith("/")) {
             console.log("Command")
-            await processcommand(msg)
+            //await processcommand(msg)
         } else {
             // clear line
             await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"))

@@ -1,9 +1,13 @@
 import { actorManager} from "../actorsystem/actorManager.ts";
 import { ActorP2P } from "../actorsystem/actorP2P.ts";
-import { ReceivePayload } from "../../petplayApp/bruh/OLDmain.ts";
+import { ReceivePayload } from "../../petplayApp/petplay.ts";
 import { Actor, Address, isRemoteAddress } from "../actorsystem/types.ts";
 
-
+/*
+* Portal Actor
+* You can create this actor 
+* TODO: this docstring
+*/
 export class aPortal extends ActorP2P<aPortal> {
   private username: string;
   private addressbook: Record<string, string> = {};

@@ -1,5 +1,4 @@
 aardvark/**
-petplayApp/out/**
-petplayApp/bruh/**
+petplayApp/out/bin/**
 OVRINTERFACE/vcpkg_installed/**
 OVRINTERFACE/out/**
