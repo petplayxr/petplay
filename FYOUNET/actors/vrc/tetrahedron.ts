@@ -107,9 +107,9 @@ export class Tetrahedron3D {
 
 // Example usage:
 const tetrahedron = new Tetrahedron3D([
-  [0.1, 0, 0],
-  [0, 0.1, 0],
-  [0, 0, 0.1],
+  [0.5, 0, 0],
+  [0, 0.5, 0],
+  [0, 0, 0.5],
   [0, 0, 0]
 ]);
 

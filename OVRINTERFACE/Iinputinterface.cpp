@@ -12,9 +12,6 @@
 
 using namespace std;
 
-
-
-
 std::string LogHMDAndControllersPositions(vr::IVRSystem* pVRSystem) {
     vr::ETrackingUniverseOrigin eTrackingOrigin = vr::TrackingUniverseStanding;
     float fPredictionTime = 0.0f;
@@ -42,12 +39,15 @@ std::string LogHMDAndControllersPositions(vr::IVRSystem* pVRSystem) {
         vr::TrackedDevicePose_t& pose = poses[unDevice];
 
         if (pose.bPoseIsValid) {
-            vr::HmdVector3_t position = {
-                pose.mDeviceToAbsoluteTracking.m[0][3],
-                pose.mDeviceToAbsoluteTracking.m[1][3],
-                pose.mDeviceToAbsoluteTracking.m[2][3]
-            };
-            outputStream << deviceType << " Position: (" << position.v[0] << ", " << position.v[1] << ", " << position.v[2] << ")\n";
+            outputStream << deviceType << " Transformation Matrix:\n";
+            for (int row = 0; row < 3; ++row) {
+                outputStream << "[ ";
+                for (int col = 0; col < 4; ++col) {
+                    outputStream << pose.mDeviceToAbsoluteTracking.m[row][col] << " ";
+                }
+                outputStream << "]\n";
+            }
+            outputStream << "\n";
         }
 
         if (deviceClass == vr::TrackedDeviceClass_Controller) {
@@ -66,7 +66,6 @@ std::string LogHMDAndControllersPositions(vr::IVRSystem* pVRSystem) {
 
     return outputStream.str();
 }
-
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
