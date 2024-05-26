@@ -83,11 +83,11 @@ function offset(data: PositionData, hmdpos: number[][]): string {
     ];
 
     // Construct the transformation matrix for the overlay
-    const trsfMtx: HMDMatrix = [
+    const trsfMtx: HMDMatrix = scale([
         hmdpos[0][0], hmdpos[0][1], hmdpos[0][2], hmdOffset[0],
         hmdpos[1][0], hmdpos[1][1], hmdpos[1][2], hmdOffset[1],
         hmdpos[2][0], hmdpos[2][1], hmdpos[2][2], hmdOffset[2]
-    ];
+    ], 0.2);
 
     //#endregion
     
@@ -119,7 +119,7 @@ function offset(data: PositionData, hmdpos: number[][]): string {
     const move = {
         type: "SetOverlayPosition",
         payload: {
-            m34: finalPosition.join(' ') // or trsfMtx.join(' ')
+            m34: trsfMtx.join(' ') // or trsfMtx.join(' ')
         }
     };
 
@@ -129,6 +129,12 @@ function offset(data: PositionData, hmdpos: number[][]): string {
     return data2;
 }
 
+function scale(positions: HMDMatrix, scale: number): HMDMatrix {
+    positions[0] *= scale;
+    positions[5] *= scale;
+    positions[10] *= scale;
+    return positions;
+}
 
 //#endregion
 
