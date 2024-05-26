@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Visualization</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+        .height-meter {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 50px;
+            height: 200px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #fff;
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column-reverse;
+        }
+        .height-indicator {
+            width: 100%;
+            background: #00ff00;
+            text-align: center;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="height-meter">
+        <div id="height-indicator" class="height-indicator">0</div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Add directional light for shading
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(1, 1, 1).normalize();
+        scene.add(directionalLight);
+
+        const ambientLight = new THREE.AmbientLight(0x404040); // soft white light
+        scene.add(ambientLight);
+
+        // Add white ball with standard material
+        const geometry = new THREE.SphereGeometry(0.1, 32, 32);
+        const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+        const whiteBall1 = new THREE.Mesh(geometry, material);
+        const whiteBall2 = new THREE.Mesh(geometry, material);
+        const whiteBall3 = new THREE.Mesh(geometry, material);
+        const whiteBall4 = new THREE.Mesh(geometry, material);
+        scene.add(whiteBall1);
+        scene.add(whiteBall2);
+        scene.add(whiteBall3);
+        scene.add(whiteBall4);
+
+        // Add ground plane with standard material
+        const planeGeometry = new THREE.PlaneGeometry(10, 10);
+        const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x87ceeb, side: THREE.DoubleSide });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.y = -5;
+        scene.add(plane);
+
+        // Add grid helper
+        const gridHelper = new THREE.GridHelper(10,20); // 10 units, 20 subdivisions (0.5m grid)
+        gridHelper.position.y = 0.001;
+        scene.add(gridHelper);
+
+        // Set camera position
+        camera.position.set(0, 6, 0); // Move camera up along the y-axis
+        
+        camera.lookAt(0, 0, 0); // Camera looks at the origi
+        //camera.lookAt(whiteBall1.position); // Camera looks at the white ball
+
+        
+
+        function remapPosition(value, oldMin, oldMax, newMin, newMax) {
+            return ((value - oldMin) / (oldMax - oldMin)) * (newMax - newMin) + newMin;
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Map distance function
+        function mapDistanceToPosition(distance) {
+            return 3 * (1 - distance); // Maps distance [0, 1] to position [3, 0]
+        }
+
+        // WebSocket connection
+        const socket = new WebSocket('ws://localhost:8080/ws');
+
+        socket.addEventListener('message', function (event) {
+            const data = JSON.parse(event.data);
+            const relativePosition1 = data[0];
+            const relativePosition2 = data[1];
+            const relativePosition3 = data[2];
+            const relativePosition4 = data[3];
+            //console.log(relativePosition);
+
+            // Assuming relativePosition is an array [x, y, z] and remapPosition is correctly defined
+            const remappedRelativePosition1 = [
+                remapPosition(relativePosition1[0], 1, -1, -6, 6),
+                remapPosition(relativePosition1[1], 1, -1, -6, 6),
+                remapPosition(relativePosition1[2], 1, -1, -6, 6)
+            ];
+            // Assuming relativePosition is an array [x, y, z] and remapPosition is correctly defined
+            const remappedRelativePosition2 = [
+                remapPosition(relativePosition2[0], 1, -1, -6, 6),
+                remapPosition(relativePosition2[1], 1, -1, -6, 6),
+                remapPosition(relativePosition2[2], 1, -1, -6, 6)
+            ];
+            // Assuming relativePosition is an array [x, y, z] and remapPosition is correctly defined
+            const remappedRelativePosition3 = [
+                remapPosition(relativePosition3[0], 1, -1, -6, 6),
+                remapPosition(relativePosition3[1], 1, -1, -6, 6),
+                remapPosition(relativePosition3[2], 1, -1, -6, 6)
+            ];
+            // Assuming relativePosition is an array [x, y, z] and remapPosition is correctly defined
+            const remappedRelativePosition4 = [
+                remapPosition(relativePosition4[0], 1, -1, -6, 6),
+                remapPosition(relativePosition4[1], 1, -1, -6, 6),
+                remapPosition(relativePosition4[2], 1, -1, -6, 6)
+            ];
+
+            //camera.lookAt(whiteBall1.position)
+
+
+
+            // Set position based on remapped coordinates
+            // Ensure the axes are correctly mapped; here, it seems there was an axis swap in your original code
+            whiteBall1.position.set(remappedRelativePosition1[0], relativePosition1[2], remappedRelativePosition1[1]);
+            whiteBall2.position.set(remappedRelativePosition2[0], relativePosition2[2], remappedRelativePosition2[1]);
+            whiteBall3.position.set(remappedRelativePosition3[0], relativePosition3[2], remappedRelativePosition3[1]);
+            whiteBall4.position.set(remappedRelativePosition4[0], relativePosition4[2], remappedRelativePosition4[1]);
+            
+
+            // Update height indicator
+            //const heightPercentage = (remappedRelativePosition[1] / 10) * 100;
+            //document.getElementById('height-indicator').style.height = heightPercentage + '%';
+            //document.getElementById('height-indicator').textContent = remappedRelativePosition[2].toFixed(2); 
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>
