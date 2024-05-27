@@ -31,9 +31,11 @@ export class ServerActor extends ActorP2P<ServerActor> {
             }
             return response;
         }
+
+        const absPath = `${Deno.cwd()}/../${"../FYOUNET/actors/debugWActor/index.html"}`;
     
         if (path === "/") {
-            return serveFile(req, "./index.html");
+            return serveFile(req, absPath);
         }
         return new Response(null, {status: 404});
     };
