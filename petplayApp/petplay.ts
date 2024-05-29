@@ -167,9 +167,7 @@ const ovrInput  = actormanager.add(new aOVRInput(await IP(), ovrIPath))
 //CREATE RELATIVE OVERLAY ACTORS
 const posSer = new RelativePositionService()
 const relativeoverlay1 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay1", 0, posSer, ovrPath))
-const relativeoverlay2 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay2", 1, posSer, ovrPath))
-const relativeoverlay3 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay3", 2, posSer, ovrPath))
-const relativeoverlay4 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay4", 3, posSer, ovrPath))
+
 
 await wait(3000)
 
@@ -209,15 +207,11 @@ const createBasicOverlay4 = {
 
 //create overlays
 actormanager.command(relativeoverlay1, "h_sendToOverlay", createBasicOverlay1)
-actormanager.command(relativeoverlay2, "h_sendToOverlay", createBasicOverlay2)
-actormanager.command(relativeoverlay3, "h_sendToOverlay", createBasicOverlay3)
-actormanager.command(relativeoverlay4, "h_sendToOverlay", createBasicOverlay4)
+
 
 //bind relative overlay to hmd
 actormanager.command(relativeoverlay1, "h_bindToHMD", ovrInput)
-actormanager.command(relativeoverlay2, "h_bindToHMD", ovrInput)
-actormanager.command(relativeoverlay3, "h_bindToHMD", ovrInput)
-actormanager.command(relativeoverlay4, "h_bindToHMD", ovrInput)
+
 
 if (import.meta.main) {
 

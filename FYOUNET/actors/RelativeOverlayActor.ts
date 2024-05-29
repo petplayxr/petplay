@@ -6,6 +6,8 @@ import { ActorP2P } from "../actorsystem/actorP2P.ts";
 import { OVRInterface } from "../helper/helpermodules/OVRInterface.ts";
 import { RelativePositionService } from "../helper/vrc/relativeposition.ts";
 import { aOVRInput } from "./OVRInput.ts";
+import { clearLine } from "node:readline";
+import { constrainedMemory } from "node:process";
 
 //#region msg types
 
@@ -43,6 +45,12 @@ type PositionData = [number, number, number];
 
 //type openvrmatrix
 type HMDMatrix = [
+    [number, number, number, number],
+    [number, number, number, number],
+    [number, number, number, number]
+];
+
+type HMDMatrix11 = [
     number, number, number, number,
     number, number, number, number,
     number, number, number, number
@@ -56,20 +64,54 @@ function format(command: OverlayCommand): string {
             result += `;${value}`;
         });
     }
-    return`${result};`;
+    return `${result};`;
 }
 
+function remapPosition(value:number, oldMin:number, oldMax:number, newMin:number, newMax:number) {
+    // Apply the scaling transformation
+    const scaledValue = (value - oldMin) / (oldMax - oldMin);
+    
+    // Nonlinear scaling (e.g., exponential scaling)
+    const nonlinearValue = Math.pow(scaledValue, 0.1); // Using square for example, adjust as needed
+    
+    // Map to new range
+    let val = nonlinearValue * (newMax - newMin) + newMin;
+    
+    // If the original value was negative, invert the result
+    if (value < 0) {
+        val = -Math.abs(val);
+    }
 
+    /* console.log(value, val); */
+    return val;
+}
 
-function offset(data: PositionData, hmdpos: number[][]): string {
+function remapPosition2(value:number, oldMin:number, oldMax:number, newMin:number, newMax:number) {
+    // Apply the scaling transformation
+    const scaledValue = (value - oldMin) / (oldMax - oldMin);
+    
+    // Nonlinear scaling (e.g., exponential scaling)
+    const nonlinearValue = Math.pow(scaledValue, 4); // Using square for example, adjust as needed
+    
+    // Map to new range
+    let val = nonlinearValue * (newMax - newMin) + newMin;
+    
+    // If the original value was negative, invert the result
+    if (value < 0) {
+        val = -Math.abs(val);
+    }
+
+    /* console.log(value, val); */
+    return val;
+}
+
+async function offset(data: HMDMatrix11, hmdpos: HMDMatrix): Promise<string> {
     // Scale data
-    const scaleX = 2; 
-    const scaleY = 2; 
-    const scaleZ = -2; 
+
 
     // Static offset
-    const offsetX = 0;  
-    const offsetY = 0;  
+    const offsetX = 0;
+    const offsetY = 0;
     const offsetZ = 0; // Offset in z-direction to move overlay forward
 
     //#region hmdoffset
@@ -79,31 +121,49 @@ function offset(data: PositionData, hmdpos: number[][]): string {
         hmdpos[2][0] * offsetX + hmdpos[2][1] * offsetY + hmdpos[2][2] * offsetZ + hmdpos[2][3]
     ];
 
+
     // Construct the transformation matrix for the overlay
-    const trsfMtx: HMDMatrix = [
-        hmdpos[0][0], hmdpos[0][1], hmdpos[0][2], hmdOffset[0],
-        hmdpos[1][0], hmdpos[1][1], hmdpos[1][2], hmdOffset[1],
-        hmdpos[2][0], hmdpos[2][1], hmdpos[2][2], hmdOffset[2]
+
+    //data[11] -0,5 = 1, 0.5 = 0
+    
+
+    const scaleFactorYaw = 2; 
+    const scaleFactorPitch = 2; 
+    const scaleFactorRoll = 2; 
+    const scaleX = -4
+    const scaleY = -2
+    const scaleZ = 0.1
+
+    
+
+
+    const sData = [
+        data[0] * scaleFactorYaw, data[1] * scaleFactorPitch, data[2] * scaleFactorRoll, data[3] * scaleX,
+        data[4] * scaleFactorYaw, data[5] * scaleFactorPitch, data[6] * scaleFactorRoll, data[7] * scaleY,
+        data[8] * scaleFactorYaw, data[9] * scaleFactorPitch, data[10]* scaleFactorRoll, remapPosition2(data[11], 0, 0.6, 1, 0),
     ];
-    //#endregion
 
-     //#region applyvrc offset
-    // Scale the data with exponential function to intensify the offset
-    const base = 1 + Math.abs(2); // Base is adjusted by the steepness value
-    const signFactor = -1;
+    const trsfMtx: HMDMatrix = [
+        [hmdpos[0][0], hmdpos[0][1], hmdpos[0][2], hmdOffset[0] - sData[3]],
+        [hmdpos[1][0], hmdpos[1][1], hmdpos[1][2], hmdOffset[1] -0.4 ],
+        [hmdpos[2][0], hmdpos[2][1], hmdpos[2][2], hmdOffset[2] - sData[11]]
+    ];
 
-    data[0] = Math.sign(data[0]) * (Math.pow(base, Math.abs(data[0])) - 1) * signFactor;
-    data[1] = Math.sign(data[1]) * (Math.pow(base, Math.abs(data[1])) - 1) * signFactor;
-    data[2] = Math.sign(data[2]) * (Math.pow(base, Math.abs(data[2])) - 1) * signFactor;
 
-    data[0] *= scaleX
-    data[1] *= scaleY
-    data[2] *= scaleZ
+    const finalMtrx: HMDMatrix11 = [
+        trsfMtx[0][0]       , sData[1], sData[2], trsfMtx[0][3] ,
+        sData[4],           trsfMtx[1][1]        , sData[6],trsfMtx[1][3] ,
+        sData[8],              sData[9], trsfMtx[2][2]        ,trsfMtx[2][3] 
 
-    // Apply the scaled offset to the transformation matrix
-    trsfMtx[3] += data[0];
-    //trsfMtx[7] += data[1];
-    trsfMtx[11] += data[2];
+    ];
+    /* console.log(finalMtrx[0], finalMtrx[1], finalMtrx[2],  hmdOffset[0],"-", sData[3], data[3], "=", finalMtrx[3]    )
+    console.log(finalMtrx[4], finalMtrx[5], finalMtrx[8],  hmdOffset[1],"-", sData[7], data[7], "=",finalMtrx[9]    )
+    console.log(finalMtrx[8], finalMtrx[9], finalMtrx[10] ,hmdOffset[2],"-", sData[11],data[11], "=",finalMtrx[11]  )
+    await new Promise(resolve => setTimeout(resolve, 150))
+    await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"))
+    await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"))
+    await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K")) */
+
 
     //#endregion
 
@@ -111,7 +171,7 @@ function offset(data: PositionData, hmdpos: number[][]): string {
     const move = {
         type: "SetOverlayPosition",
         payload: {
-            m34: trsfMtx.join(' ')
+            m34: finalMtrx.join(' ')
         }
     };
 
@@ -133,13 +193,13 @@ export class RelativeOverlayActor extends ActorP2P<RelativeOverlayActor> {
     private name: string; //name of overlay
     private ovrConnector: OVRInterface; //ovr interface
     private hmdAddr: Address<aOVRInput> | null = null; //hmd address
-    private actorManager: actorManager | null = null; 
+    private actorManager: actorManager | null = null;
     private ballNum = 0;
     private posService: RelativePositionService;
-    
-    
 
-    constructor(publicIp: string, name: string, ballNum: number, posServ:RelativePositionService, executablePath: string) {
+
+
+    constructor(publicIp: string, name: string, ballNum: number, posServ: RelativePositionService, executablePath: string) {
         super(name, publicIp);
         this.name = name;
         this.posService = posServ;
@@ -152,48 +212,61 @@ export class RelativeOverlayActor extends ActorP2P<RelativeOverlayActor> {
         await this.ovrConnector.connect();
         this.ovrConnector.subscribe(this.onOverlayMessage.bind(this));
         this.posUpdate(this.posService);
-        
+
     }
 
-    async posUpdate(relativePositionService: RelativePositionService){
+    async posUpdate(relativePositionService: RelativePositionService) {
 
+        let pos
 
-        relativePositionService.subscribe( async(position) => {
+        relativePositionService.subscribe(async (position) => {
             if (!this.actorManager || !this.hmdAddr) {
                 return;
             }
-            const hmdpos = await this.getHmdPos(this.actorManager as actorManager, this.hmdAddr!);
-            
+            pos = position;
 
-            //position of one of the balls
-            const posf = offset(position[this.ballNum], hmdpos);
-            await this.ovrConnector.send(posf);
+
+
         });
+        while (true) {
+            
+            //position of one of the balls
+            if (pos) {
+                const hmdpos: HMDMatrix = await this.getHmdPos(this.actorManager as actorManager, this.hmdAddr!);
+                const posf = await offset(pos.rotation, hmdpos);
+                await this.ovrConnector.send(posf);
+            }
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+        }
+
+
+
     }
 
-    async getHmdPos(ctx: actorManager, hmdAddr: Address<aOVRInput>): Promise<number[][]> {
+    async getHmdPos(ctx: actorManager, hmdAddr: Address<aOVRInput>): Promise<HMDMatrix> {
         let data = "";
-    
+
         await ctx.command(hmdAddr, "h_getOVRData", (data1: string) => {
             data = data1;
         });
-    
+
         // Extract the HMD transformation matrix from the string using a regular expression
         const regex = /HMD Transformation Matrix:\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/;
         const match = data.match(regex);
-    
-        let matrix: number[][] = [
+
+        let matrix: HMDMatrix = [
             [0, 0, 0, 0],
             [0, 0, 0, 0],
             [0, 0, 0, 0]
         ];
-    
+
         if (match && match[1] && match[2] && match[3]) {
             matrix[0] = match[1].trim().split(/\s+/).map(Number);
             matrix[1] = match[2].trim().split(/\s+/).map(Number);
             matrix[2] = match[3].trim().split(/\s+/).map(Number);
         }
-    
+
         // Return the transformation matrix
         return matrix;
     }
@@ -226,6 +299,6 @@ export class RelativeOverlayActor extends ActorP2P<RelativeOverlayActor> {
 
 
         console.log(`OverlayActor received message: ${msg.data}`);
-        await this.h_sendToOverlay(ctx,msg.data);
+        await this.h_sendToOverlay(ctx, msg.data);
     }
 }

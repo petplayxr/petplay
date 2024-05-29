@@ -2,6 +2,12 @@ import numeric from 'npm:numeric';
 
 type Point3D = [number, number, number];
 
+type HMDMatrix = [
+  number, number, number, number,
+  number, number, number, number,
+  number, number, number, number
+];
+
 export class Tetrahedron3D {
   points: Point3D[];
 
@@ -9,7 +15,7 @@ export class Tetrahedron3D {
     this.points = points;
   }
 
-  findSecondTetrahedron(distances: number[]): Point3D[] {
+  findSecondTetrahedron(distances: number[]): { points: Point3D[], translation: Point3D, rotation: HMDMatrix } {
     const [p1, p2, p3, p4] = this.points;
     const [d1, d2, d3, d4] = distances;
 
@@ -101,7 +107,14 @@ export class Tetrahedron3D {
       ];
     };
 
-    return [transform(p1), transform(p2), transform(p3), transform(p4)];
+    const transformedPoints = [transform(p1), transform(p2), transform(p3), transform(p4)];
+    const rotationMatrix: HMDMatrix = [
+      R[0][0], R[0][1], R[0][2], tx,
+      R[1][0], R[1][1], R[1][2], ty,
+      R[2][0], R[2][1], R[2][2], tz
+    ];
+
+    return { points: transformedPoints, translation: [tx, ty, tz], rotation: rotationMatrix };
   }
 }
 
