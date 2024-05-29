@@ -62,20 +62,17 @@ function format(command: OverlayCommand): string {
 
 
 function offset(data: PositionData, hmdpos: number[][]): string {
+    // Scale data
+    const scaleX = 2; 
+    const scaleY = 2; 
+    const scaleZ = -2; 
 
-    //scale data
-    const scaleX = 6; 
-    const scaleY = 6; 
-    const scaleZ = 6; 
-
-    //static offset
+    // Static offset
     const offsetX = 0;  
     const offsetY = 0;  
-    const offsetZ = -0.2; // Offset in z-direction to move overlay forward
-
+    const offsetZ = 0; // Offset in z-direction to move overlay forward
 
     //#region hmdoffset
-
     const hmdOffset = [
         hmdpos[0][0] * offsetX + hmdpos[0][1] * offsetY + hmdpos[0][2] * offsetZ + hmdpos[0][3],
         hmdpos[1][0] * offsetX + hmdpos[1][1] * offsetY + hmdpos[1][2] * offsetZ + hmdpos[1][3],
@@ -88,42 +85,37 @@ function offset(data: PositionData, hmdpos: number[][]): string {
         hmdpos[1][0], hmdpos[1][1], hmdpos[1][2], hmdOffset[1],
         hmdpos[2][0], hmdpos[2][1], hmdpos[2][2], hmdOffset[2]
     ];
-
     //#endregion
-    
-    //#region applyvrc offset
 
-    //this part is still broken
+     //#region applyvrc offset
+    // Scale the data with exponential function to intensify the offset
+    const base = 1 + Math.abs(2); // Base is adjusted by the steepness value
+    const signFactor = -1;
 
-    data[0] *= scaleX + offsetX;
-    data[1] *= scaleY + offsetY;
-    data[2] *= scaleZ + offsetZ;
+    data[0] = Math.sign(data[0]) * (Math.pow(base, Math.abs(data[0])) - 1) * signFactor;
+    data[1] = Math.sign(data[1]) * (Math.pow(base, Math.abs(data[1])) - 1) * signFactor;
+    data[2] = Math.sign(data[2]) * (Math.pow(base, Math.abs(data[2])) - 1) * signFactor;
 
-    const hmdOffsett = [
-        trsfMtx[0] * data[0] + trsfMtx[1] * data[1] + trsfMtx[2] * data[2]+ trsfMtx[3],
-        trsfMtx[4] * data[0] + trsfMtx[5] * data[1] + trsfMtx[6] * data[2]+ trsfMtx[7],
-        trsfMtx[8] * data[0] + trsfMtx[9] * data[1] + trsfMtx[10]* data[2]+ trsfMtx[1]
-    ];
+    data[0] *= scaleX
+    data[1] *= scaleY
+    data[2] *= scaleZ
 
-    const finalPosition: HMDMatrix = [
-        trsfMtx[0], trsfMtx[1], trsfMtx[2], hmdOffsett[0],
-        trsfMtx[4], trsfMtx[5], trsfMtx[6], hmdOffsett[1],
-        trsfMtx[8], trsfMtx[9], trsfMtx[10], hmdOffsett[2]
-    ];
-    
+    // Apply the scaled offset to the transformation matrix
+    trsfMtx[3] += data[0];
+    //trsfMtx[7] += data[1];
+    trsfMtx[11] += data[2];
 
     //#endregion
 
-    
-    //construct message
+    // Construct message
     const move = {
         type: "SetOverlayPosition",
         payload: {
-            m34: finalPosition.join(' ') // or trsfMtx.join(' ')
+            m34: trsfMtx.join(' ')
         }
     };
 
-    //format message
+    // Format message
     const data2 = format(move);
 
     return data2;
