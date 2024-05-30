@@ -37,6 +37,10 @@ export class RelativePositionService {
             const greenDistance = this.distances[PetPlay3];
             const whiteDistance = this.distances[PetPlay4];
 
+            if (redDistance === 0 || blueDistance === 0 || greenDistance === 0 || whiteDistance === 0) {
+                return;
+            }
+
             const secondTetrahedron = this.tetrahedron.findSecondTetrahedron([redDistance, blueDistance, greenDistance, whiteDistance]);
             const result2 = secondTetrahedron;
 
