@@ -20,58 +20,149 @@ export class Tetrahedron3D {
     const [p1, p2, p3, p4] = this.points;
     const [d1, d2, d3, d4] = distances;
 
+    const mean = this.points.reduce((acc, point) => [acc[0] + point[0], acc[1] + point[1], acc[2] + point[2]], [0, 0, 0]).map(coord => coord / 4);
+    const diff = this.points.map(point => [point[0] - mean[0], point[1] - mean[1], point[2] - mean[2]]);
+    const S = diff.reduce((acc, d) => [
+      [acc[0][0] + d[0] * d[0], acc[0][1] + d[0] * d[1], acc[0][2] + d[0] * d[2]],
+      [acc[1][0] + d[1] * d[0], acc[1][1] + d[1] * d[1], acc[1][2] + d[1] * d[2]],
+      [acc[2][0] + d[2] * d[0], acc[2][1] + d[2] * d[1], acc[2][2] + d[2] * d[2]]
+    ], [[0, 0, 0], [0, 0, 0], [0, 0, 0]]).map(row => row.map(val => val / 4));
+    const SInv = numeric.inv(S);
+
     // Define the system of equations
-    const equations = [
+    const equations2 = [
       (tx: number, ty: number, tz: number, alpha: number, beta: number, gamma: number) =>
-        Math.sqrt(
-          ((p1[0] * Math.cos(beta) * Math.cos(gamma) - p1[1] * Math.cos(beta) * Math.sin(gamma) + p1[2] * Math.sin(beta)) + tx) ** 2 +
-          ((p1[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) + 
-            p1[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) - 
-            p1[2] * Math.sin(alpha) * Math.cos(beta)) + ty) ** 2 +
-          ((p1[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) + 
-            p1[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) + 
-            p1[2] * Math.cos(alpha) * Math.cos(beta)) + tz) ** 2
-        ) - d1,
+        Math.sqrt(numeric.dot(numeric.dot([
+          ((p1[0] * Math.cos(beta) * Math.cos(gamma) - p1[1] * Math.cos(beta) * Math.sin(gamma) + p1[2] * Math.sin(beta)) + tx) - mean[0],
+          ((p1[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p1[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) -
+            p1[2] * Math.sin(alpha) * Math.cos(beta)) + ty) - mean[1],
+          ((p1[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p1[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) +
+            p1[2] * Math.cos(alpha) * Math.cos(beta)) + tz) - mean[2]
+        ], SInv), [
+          ((p1[0] * Math.cos(beta) * Math.cos(gamma) - p1[1] * Math.cos(beta) * Math.sin(gamma) + p1[2] * Math.sin(beta)) + tx) - mean[0],
+          ((p1[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p1[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) -
+            p1[2] * Math.sin(alpha) * Math.cos(beta)) + ty) - mean[1],
+          ((p1[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p1[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) +
+            p1[2] * Math.cos(alpha) * Math.cos(beta)) + tz) - mean[2]
+        ])) - d1,
       (tx: number, ty: number, tz: number, alpha: number, beta: number, gamma: number) =>
-        Math.sqrt(
-          ((p2[0] * Math.cos(beta) * Math.cos(gamma) - p2[1] * Math.cos(beta) * Math.sin(gamma) + p2[2] * Math.sin(beta)) + tx) ** 2 +
-          ((p2[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) + 
-            p2[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) - 
-            p2[2] * Math.sin(alpha) * Math.cos(beta)) + ty) ** 2 +
-          ((p2[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) + 
-            p2[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) + 
-            p2[2] * Math.cos(alpha) * Math.cos(beta)) + tz) ** 2
-        ) - d2,
+        Math.sqrt(numeric.dot(numeric.dot([
+          ((p2[0] * Math.cos(beta) * Math.cos(gamma) - p2[1] * Math.cos(beta) * Math.sin(gamma) + p2[2] * Math.sin(beta)) + tx) - mean[0],
+          ((p2[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p2[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) -
+            p2[2] * Math.sin(alpha) * Math.cos(beta)) + ty) - mean[1],
+          ((p2[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p2[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) +
+            p2[2] * Math.cos(alpha) * Math.cos(beta)) + tz) - mean[2]
+        ], SInv), [
+          ((p2[0] * Math.cos(beta) * Math.cos(gamma) - p2[1] * Math.cos(beta) * Math.sin(gamma) + p2[2] * Math.sin(beta)) + tx) - mean[0],
+          ((p2[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p2[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) -
+            p2[2] * Math.sin(alpha) * Math.cos(beta)) + ty) - mean[1],
+          ((p2[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p2[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) +
+            p2[2] * Math.cos(alpha) * Math.cos(beta)) + tz) - mean[2]
+        ])) - d2,
       (tx: number, ty: number, tz: number, alpha: number, beta: number, gamma: number) =>
-        Math.sqrt(
-          ((p3[0] * Math.cos(beta) * Math.cos(gamma) - p3[1] * Math.cos(beta) * Math.sin(gamma) + p3[2] * Math.sin(beta)) + tx) ** 2 +
-          ((p3[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) + 
-            p3[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) - 
-            p3[2] * Math.sin(alpha) * Math.cos(beta)) + ty) ** 2 +
-          ((p3[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) + 
-            p3[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) + 
-            p3[2] * Math.cos(alpha) * Math.cos(beta)) + tz) ** 2
-        ) - d3,
+        Math.sqrt(numeric.dot(numeric.dot([
+          ((p3[0] * Math.cos(beta) * Math.cos(gamma) - p3[1] * Math.cos(beta) * Math.sin(gamma) + p3[2] * Math.sin(beta)) + tx) - mean[0],
+          ((p3[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p3[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) -
+            p3[2] * Math.sin(alpha) * Math.cos(beta)) + ty) - mean[1],
+          ((p3[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p3[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) +
+            p3[2] * Math.cos(alpha) * Math.cos(beta)) + tz) - mean[2]
+        ], SInv), [
+          ((p3[0] * Math.cos(beta) * Math.cos(gamma) - p3[1] * Math.cos(beta) * Math.sin(gamma) + p3[2] * Math.sin(beta)) + tx) - mean[0],
+          ((p3[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p3[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) -
+            p3[2] * Math.sin(alpha) * Math.cos(beta)) + ty) - mean[1],
+          ((p3[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p3[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) +
+            p3[2] * Math.cos(alpha) * Math.cos(beta)) + tz) - mean[2]
+        ])) - d3,
       (tx: number, ty: number, tz: number, alpha: number, beta: number, gamma: number) =>
-        Math.sqrt(
-          ((p4[0] * Math.cos(beta) * Math.cos(gamma) - p4[1] * Math.cos(beta) * Math.sin(gamma) + p4[2] * Math.sin(beta)) + tx) ** 2 +
-          ((p4[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) + 
-            p4[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) - 
-            p4[2] * Math.sin(alpha) * Math.cos(beta)) + ty) ** 2 +
-          ((p4[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) + 
-            p4[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) + 
-            p4[2] * Math.cos(alpha) * Math.cos(beta)) + tz) ** 2
-        ) - d4,
+        Math.sqrt(numeric.dot(numeric.dot([
+          ((p4[0] * Math.cos(beta) * Math.cos(gamma) - p4[1] * Math.cos(beta) * Math.sin(gamma) + p4[2] * Math.sin(beta)) + tx) - mean[0],
+          ((p4[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p4[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) -
+            p4[2] * Math.sin(alpha) * Math.cos(beta)) + ty) - mean[1],
+          ((p4[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p4[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) +
+            p4[2] * Math.cos(alpha) * Math.cos(beta)) + tz) - mean[2]
+        ], SInv), [
+          ((p4[0] * Math.cos(beta) * Math.cos(gamma) - p4[1] * Math.cos(beta) * Math.sin(gamma) + p4[2] * Math.sin(beta)) + tx) - mean[0],
+          ((p4[0] * (Math.cos(alpha) * Math.sin(gamma) + Math.sin(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p4[1] * (Math.cos(alpha) * Math.cos(gamma) - Math.sin(alpha) * Math.sin(beta) * Math.sin(gamma)) -
+            p4[2] * Math.sin(alpha) * Math.cos(beta)) + ty) - mean[1],
+          ((p4[0] * (Math.sin(alpha) * Math.sin(gamma) - Math.cos(alpha) * Math.sin(beta) * Math.cos(gamma)) +
+            p4[1] * (Math.sin(alpha) * Math.cos(gamma) + Math.cos(alpha) * Math.sin(beta) * Math.sin(gamma)) +
+            p4[2] * Math.cos(alpha) * Math.cos(beta)) + tz) - mean[2]
+        ])) - d4,
     ];
+
+    const equations = [
+      (tx: number, ty: number, tz: number, q: Quaternion) =>
+        Math.sqrt(numeric.dot(numeric.dot([
+          (q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]) * p1[0] + 2 * (q[1] * q[2] - q[0] * q[3]) * p1[1] + 2 * (q[1] * q[3] + q[0] * q[2]) * p1[2] + tx - mean[0],
+          2 * (q[1] * q[2] + q[0] * q[3]) * p1[0] + (q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]) * p1[1] + 2 * (q[2] * q[3] - q[0] * q[1]) * p1[2] + ty - mean[1],
+          2 * (q[1] * q[3] - q[0] * q[2]) * p1[0] + 2 * (q[2] * q[3] + q[0] * q[1]) * p1[1] + (q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]) * p1[2] + tz - mean[2]
+        ], SInv), [
+          (q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]) * p1[0] + 2 * (q[1] * q[2] - q[0] * q[3]) * p1[1] + 2 * (q[1] * q[3] + q[0] * q[2]) * p1[2] + tx - mean[0],
+          2 * (q[1] * q[2] + q[0] * q[3]) * p1[0] + (q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]) * p1[1] + 2 * (q[2] * q[3] - q[0] * q[1]) * p1[2] + ty - mean[1],
+          2 * (q[1] * q[3] - q[0] * q[2]) * p1[0] + 2 * (q[2] * q[3] + q[0] * q[1]) * p1[1] + (q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]) * p1[2] + tz - mean[2]
+        ])) - d1,
+      (tx: number, ty: number, tz: number, q: Quaternion) =>
+        Math.sqrt(numeric.dot(numeric.dot([
+          (q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]) * p2[0] + 2 * (q[1] * q[2] - q[0] * q[3]) * p2[1] + 2 * (q[1] * q[3] + q[0] * q[2]) * p2[2] + tx - mean[0],
+          2 * (q[1] * q[2] + q[0] * q[3]) * p2[0] + (q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]) * p2[1] + 2 * (q[2] * q[3] - q[0] * q[1]) * p2[2] + ty - mean[1],
+          2 * (q[1] * q[3] - q[0] * q[2]) * p2[0] + 2 * (q[2] * q[3] + q[0] * q[1]) * p2[1] + (q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]) * p2[2] + tz - mean[2]
+        ], SInv), [
+          (q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]) * p2[0] + 2 * (q[1] * q[2] - q[0] * q[3]) * p2[1] + 2 * (q[1] * q[3] + q[0] * q[2]) * p2[2] + tx - mean[0],
+          2 * (q[1] * q[2] + q[0] * q[3]) * p2[0] + (q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]) * p2[1] + 2 * (q[2] * q[3] - q[0] * q[1]) * p2[2] + ty - mean[1],
+          2 * (q[1] * q[3] - q[0] * q[2]) * p2[0] + 2 * (q[2] * q[3] + q[0] * q[1]) * p2[1] + (q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]) * p2[2] + tz - mean[2]
+        ])) - d2,
+      (tx: number, ty: number, tz: number, q: Quaternion) =>
+        Math.sqrt(numeric.dot(numeric.dot([
+          (q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]) * p3[0] + 2 * (q[1] * q[2] - q[0] * q[3]) * p3[1] + 2 * (q[1] * q[3] + q[0] * q[2]) * p3[2] + tx - mean[0],
+          2 * (q[1] * q[2] + q[0] * q[3]) * p3[0] + (q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]) * p3[1] + 2 * (q[2] * q[3] - q[0] * q[1]) * p3[2] + ty - mean[1],
+          2 * (q[1] * q[3] - q[0] * q[2]) * p3[0] + 2 * (q[2] * q[3] + q[0] * q[1]) * p3[1] + (q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]) * p3[2] + tz - mean[2]
+        ], SInv), [
+          (q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]) * p3[0] + 2 * (q[1] * q[2] - q[0] * q[3]) * p3[1] + 2 * (q[1] * q[3] + q[0] * q[2]) * p3[2] + tx - mean[0],
+          2 * (q[1] * q[2] + q[0] * q[3]) * p3[0] + (q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]) * p3[1] + 2 * (q[2] * q[3] - q[0] * q[1]) * p3[2] + ty - mean[1],
+          2 * (q[1] * q[3] - q[0] * q[2]) * p3[0] + 2 * (q[2] * q[3] + q[0] * q[1]) * p3[1] + (q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]) * p3[2] + tz - mean[2]
+        ])) - d3,
+      (tx: number, ty: number, tz: number, q: Quaternion) =>
+        Math.sqrt(numeric.dot(numeric.dot([
+          (q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]) * p4[0] + 2 * (q[1] * q[2] - q[0] * q[3]) * p4[1] + 2 * (q[1] * q[3] + q[0] * q[2]) * p4[2] + tx - mean[0],
+          2 * (q[1] * q[2] + q[0] * q[3]) * p4[0] + (q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]) * p4[1] + 2 * (q[2] * q[3] - q[0] * q[1]) * p4[2] + ty - mean[1],
+          2 * (q[1] * q[3] - q[0] * q[2]) * p4[0] + 2 * (q[2] * q[3] + q[0] * q[1]) * p4[1] + (q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]) * p4[2] + tz - mean[2]
+        ], SInv), [
+          (q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]) * p4[0] + 2 * (q[1] * q[2] - q[0] * q[3]) * p4[1] + 2 * (q[1] * q[3] + q[0] * q[2]) * p4[2] + tx - mean[0],
+          2 * (q[1] * q[2] + q[0] * q[3]) * p4[0] + (q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]) * p4[1] + 2 * (q[2] * q[3] - q[0] * q[1]) * p4[2] + ty - mean[1],
+          2 * (q[1] * q[3] - q[0] * q[2]) * p4[0] + 2 * (q[2] * q[3] + q[0] * q[1]) * p4[1] + (q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]) * p4[2] + tz - mean[2]
+        ])) - d4,
+
+      // ... (same for p2, p3, p4)
+    ];
+
+    let q
 
     // Define the objective function
     const objectiveFunction = (params: number[]) => {
-      const [tx, ty, tz, alpha, beta, gamma] = params;
-      return equations.reduce((sum, eq) => sum + Math.abs(eq(tx, ty, tz, alpha, beta, gamma)) ** 2, 0);
+      const [tx, ty, tz, q0, q1, q2, q3] = params;
+      const qNorm = Math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
+      q = [q0 / qNorm, q1 / qNorm, q2 / qNorm, q3 / qNorm]; // normalize the quaternion
+      return equations.reduce((sum, eq) => sum + Math.abs(eq(tx, ty, tz, q)) ** 2, 0);
     };
 
     // Initial guess
-    const initialGuess = [0, 0, 0, 0, 0, 0];
+    const centroid = this.points.reduce((acc, point) => [acc[0] + point[0], acc[1] + point[1], acc[2] + point[2]], [0, 0, 0]).map(coord => coord / 4);
+    const initialGuess = [...centroid, 1, 0, 0, 0];
 
     // Perform the optimization using Nelder-Mead
     const result = numeric.uncmin(objectiveFunction, initialGuess, 1e-10, undefined, 10000);
@@ -97,7 +188,13 @@ export class Tetrahedron3D {
       [0, Math.sin(alpha), Math.cos(alpha)]
     ];
 
-    const R = numeric.dot(numeric.dot(Rz, Ry), Rx);
+    const R = [
+      [1 - 2 * q[2] * q[2] - 2 * q[3] * q[3], 2 * q[1] * q[2] - 2 * q[0] * q[3], 2 * q[1] * q[3] + 2 * q[0] * q[2]],
+      [2 * q[1] * q[2] + 2 * q[0] * q[3], 1 - 2 * q[1] * q[1] - 2 * q[3] * q[3], 2 * q[2] * q[3] - 2 * q[0] * q[1]],
+      [2 * q[1] * q[3] - 2 * q[0] * q[2], 2 * q[2] * q[3] + 2 * q[0] * q[1], 1 - 2 * q[1] * q[1] - 2 * q[2] * q[2]]
+    ];
+
+    //const R = numeric.dot(numeric.dot(Rz, Ry), Rx);
 
     const transform = (point: Point3D): Point3D => {
       const rotated = numeric.dot(R, point);

@@ -130,7 +130,7 @@ async function offset(data: HMDMatrix11, hmdpos: HMDMatrix): Promise<string> {
     const scaleFactorYaw = 2; 
     const scaleFactorPitch = 2; 
     const scaleFactorRoll = 2; 
-    const scaleX = -4
+    const scaleX = -160
     const scaleY = -2
     const scaleZ = 0.1
 
@@ -140,7 +140,7 @@ async function offset(data: HMDMatrix11, hmdpos: HMDMatrix): Promise<string> {
     const sData = [
         data[0] * scaleFactorYaw, data[1] * scaleFactorPitch, data[2] * scaleFactorRoll, data[3] * scaleX,
         data[4] * scaleFactorYaw, data[5] * scaleFactorPitch, data[6] * scaleFactorRoll, data[7] * scaleY,
-        data[8] * scaleFactorYaw, data[9] * scaleFactorPitch, data[10]* scaleFactorRoll, remapPosition2(data[11], 0, 0.6, 1, 0),
+        data[8] * scaleFactorYaw, data[9] * scaleFactorPitch, data[10]* scaleFactorRoll, remapPosition2(data[11], 0, 0.6, 2, 0),
     ];
 
     const trsfMtx: HMDMatrix = [
@@ -151,9 +151,9 @@ async function offset(data: HMDMatrix11, hmdpos: HMDMatrix): Promise<string> {
 
 
     const finalMtrx: HMDMatrix11 = [
-        trsfMtx[0][0]       , sData[1], sData[2], trsfMtx[0][3] ,
-        sData[4],           trsfMtx[1][1]        , sData[6],trsfMtx[1][3] ,
-        sData[8],              sData[9], trsfMtx[2][2]        ,trsfMtx[2][3] 
+        trsfMtx[0][0] , sData[1],      sData[2],      trsfMtx[0][3] ,
+        sData[4],       trsfMtx[1][1], sData[6],      trsfMtx[1][3] ,
+        sData[8],       sData[9],      trsfMtx[2][2] ,trsfMtx[2][3] 
 
     ];
     /* console.log(finalMtrx[0], finalMtrx[1], finalMtrx[2],  hmdOffset[0],"-", sData[3], data[3], "=", finalMtrx[3]    )
