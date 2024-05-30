@@ -25,7 +25,6 @@ export class Tetrahedron3D {
 
   findSecondTetrahedron(distances: number[]): { points: Point3D[], translation: Point3D, rotation: HMDMatrix } {
     const [p1, p2, p3, p4] = this.points;
-    //const [d1, d2, d3, d4] = distances;
 
     const mean = this.points.reduce((acc, point) => [acc[0] + point[0], acc[1] + point[1], acc[2] + point[2]], [0, 0, 0]).map(coord => coord / 4);
     const diff = this.points.map(point => [point[0] - mean[0], point[1] - mean[1], point[2] - mean[2]]);
@@ -36,22 +35,40 @@ export class Tetrahedron3D {
     ], [[0, 0, 0], [0, 0, 0], [0, 0, 0]]).map(row => row.map(val => val / 4));
     const SInv = numeric.inv(S);
 
+    const quaternionToRotationMatrix = (q: Quaternion): Matrix3x3 => {
+      return [
+        [1 - 2 * q[2] * q[2] - 2 * q[3] * q[3], 2 * q[1] * q[2] - 2 * q[0] * q[3], 2 * q[1] * q[3] + 2 * q[0] * q[2]],
+        [2 * q[1] * q[2] + 2 * q[0] * q[3], 1 - 2 * q[1] * q[1] - 2 * q[3] * q[3], 2 * q[2] * q[3] - 2 * q[0] * q[1]],
+        [2 * q[1] * q[3] - 2 * q[0] * q[2], 2 * q[2] * q[3] + 2 * q[0] * q[1], 1 - 2 * q[1] * q[1] - 2 * q[2] * q[2]]
+      ];
+    };
 
+    const applyRotationAndTranslation = (point: Point3D, tx: number, ty: number, tz: number, R: Matrix3x3): Point3D => {
+      const rotated = numeric.dot(R, point) as number[];
+      return [
+        rotated[0] + tx,
+        rotated[1] + ty,
+        rotated[2] + tz
+      ];
+    };
 
     const equations = Array.from({ length: 4 }, (_, index) => {
       const p = this.points[index];
       const d = distances[index];
-    
-      return (tx: number, ty: number, tz: number, q: Quaternion) =>
-        Math.sqrt(numeric.dot(numeric.dot([
-          (q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]) * p[0] + 2 * (q[1] * q[2] - q[0] * q[3]) * p[1] + 2 * (q[1] * q[3] + q[0] * q[2]) * p[2] + tx - mean[0],
-          2 * (q[1] * q[2] + q[0] * q[3]) * p[0] + (q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]) * p[1] + 2 * (q[2] * q[3] - q[0] * q[1]) * p[2] + ty - mean[1],
-          2 * (q[1] * q[3] - q[0] * q[2]) * p[0] + 2 * (q[2] * q[3] + q[0] * q[1]) * p[1] + (q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]) * p[2] + tz - mean[2]
+      
+      return (tx: number, ty: number, tz: number, q: Quaternion) => {
+        const R = quaternionToRotationMatrix(q);
+        const transformed = applyRotationAndTranslation(p, tx, ty, tz, R);
+        return Math.sqrt(numeric.dot(numeric.dot([
+          transformed[0] - mean[0],
+          transformed[1] - mean[1],
+          transformed[2] - mean[2]
         ], SInv), [
-          (q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]) * p[0] + 2 * (q[1] * q[2] - q[0] * q[3]) * p[1] + 2 * (q[1] * q[3] + q[0] * q[2]) * p[2] + tx - mean[0],
-          2 * (q[1] * q[2] + q[0] * q[3]) * p[0] + (q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]) * p[1] + 2 * (q[2] * q[3] - q[0] * q[1]) * p[2] + ty - mean[1],
-          2 * (q[1] * q[3] - q[0] * q[2]) * p[0] + 2 * (q[2] * q[3] + q[0] * q[1]) * p[1] + (q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]) * p[2] + tz - mean[2]
-        ])as number) - d ;
+          transformed[0] - mean[0],
+          transformed[1] - mean[1],
+          transformed[2] - mean[2]
+        ]) as number) - d;
+      };
     });
 
     let q: Quaternion = [1, 0, 0, 0];
@@ -71,27 +88,11 @@ export class Tetrahedron3D {
     // Perform the optimization using Nelder-Mead
     const result = numeric.uncmin(objectiveFunction, initialGuess, 1e-10, undefined, 10000);
 
-    const [tx, ty, tz, alpha, beta, gamma] = result.solution;
+    const [tx, ty, tz, q0, q1, q2, q3] = result.solution;
+    q = [q0, q1, q2, q3];
+    const R = quaternionToRotationMatrix(q);
 
-
-    const R: Matrix3x3 = [
-      [1 - 2 * q[2] * q[2] - 2 * q[3] * q[3], 2 * q[1] * q[2] - 2 * q[0] * q[3], 2 * q[1] * q[3] + 2 * q[0] * q[2]],
-      [2 * q[1] * q[2] + 2 * q[0] * q[3], 1 - 2 * q[1] * q[1] - 2 * q[3] * q[3], 2 * q[2] * q[3] - 2 * q[0] * q[1]],
-      [2 * q[1] * q[3] - 2 * q[0] * q[2], 2 * q[2] * q[3] + 2 * q[0] * q[1], 1 - 2 * q[1] * q[1] - 2 * q[2] * q[2]]
-    ];
-
-    //const R = numeric.dot(numeric.dot(Rz, Ry), Rx);
-
-    const transform = (point: Point3D): Point3D => {
-      const rotated = numeric.dot(R, point) as number[];
-      return [
-        rotated[0] + tx,
-        rotated[1] + ty,
-        rotated[2] + tz
-      ];
-    };
-
-    const transformedPoints = [transform(p1), transform(p2), transform(p3), transform(p4)];
+    const transformedPoints = this.points.map(point => applyRotationAndTranslation(point, tx, ty, tz, R));
     const rotationMatrix: HMDMatrix = [
       R[0][0], R[0][1], R[0][2], tx,
       R[1][0], R[1][1], R[1][2], ty,
