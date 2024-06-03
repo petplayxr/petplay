@@ -26,13 +26,13 @@ export class Tetrahedron3D {
   findSecondTetrahedron(distances: number[]): { points: Point3D[], translation: Point3D, rotation: HMDMatrix } {
     const [p1, p2, p3, p4] = this.points;
 
-    const mean = this.points.reduce((acc, point) => [acc[0] + point[0], acc[1] + point[1], acc[2] + point[2]], [0, 0, 0]).map(coord => coord / 4);
+    const mean = this.points.reduce((acc, point) => [acc[0] + point[0], acc[1] + point[1], acc[2] + point[2]], [0, 0, 0]).map(coord => coord / 7);
     const diff = this.points.map(point => [point[0] - mean[0], point[1] - mean[1], point[2] - mean[2]]);
     const S = diff.reduce((acc, d) => [
       [acc[0][0] + d[0] * d[0], acc[0][1] + d[0] * d[1], acc[0][2] + d[0] * d[2]],
       [acc[1][0] + d[1] * d[0], acc[1][1] + d[1] * d[1], acc[1][2] + d[1] * d[2]],
       [acc[2][0] + d[2] * d[0], acc[2][1] + d[2] * d[1], acc[2][2] + d[2] * d[2]]
-    ], [[0, 0, 0], [0, 0, 0], [0, 0, 0]]).map(row => row.map(val => val / 4));
+    ], [[0, 0, 0], [0, 0, 0], [0, 0, 0]]).map(row => row.map(val => val / 7));
     const SInv = numeric.inv(S);
 
     const quaternionToRotationMatrix = (q: Quaternion): Matrix3x3 => {
@@ -52,7 +52,7 @@ export class Tetrahedron3D {
       ];
     };
 
-    const equations = Array.from({ length: 4 }, (_, index) => {
+    const equations = Array.from({ length: 7 }, (_, index) => {
       const p = this.points[index];
       const d = distances[index];
       
@@ -77,12 +77,18 @@ export class Tetrahedron3D {
     const objectiveFunction = (params: number[]) => {
       const [tx, ty, tz, q0, q1, q2, q3] = params;
       const qNorm = Math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
+    
+      // Check if qNorm is zero
+      if (qNorm === 0) {
+        return Infinity; // Return a large value to indicate a bad solution
+      }
+    
       q = [q0 / qNorm, q1 / qNorm, q2 / qNorm, q3 / qNorm]; // normalize the quaternion
       return equations.reduce((sum, eq) => sum + Math.abs(eq(tx, ty, tz, q)) ** 2, 0);
     };
 
     // Initial guess
-    const centroid = this.points.reduce((acc, point) => [acc[0] + point[0], acc[1] + point[1], acc[2] + point[2]], [0, 0, 0]).map(coord => coord / 4);
+    const centroid = this.points.reduce((acc, point) => [acc[0] + point[0], acc[1] + point[1], acc[2] + point[2]], [0, 0, 0]).map(coord => coord / 7);
     const initialGuess = [...centroid, 1, 0, 0, 0];
 
     // Perform the optimization using Nelder-Mead
@@ -105,13 +111,16 @@ export class Tetrahedron3D {
 
 // Example usage:
 const tetrahedron = new Tetrahedron3D([
-  [0.5, 0, 0],
-  [0, 0.5, 0],
-  [0, 0, 0.5],
-  [0, 0, 0]
+  [0.5, 0, 0], //PetPlay1 // right
+  [0, -0.5, 0], //PetPlay2 // up
+  [0, 0, 0.5], //PetPlay3 // forward
+  [0, 0, 0], //PetPlay4 // origin
+  [-0.5, 0, 0], //PetPlay5 // left
+  [0, 0.5, 0], //PetPlay6 // down
+  [0, 0, -0.5], //PetPlay7 // back
 ]);
 
-const distances = [1, 1, 1, 1];
+const distances = [1, 1, 1, 1, 1, 1, 1];
 const secondTetrahedron = tetrahedron.findSecondTetrahedron(distances);
 
 console.log('Second Tetrahedron Points:', secondTetrahedron);

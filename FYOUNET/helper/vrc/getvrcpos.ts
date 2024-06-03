@@ -4,6 +4,9 @@ const PetPlay1: string = "/avatar/parameters/PetPlayPole1"; //float out
 const PetPlay2: string = "/avatar/parameters/PetPlayPole2"; //float out
 const PetPlay3: string = "/avatar/parameters/PetPlayPole3"; //float out
 const PetPlay4: string = "/avatar/parameters/PetPlayPole4"; //float out
+const PetPlay5: string = "/avatar/parameters/PetPlayPole5"; //float out
+const PetPlay6: string = "/avatar/parameters/PetPlayPole6"; //float out
+const PetPlay7: string = "/avatar/parameters/PetPlayPole7"; //float out
 
 type Callback = (address: string, value: number) => void;
 
@@ -13,6 +16,9 @@ export class OscSubscriber {
     [PetPlay2]: 0,
     [PetPlay3]: 0,
     [PetPlay4]: 0,
+    [PetPlay5]: 0,
+    [PetPlay6]: 0,
+    [PetPlay7]: 0,
   };
 
   private subscribers: Callback[] = [];

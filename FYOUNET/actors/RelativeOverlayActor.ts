@@ -144,9 +144,9 @@ async function offset(data: HMDMatrix11, hmdpos: HMDMatrix): Promise<string> {
     ];
 
     const trsfMtx: HMDMatrix = [
-        [hmdpos[0][0], hmdpos[0][1], hmdpos[0][2], hmdOffset[0] - sData[3]],
+        [hmdpos[0][0], hmdpos[0][1], hmdpos[0][2], hmdOffset[0]],
         [hmdpos[1][0], hmdpos[1][1], hmdpos[1][2], hmdOffset[1]  ],
-        [hmdpos[2][0], hmdpos[2][1], hmdpos[2][2], hmdOffset[2]- sData[11]]
+        [hmdpos[2][0], hmdpos[2][1], hmdpos[2][2], hmdOffset[2] - sData[11]]
     ];
 
 
@@ -156,7 +156,7 @@ async function offset(data: HMDMatrix11, hmdpos: HMDMatrix): Promise<string> {
         sData[8],       sData[9],      trsfMtx[2][2] ,trsfMtx[2][3] 
 
     ];
-    /* console.log(finalMtrx[0], finalMtrx[1], finalMtrx[2],  hmdOffset[0],"-", sData[3], data[3], "=", finalMtrx[3]    )
+/*     console.log(finalMtrx[0], finalMtrx[1], finalMtrx[2],  hmdOffset[0],"-", sData[3], data[3], "=", finalMtrx[3]    )
     console.log(finalMtrx[4], finalMtrx[5], finalMtrx[8],  hmdOffset[1],"-", sData[7], data[7], "=",finalMtrx[9]    )
     console.log(finalMtrx[8], finalMtrx[9], finalMtrx[10] ,hmdOffset[2],"-", sData[11],data[11], "=",finalMtrx[11]  )
     await new Promise(resolve => setTimeout(resolve, 150))

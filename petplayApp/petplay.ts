@@ -14,6 +14,7 @@ import { aPortal } from "../FYOUNET/actors/PortalActor.ts"; //helper actor for a
 //generic actors
 import { aTest } from "../FYOUNET/actors/TestActor.ts";
 import { ChatApp } from "../FYOUNET/actors/ChatApp.ts";
+import { ServerActor } from "../FYOUNET/actors/debugWActor/ServerActor.ts";
 
 //vr actors
 import { aOVRInput } from "../FYOUNET/actors/OVRInput.ts";
@@ -167,7 +168,8 @@ const ovrInput  = actormanager.add(new aOVRInput(await IP(), ovrIPath))
 //CREATE RELATIVE OVERLAY ACTORS
 const posSer = new RelativePositionService()
 const relativeoverlay1 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay1", 0, posSer, ovrPath))
-
+const debw = actormanager.add(new ServerActor("debw",await IP(), posSer))
+actormanager.command(debw, "h_startServer", null)
 
 await wait(3000)
 
