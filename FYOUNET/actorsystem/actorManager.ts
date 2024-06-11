@@ -44,10 +44,10 @@ export class actorManager extends Actor {
   }
 
   // Transfer an actor to the cloudSpace
-  async transferToCloudSpace<T extends Address<ActorP2P>>(actor: T, cloudspace: cloudSpace): Promise<CloudAddress<T>> {
+  async transferToCloudSpace<T extends Address<ActorP2P>>(actor: Address<ActorP2P>, cloudspace: cloudSpace): Promise<CloudAddress<T>> {
     console.log("TRANSEFERRING ACTOR TO CLOUDSPACE")
 
-    const localActor = Object.values(this.actors).find((actor) => actor instanceof ActorP2P);
+    const localActor = this.actors[actor];
 
     if(localActor) {
 
@@ -55,7 +55,7 @@ export class actorManager extends Actor {
 
       await this.remove(this.addressOf(localActor));  // Remove from local actor manager
 
-      const cloudAddress = cloudspace.add(localActor as ActorP2P, data as SerializedState<ActorP2P>) as CloudAddress<T>;  // Add to cloudSpace
+      const cloudAddress = cloudspace.add(localActor as ActorP2P, this, data as SerializedState<ActorP2P>) as CloudAddress<T>;  // Add to cloudSpace
       return cloudAddress;
     }
     

@@ -67,7 +67,7 @@ export class ServerActor extends ActorP2P<ServerActor> {
 
                 const socket = this.socket as WebSocket;
                 const tran = pos.translation;
-                socket.send(JSON.stringify(tran));
+                socket.send(JSON.stringify(pos));
             }
             await new Promise(resolve => setTimeout(resolve, 100));
 

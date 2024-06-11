@@ -13,12 +13,12 @@
 
 #pragma comment(lib, "Ws2_32.lib")
 
-
 using namespace std;
 
-
-int main(int argc, char* argv[]) {
-    if (argc < 2) {
+int main(int argc, char *argv[])
+{
+    if (argc < 2)
+    {
         cerr << "Usage: " << argv[0] << " <port>" << endl;
         return 1;
     }
@@ -26,14 +26,16 @@ int main(int argc, char* argv[]) {
     int port = stoi(argv[1]);
     WebSocketServer server(port);
 
-    if (!server.Initialize() || !server.AcceptConnection()) {
+    if (!server.Initialize() || !server.AcceptConnection())
+    {
         return 1;
     }
 
-    vr::IVRSystem* system = nullptr;
+    vr::IVRSystem *system = nullptr;
     vr::EVRInitError error = vr::VRInitError_None;
     system = vr::VR_Init(&error, vr::VRApplication_Overlay);
-    if (error != vr::VRInitError_None) {
+    if (error != vr::VRInitError_None)
+    {
         cout << "Error: " << vr::VR_GetVRInitErrorAsEnglishDescription(error) << endl;
         server.Cleanup();
         return 1;
@@ -41,10 +43,12 @@ int main(int argc, char* argv[]) {
     OverlayInterface overlayInterface;
     vr::VROverlayHandle_t overlayHandle = vr::k_ulOverlayHandleInvalid;
 
-    while (true) {
+    while (true)
+    {
         char buffer[1024];
         int bytesRead = server.ReceiveData(buffer, sizeof(buffer) - 1);
-        if (bytesRead <= 0) {
+        if (bytesRead <= 0)
+        {
             break;
         }
 
@@ -59,10 +63,11 @@ int main(int argc, char* argv[]) {
 
         istringstream iss(receivedData);
         getline(iss, function, ';');
-        
+
         stringstream response;
 
-        if (function == "CreateBasicOverlay") {
+        if (function == "CreateBasicOverlay")
+        {
             getline(iss, overlayName, ';');
             getline(iss, pathToTexture, ';');
 
@@ -74,11 +79,12 @@ int main(int argc, char* argv[]) {
 
             response << "status=success;message=Overlay created successfully;overlayHandle=" << static_cast<uint64_t>(overlayHandle) << ";";
             response << serializedPositions;
-            
+
             server.SendData(response.str());
         }
 
-        if (function == "SetOverlayPosition") {
+        if (function == "SetOverlayPosition")
+        {
             response << "overlaymove!" << ";";
             response << "overlayHandle=" << static_cast<uint64_t>(overlayHandle) << ";";
             getline(iss, matrix, ';');
@@ -86,12 +92,14 @@ int main(int argc, char* argv[]) {
             std::vector<float> matrixElements;
             float num;
             int count = 0;
-            while (iss >> num && count < 12) {  // Read only the first 12 elements
+            while (iss >> num && count < 12)
+            { // Read only the first 12 elements
                 matrixElements.push_back(num);
-                response << num<< " ";
+                response << num << " ";
                 count++;
             }
-            if (matrixElements.size() == 12) { // Ensure we have exactly 12 elements (3x4 matrix)
+            if (matrixElements.size() == 12)
+            { // Ensure we have exactly 12 elements (3x4 matrix)
 
                 vr::HmdMatrix34_t transformMatrix;
                 transformMatrix.m[0][0] = matrixElements[0];
@@ -106,16 +114,18 @@ int main(int argc, char* argv[]) {
                 transformMatrix.m[2][1] = matrixElements[9];
                 transformMatrix.m[2][2] = matrixElements[10];
                 transformMatrix.m[2][3] = matrixElements[11];
-                
+
                 overlayInterface.SetOverlayPosition(overlayHandle, transformMatrix);
 
                 server.SendData(response.str());
+                // cout << response.str() << endl;
             }
-            
-            else {
+
+            else
+            {
                 cerr << "Drastic change detected, update skipped." << endl;
             }
-        }  
+        }
     }
 
     cout << "close" << endl;

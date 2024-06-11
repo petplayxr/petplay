@@ -93,7 +93,7 @@ class OVRInterface {
         if (!this.conn) {
             throw new Error("No connection established.");
         }
-        const buffer = new Uint8Array(1024);
+        const buffer = new Uint8Array(4096);
         const decoder = new TextDecoder();
         while (true) {
             const bytesRead = await this.conn.read(buffer);

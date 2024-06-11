@@ -1,32 +1,43 @@
-import { Actor, Connection, Address, CloudAddress, createCloudActorAddress, SerializedState, isActorId, isRemoteAddress, } from "./types.ts";
-import { ActorP2P } from "./actorP2P.ts"
+import {
+  Actor,
+  Address,
+  CloudAddress,
+  Connection,
+  createCloudActorAddress,
+  isActorId,
+  isRemoteAddress,
+  SerializedState,
+} from "./types.ts";
+import { ActorP2P } from "./actorP2P.ts";
 import { Message } from "./message.ts";
 import { actorManager } from "./actorManager.ts";
 import { ActorMessage, ActorPayload } from "./types.ts";
 
-
 export type cloudPayload = {
-  addr: Address<ActorP2P>,
-  username: string,
-} & ({ msg: string } | { event: "JOIN" | "LEAVE" })
+  addr: Address<ActorP2P>;
+  username: string;
+} & ({ msg: string } | { event: "JOIN" | "LEAVE" });
 
 export class cloudSpace extends ActorP2P<cloudSpace> {
-  private cloudAddress: Address<cloudSpace> = this.actorid as Address<cloudSpace>;
-  private username:string;
-  private names: Record <string, string> = {};
-  public actors: Record <CloudAddress<cloudSpace>, Actor> = {};
-  private peers: Record <string, Connection> = {};
+  private localActorManager: actorManager | null = null;
+  private cloudAddress: Address<cloudSpace> = this.actorid as Address<
+    cloudSpace
+  >;
+  private username: string;
+  private names: Record<string, string> = {};
+  public actors: Record<CloudAddress<cloudSpace>, Actor> = {};
+  private peers: Record<string, Connection> = {};
 
   constructor(localip: string) {
-    super("cloudSpace",localip)
+    super("cloudSpace", localip);
     this.actorname = "actorManager";
     this.username = "cloudSpace";
     //this.cloudLoop();
   }
-  
+
   cloudLoop() {
     setInterval(() => {
-      console.log("looping")
+      console.log("looping");
       this.h_sync();
     }, 1000);
   }
@@ -43,8 +54,6 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
     await this.command(addr, "h_sync", states);
   }
 
-
-
   getActorStates() {
     const states: Record<string, SerializedState<Actor>> = {};
     for (const [key, value] of Object.entries(this.actors)) {
@@ -55,13 +64,18 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
 
   /**
    * Adds an actor to the actor manager.
-   * 
+   *
    * @param actor The actor to be added.
-   * 
+   *
    * @returns The cloud address of the added actor.
    */
-  add<T extends ActorP2P>(actor: T, state?: SerializedState<T>): CloudAddress<cloudSpace> {
-    const addr = createCloudActorAddress(this.cloudAddress, actor.actorid)
+  add<T extends ActorP2P>(
+    actor: T,
+    localActorManager: actorManager,
+    state?: SerializedState<T>,
+  ): CloudAddress<cloudSpace> {
+    this.localActorManager = localActorManager;
+    const addr = createCloudActorAddress(this.cloudAddress, actor.actorid);
     this.actors[addr] = actor;
     actor.onAdd(this);
     actor.onStart(state);
@@ -77,18 +91,20 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
         return key as CloudAddress<cloudSpace>;
       }
     }
-  
+
     // If the actor is not found, throw an error or handle accordingly
     throw new Error(`Actor not found in the cloud space.`);
   }
 
   //remove actor from our global actor list?
   remove(addr: CloudAddress<cloudSpace>): void {
-
     delete this.actors[addr];
   }
 
-  override async onConnect(ctx: actorManager, addr: Address<cloudSpace>): Promise<void> {
+  override async onConnect(
+    ctx: actorManager,
+    addr: Address<cloudSpace>,
+  ): Promise<void> {
     await ctx.command(addr, "h_receive", {
       addr: ctx.addressOf(this),
       username: this.username,
@@ -96,7 +112,10 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
     });
   }
 
-  override onDisconnect(ctx: actorManager, addr: Address<cloudSpace>): Promise<void> {
+  override onDisconnect(
+    ctx: actorManager,
+    addr: Address<cloudSpace>,
+  ): Promise<void> {
     if (addr as string in this.names) {
       this.h_receive(ctx, {
         addr,
@@ -127,9 +146,8 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
   }
 
   async h_broadcast(ctx: actorManager, msg: string) {
-
     //console.log(`<${this.name}> ${msg}`);
-    console.log(this.actorid)
+    console.log(this.actorid);
 
     await this.broadcast(ctx, "h_receive", {
       addr: ctx.addressOf(this),
@@ -140,15 +158,13 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
 
   //improve this lol
   async command<T, K extends ActorMessage<T>>(
-    addr: Address<T>,
+    addr: CloudAddress<Address<T>>,
     type: K | string,
     //deno-lint-ignore no-explicit-any
-    payload: ActorPayload<T, K> | ((...args: any[]) => void ) | null,
+    payload: ActorPayload<T, K> | null,
   ): Promise<void> {
     if (isActorId(addr)) {
       if (isRemoteAddress(addr)) {
-        
-
         const message = new Message(addr, type, payload);
 
         const split = (addr as string).split("@");
@@ -160,14 +176,14 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
           //deno-lint-ignore no-explicit-any
           const actor = this.actors[addr as any] as any;
           if (actor === undefined) {
-            console.error(`Actor with UUID ${addr as string} not found.`);
+            console.error(
+              `Actor with UUID ${addr as string} not found.`,
+            );
           } else {
             await actor[type]?.(this, payload);
           }
           return;
-
         }
-
 
         const conn = this.peers[actorid];
         if (conn === undefined) {
@@ -176,18 +192,22 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
           await conn.send(message);
         }
         return;
-
-
-      }
-      else {
+      } else {
         //deno-lint-ignore no-explicit-any
         const actor = this.actors[addr as any] as any;
+
         if (actor === undefined) {
-          console.error(`Actor with UUID ${addr as string} not found.`);
+          try {
+            this.localActorManager.command(addr, type, payload);
+          } catch {
+            console.error(
+              `Actor with UUID ${addr as string} not found.`,
+            );
+          }
         } else {
           //console.log('Before calling payload:', payload);
           // Check if payload is a function and adjust the arguments accordingly
-          if (typeof payload === 'function') {
+          if (typeof payload === "function") {
             // If payload is a function, pass only payload
             await actor[type]?.(payload);
           } else {
@@ -198,7 +218,6 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
         }
         return;
       }
-
     }
     /* else if (isActorName(addr)) {
       console.log("address has no UUID, assume local actor. insecure true")
@@ -212,8 +231,4 @@ export class cloudSpace extends ActorP2P<cloudSpace> {
       return;
     } */
   }
-
-  
-
-
 }

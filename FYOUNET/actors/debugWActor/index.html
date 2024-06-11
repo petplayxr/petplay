@@ -31,6 +31,12 @@
     <div class="height-meter">
         <div id="height-indicator" class="height-indicator">0</div>
     </div>
+    <div id="dataDisplay"></div>
+    <style>
+        p {
+            line-height: 0.1;
+        }
+    </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         const scene = new THREE.Scene();
@@ -54,10 +60,16 @@
         const whiteBall2 = new THREE.Mesh(geometry, material);
         const whiteBall3 = new THREE.Mesh(geometry, material);
         const whiteBall4 = new THREE.Mesh(geometry, material);
+        const whiteBall5 = new THREE.Mesh(geometry, material);
+        const whiteBall6 = new THREE.Mesh(geometry, material);
+        const whiteBall7 = new THREE.Mesh(geometry, material);
         scene.add(whiteBall1);
-/*         scene.add(whiteBall2);
+        scene.add(whiteBall2);
         scene.add(whiteBall3);
-        scene.add(whiteBall4); */
+        scene.add(whiteBall4);
+        scene.add(whiteBall5);
+        scene.add(whiteBall6);
+        scene.add(whiteBall7);
 
         // Add ground plane with standard material
         const planeGeometry = new THREE.PlaneGeometry(10, 10);
@@ -100,37 +112,85 @@
         const socket = new WebSocket('ws://localhost:8080/ws');
 
         socket.addEventListener('message', function (event) {
-            const data = JSON.parse(event.data);
-            const relativePosition1 = data;
-/*             const relativePosition2 = data[1];
+            const rawData = JSON.parse(event.data);
+            const data = rawData.points;
+            
+            //#region Data Display
+            const dataDisplay = document.getElementById('dataDisplay');
+            dataDisplay.innerHTML = '';
+            for (let key in rawData) {
+                if (rawData.hasOwnProperty(key) && key !== 'rotation') {
+                    // Create a new paragraph for each property
+                    let pKey = document.createElement('p');
+                    pKey.textContent = key;
+                    dataDisplay.appendChild(pKey);
+
+                    // If the property is an array, display each element on a new line
+                    if (Array.isArray(rawData[key])) {
+                        rawData[key].forEach(item => {
+                            let pValue = document.createElement('p');
+                            pValue.textContent = item;
+                            dataDisplay.appendChild(pValue);
+                        });
+                    } else {
+                        // If the property is not an array, just display its value
+                        let pValue = document.createElement('p');
+                        pValue.textContent = rawData[key];
+                        dataDisplay.appendChild(pValue);
+                    }
+                }
+            }
+            //#endregion
+
+            const relativePosition1 = data[0];
+            const relativePosition2 = data[1];
             const relativePosition3 = data[2];
-            const relativePosition4 = data[3]; */
+            const relativePosition4 = data[3];
+            const relativePosition5 = data[4];
+            const relativePosition6 = data[5];
+            const relativePosition7 = data[6];
             //console.log(relativePosition);
 
-            // Assuming relativePosition is an array [x, y, z] and remapPosition is correctly defined
+            //#region remapPosition
             const remappedRelativePosition1 = [
                 remapPosition(relativePosition1[0], 1, -1, 6, -6),
                 remapPosition(relativePosition1[1], 1, -1, 6, -6),
                 remapPosition(relativePosition1[2], 1, -1, 6, -6)
             ];
-            // Assuming relativePosition is an array [x, y, z] and remapPosition is correctly defined
-/*             const remappedRelativePosition2 = [
-                remapPosition(relativePosition2[0], 1, -1, -6, 6),
-                remapPosition(relativePosition2[1], 1, -1, -6, 6),
-                remapPosition(relativePosition2[2], 1, -1, -6, 6)
+            const remappedRelativePosition2 = [
+                remapPosition(relativePosition2[0], 1, -1, 6, -6),
+                remapPosition(relativePosition2[1], 1, -1, 6, -6),
+                remapPosition(relativePosition2[2], 1, -1, 6, -6)
             ];
-            // Assuming relativePosition is an array [x, y, z] and remapPosition is correctly defined
             const remappedRelativePosition3 = [
-                remapPosition(relativePosition3[0], 1, -1, -6, 6),
-                remapPosition(relativePosition3[1], 1, -1, -6, 6),
-                remapPosition(relativePosition3[2], 1, -1, -6, 6)
+                remapPosition(relativePosition3[0], 1, -1, 6, -6),
+                remapPosition(relativePosition3[1], 1, -1, 6, -6),
+                remapPosition(relativePosition3[2], 1, -1, 6, -6)
             ];
-            // Assuming relativePosition is an array [x, y, z] and remapPosition is correctly defined
             const remappedRelativePosition4 = [
-                remapPosition(relativePosition4[0], 1, -1, -6, 6),
-                remapPosition(relativePosition4[1], 1, -1, -6, 6),
-                remapPosition(relativePosition4[2], 1, -1, -6, 6)
-            ]; */
+                remapPosition(relativePosition4[0], 1, -1, 6, -6),
+                remapPosition(relativePosition4[1], 1, -1, 6, -6),
+                remapPosition(relativePosition4[2], 1, -1, 6, -6)
+            ];
+            const remappedRelativePosition5 = [
+                remapPosition(relativePosition5[0], 1, -1, 6, -6),
+                remapPosition(relativePosition5[1], 1, -1, 6, -6),
+                remapPosition(relativePosition5[2], 1, -1, 6, -6)
+            ];
+            const remappedRelativePosition6 = [
+                remapPosition(relativePosition6[0], 1, -1, 6, -6),
+                remapPosition(relativePosition6[1], 1, -1, 6, -6),
+                remapPosition(relativePosition6[2], 1, -1, 6, -6)
+            ];
+            const remappedRelativePosition7 = [
+                remapPosition(relativePosition7[0], 1, -1, 6, -6),
+                remapPosition(relativePosition7[1], 1, -1, 6, -6),
+                remapPosition(relativePosition7[2], 1, -1, 6, -6)
+            ];
+            //#endregion
+
+
+
 
             //camera.lookAt(whiteBall1.position)
 
@@ -139,11 +199,13 @@
             // Set position based on remapped coordinates
             // Ensure the axes are correctly mapped; here, it seems there was an axis swap in your original code
             whiteBall1.position.set(remappedRelativePosition1[0], relativePosition1[2], remappedRelativePosition1[1]);
-            console.log(whiteBall1.position);
-/*             whiteBall2.position.set(remappedRelativePosition2[0], relativePosition2[2], remappedRelativePosition2[1]);
+            whiteBall2.position.set(remappedRelativePosition2[0], relativePosition2[2], remappedRelativePosition2[1]);
             whiteBall3.position.set(remappedRelativePosition3[0], relativePosition3[2], remappedRelativePosition3[1]);
             whiteBall4.position.set(remappedRelativePosition4[0], relativePosition4[2], remappedRelativePosition4[1]);
-             */
+            whiteBall5.position.set(remappedRelativePosition5[0], relativePosition5[2], remappedRelativePosition5[1]);
+            whiteBall6.position.set(remappedRelativePosition6[0], relativePosition6[2], remappedRelativePosition6[1]);
+            whiteBall7.position.set(remappedRelativePosition7[0], relativePosition7[2], remappedRelativePosition7[1]);
+            
 
             // Update height indicator
             //const heightPercentage = (remappedRelativePosition[1] / 10) * 100;

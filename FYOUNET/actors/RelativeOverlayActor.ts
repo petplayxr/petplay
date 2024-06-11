@@ -112,7 +112,7 @@ async function offset(data: HMDMatrix11, hmdpos: HMDMatrix): Promise<string> {
     // Static offset
     const offsetX = 0;
     const offsetY = 0;
-    const offsetZ = 0; // Offset in z-direction to move overlay forward
+    const offsetZ = -0.2; // Offset in z-direction to move overlay forward
 
     //#region hmdoffset
     const hmdOffset = [
@@ -130,23 +130,23 @@ async function offset(data: HMDMatrix11, hmdpos: HMDMatrix): Promise<string> {
     const scaleFactorYaw = 2; 
     const scaleFactorPitch = 2; 
     const scaleFactorRoll = 2; 
-    const scaleX = -160
-    const scaleY = -2
-    const scaleZ = 0.1
+    const scaleX = -70
+    const scaleY = -20
+    const scaleZ = 0.2
 
     
 
 
     const sData = [
-        data[0] * scaleFactorYaw, data[1] * scaleFactorPitch, data[2] * scaleFactorRoll, data[3] * scaleX,
-        data[4] * scaleFactorYaw, data[5] * scaleFactorPitch, data[6] * scaleFactorRoll, data[7] * scaleY,
-        data[8] * scaleFactorYaw, data[9] * scaleFactorPitch, data[10]* scaleFactorRoll, remapPosition2(data[11], 0, 0.6, 2, 0),
+        data[0] * scaleFactorYaw, data[1] * scaleFactorPitch, data[2] * scaleFactorRoll, remapPosition2(data[3 ], 0, 0.05, 0, 2),
+        data[4] * scaleFactorYaw, data[5] * scaleFactorPitch, data[6] * scaleFactorRoll, remapPosition2(data[7 ], 0, 0.05, 0, 2),
+        data[8] * scaleFactorYaw, data[9] * scaleFactorPitch, data[10]* scaleFactorRoll, remapPosition2(data[11], 0, 0.05, 2, 0),
     ];
 
     const trsfMtx: HMDMatrix = [
-        [hmdpos[0][0], hmdpos[0][1], hmdpos[0][2], hmdOffset[0]],
-        [hmdpos[1][0], hmdpos[1][1], hmdpos[1][2], hmdOffset[1]  ],
-        [hmdpos[2][0], hmdpos[2][1], hmdpos[2][2], hmdOffset[2] - sData[11]]
+        [hmdpos[0][0], hmdpos[0][1], hmdpos[0][2], hmdOffset[0]],//  - sData[3] 
+        [hmdpos[1][0], hmdpos[1][1], hmdpos[1][2], hmdOffset[1] ],// - sData[7] 
+        [hmdpos[2][0], hmdpos[2][1], hmdpos[2][2], hmdOffset[2] ] //  - sData[11]
     ];
 
 
@@ -156,7 +156,9 @@ async function offset(data: HMDMatrix11, hmdpos: HMDMatrix): Promise<string> {
         sData[8],       sData[9],      trsfMtx[2][2] ,trsfMtx[2][3] 
 
     ];
-/*     console.log(finalMtrx[0], finalMtrx[1], finalMtrx[2],  hmdOffset[0],"-", sData[3], data[3], "=", finalMtrx[3]    )
+
+
+    /* console.log(finalMtrx[0], finalMtrx[1], finalMtrx[2],  hmdOffset[0],"-", sData[3], data[3], "=", finalMtrx[3]    )
     console.log(finalMtrx[4], finalMtrx[5], finalMtrx[8],  hmdOffset[1],"-", sData[7], data[7], "=",finalMtrx[9]    )
     console.log(finalMtrx[8], finalMtrx[9], finalMtrx[10] ,hmdOffset[2],"-", sData[11],data[11], "=",finalMtrx[11]  )
     await new Promise(resolve => setTimeout(resolve, 150))
@@ -194,7 +196,6 @@ export class RelativeOverlayActor extends ActorP2P<RelativeOverlayActor> {
     private ovrConnector: OVRInterface; //ovr interface
     private hmdAddr: Address<aOVRInput> | null = null; //hmd address
     private actorManager: actorManager | null = null;
-    private ballNum = 0;
     private posService: RelativePositionService;
 
 
@@ -205,7 +206,7 @@ export class RelativeOverlayActor extends ActorP2P<RelativeOverlayActor> {
         this.posService = posServ;
         this.ballNum = ballNum;
         this.ovrConnector = new OVRInterface(this.name, executablePath);
-        this.onStart();
+        
     }
 
     async onStart() {
@@ -234,6 +235,7 @@ export class RelativeOverlayActor extends ActorP2P<RelativeOverlayActor> {
             if (pos) {
                 const hmdpos: HMDMatrix = await this.getHmdPos(this.actorManager as actorManager, this.hmdAddr!);
                 const posf = await offset(pos.rotation, hmdpos);
+                /* console.log(posf) */
                 await this.ovrConnector.send(posf);
             }
             await new Promise(resolve => setTimeout(resolve, 10));
@@ -281,6 +283,7 @@ export class RelativeOverlayActor extends ActorP2P<RelativeOverlayActor> {
     }
 
     async h_sendToOverlay(_ctx: actorManager, data: string | OverlayCommand) {
+        await this.onStart();
 
         if (typeof data !== "string") {
             data = format(data);

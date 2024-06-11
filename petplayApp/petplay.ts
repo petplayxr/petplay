@@ -6,7 +6,7 @@ import { getAvailablePort } from "https://deno.land/x/port@1.0.0/mod.ts"
 import { RelativePositionService } from "../FYOUNET/helper/vrc/relativeposition.ts";
 
 //actorSystem
-import { Actor, Address, CloudAddress } from "../FYOUNET/actorsystem/types.ts";
+import { Actor, Address, CloudAddress, isActorId } from "../FYOUNET/actorsystem/types.ts";
 import { actorManager } from "../FYOUNET/actorsystem/actorManager.ts"; //main system
 import { cloudSpace } from "../FYOUNET/actorsystem/cloudActorManager.ts"; //cloud networking system
 import { aPortal } from "../FYOUNET/actors/PortalActor.ts"; //helper actor for addressmanagement
@@ -168,8 +168,8 @@ const ovrInput  = actormanager.add(new aOVRInput(await IP(), ovrIPath))
 //CREATE RELATIVE OVERLAY ACTORS
 const posSer = new RelativePositionService()
 const relativeoverlay1 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay1", 0, posSer, ovrPath))
-const debw = actormanager.add(new ServerActor("debw",await IP(), posSer))
-actormanager.command(debw, "h_startServer", null)
+/* const debw = actormanager.add(new ServerActor("debw",await IP(), posSer))
+actormanager.command(debw, "h_startServer", null) */
 
 await wait(3000)
 
@@ -208,11 +208,15 @@ const createBasicOverlay4 = {
 
 
 //create overlays
-actormanager.command(relativeoverlay1, "h_sendToOverlay", createBasicOverlay1)
 
+
+const cloud : cloudSpace = new cloudSpace(await IP())
+
+const overlayCloud : CloudAddress<Address<RelativeOverlayActor>>  = await actormanager.transferToCloudSpace(relativeoverlay1, cloud)
+cloud.command(overlayCloud, "h_sendToOverlay", createBasicOverlay1)
 
 //bind relative overlay to hmd
-actormanager.command(relativeoverlay1, "h_bindToHMD", ovrInput)
+cloud.command(overlayCloud, "h_bindToHMD", ovrInput)
 
 
 if (import.meta.main) {
