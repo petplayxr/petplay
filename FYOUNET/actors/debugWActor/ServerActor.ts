@@ -7,7 +7,6 @@ import { RelativePositionService } from "../../helper/vrc/relativeposition.ts";
 
 export class ServerActor extends ActorP2P<ServerActor> {
     
-    private overlayPosition: number[] = [0, 0, 0, 0, 0, 0, 0, 0, 0];
     private posService: RelativePositionService;
     private socket: WebSocket | unknown;
     private handler = async (req: Request): Promise<Response> => {
