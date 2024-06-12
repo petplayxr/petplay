@@ -1,6 +1,6 @@
 //#region imports
 //helpers
-import { getAvailablePort } from "https://deno.land/x/port@1.0.0/mod.ts"
+import { getAvailablePort } from "https://raw.githubusercontent.com/jakubdolejs/deno-port/main/mod.ts"
 
 //classes
 import { RelativePositionService } from "../FYOUNET/helper/vrc/relativeposition.ts";
@@ -58,7 +58,9 @@ const ovrPath = `${Deno.cwd()}/../${"../OVRINTERFACE/out/build/user/Debug/petpla
 
 //#endregion
 //#region helper funcs
+
 async function IP() {return `${localip}:${await getAvailablePort()}`}
+
 async function wait(ms: number) {return await new Promise(resolve => setTimeout(resolve, ms));}
 async function asyncPrompt(): Promise<string> {
     const next = await stream.next()
@@ -163,11 +165,11 @@ actormanager.listactors() */
 const actormanager = new actorManager(localfullip) //create actormanager
 
 //CREATE VR INPUT MODULE
-//const ovrInput  = actormanager.add(new aOVRInput(await IP(), ovrIPath))
+const ovrInput  = actormanager.add(new aOVRInput(await IP(), ovrIPath))
 
 //CREATE RELATIVE OVERLAY ACTORS
 const posSer = new RelativePositionService()
-//const relativeoverlay1 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay1", 0, posSer, ovrPath))
+const relativeoverlay1 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay1", 0, posSer, ovrPath))
 const debw = actormanager.add(new ServerActor("debw",await IP(), posSer))
 actormanager.command(debw, "h_startServer", null)
 
@@ -210,13 +212,13 @@ const createBasicOverlay4 = {
 //create overlays
 
 
-//const cloud : cloudSpace = new cloudSpace(await IP())
+const cloud : cloudSpace = new cloudSpace(await IP())
 
-//const overlayCloud : CloudAddress<Address<RelativeOverlayActor>>  = await actormanager.transferToCloudSpace(relativeoverlay1, cloud)
-//cloud.command(overlayCloud, "h_sendToOverlay", createBasicOverlay1)
+const overlayCloud : CloudAddress<Address<RelativeOverlayActor>>  = await actormanager.transferToCloudSpace(relativeoverlay1, cloud)
+cloud.command(overlayCloud, "h_sendToOverlay", createBasicOverlay1)
 
 //bind relative overlay to hmd
-//cloud.command(overlayCloud, "h_bindToHMD", ovrInput)
+cloud.command(overlayCloud, "h_bindToHMD", ovrInput)
 
 
 if (import.meta.main) {
