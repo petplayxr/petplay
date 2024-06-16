@@ -37,7 +37,7 @@ export class aOVRInput extends ActorP2P<aOVRInput> {
     }
 
     private onOVRData(data: string) {
-        //console.log(`Received overlay message: ${data}`);
+        /* console.log(`Received overlay message: ${data}`); */
         this.ovrData = data;
         
     }

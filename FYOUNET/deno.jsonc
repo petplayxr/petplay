@@ -3,7 +3,10 @@
     "dev": "deno run --watch main.ts"
   },
   "fmt": {
-    "indentWidth": 2
+    "indentWidth": 2,
+    "lineWidth": 500,
+    "singleQuote": true,
+    "proseWrap": "never"
   },
   "lint": {
     "rules": {

@@ -1,12 +1,17 @@
 //#region imports
 //helpers
-import { getAvailablePort } from "https://raw.githubusercontent.com/jakubdolejs/deno-port/main/mod.ts"
+import { getAvailablePort } from "https://raw.githubusercontent.com/jakubdolejs/deno-port/main/mod.ts";
 
 //classes
 import { RelativePositionService } from "../FYOUNET/helper/vrc/relativeposition.ts";
 
 //actorSystem
-import { Actor, Address, CloudAddress, isActorId } from "../FYOUNET/actorsystem/types.ts";
+import {
+  Actor,
+  Address,
+  CloudAddress,
+  isActorId,
+} from "../FYOUNET/actorsystem/types.ts";
 import { actorManager } from "../FYOUNET/actorsystem/actorManager.ts"; //main system
 import { cloudSpace } from "../FYOUNET/actorsystem/cloudActorManager.ts"; //cloud networking system
 import { aPortal } from "../FYOUNET/actors/PortalActor.ts"; //helper actor for addressmanagement
@@ -18,7 +23,12 @@ import { ServerActor } from "../FYOUNET/actors/debugWActor/ServerActor.ts";
 
 //vr actors
 import { aOVRInput } from "../FYOUNET/actors/OVRInput.ts";
-import { SimpleOverlayActor } from "../FYOUNET/actors/SimpleOverlayActor.ts";
+import {
+  CreateBasicOverlayPayload,
+  OverlayCommand,
+  SimpleOverlayActor,
+} from "../FYOUNET/actors/SimpleOverlayActor.ts";
+import { aInteractionManager } from "../FYOUNET/actors/InteractionManagerActor.ts";
 import { RelativeOverlayActor } from "../FYOUNET/actors/RelativeOverlayActor.ts";
 import { ActorP2P } from "../FYOUNET/actorsystem/actorP2P.ts";
 
@@ -26,49 +36,52 @@ import { ActorP2P } from "../FYOUNET/actorsystem/actorP2P.ts";
 
 //#region actor payload types
 export type ReceivePayload = {
-    addr: Address<ActorP2P>,
-    name: string,
-} & ({ msg: string } | { event: "JOIN" | "LEAVE" })
+  addr: Address<ActorP2P>;
+  name: string;
+} & ({ msg: string } | { event: "JOIN" | "LEAVE" });
 
 export type ReceiveCoord = {
-    addr: Address<SimpleOverlayActor>,
-    name: string,
-} & ({ data: string } | { event: "JOIN" | "LEAVE" })
-
-
+  addr: Address<SimpleOverlayActor>;
+  name: string;
+} & ({ data: string } | { event: "JOIN" | "LEAVE" });
 
 //#endregion
 //#region consts
 
-const stream = Deno.stdin.readable.values()
+const stream = Deno.stdin.readable.values();
 
 console.log("runtime args: " + Deno.args); // ['one, 'two', 'three']
-const username = Deno.args[0]
-const ownip = Deno.args[1]
-const friendip = Deno.args[2]
-
+const username = Deno.args[0];
+const ownip = Deno.args[1];
+const friendip = Deno.args[2];
 
 //username and ip
-const localfullip = ownip
-const localip = localfullip.split(":")[0]
+const localfullip = ownip;
+const localip = localfullip.split(":")[0];
 
+const ovrIPath =
+  `${Deno.cwd()}/../${"../OVRINTERFACE/out/build/user/Debug/ovrinput.exe"}`;
+const ovrPath =
+  `${Deno.cwd()}/../${"../OVRINTERFACE/out/build/user/Debug/petplay.exe"}`;
 
-const ovrIPath = `${Deno.cwd()}/../${"../OVRINTERFACE/out/build/user/Debug/ovrinput.exe"}`;
-const ovrPath = `${Deno.cwd()}/../${"../OVRINTERFACE/out/build/user/Debug/petplay.exe"}`;
-
+const absImgPath = `${Deno.cwd()}/../${"../resources/PetPlay.png"}`;
 //#endregion
 //#region helper funcs
 
-async function IP() {return `${localip}:${await getAvailablePort()}`}
+async function IP() {
+  return `${localip}:${await getAvailablePort()}`;
+}
 
-async function wait(ms: number) {return await new Promise(resolve => setTimeout(resolve, ms));}
+async function wait(ms: number) {
+  return await new Promise((resolve) => setTimeout(resolve, ms));
+}
 async function asyncPrompt(): Promise<string> {
-    const next = await stream.next()
-    if ('done' in next && next.done) {
-        return ""
-    } else {
-        return new TextDecoder().decode(next.value).slice(0, -1)
-    }
+  const next = await stream.next();
+  if ("done" in next && next.done) {
+    return "";
+  } else {
+    return new TextDecoder().decode(next.value).slice(0, -1);
+  }
 }
 //commented out for now
 /* async function processcommand(msgD: string) {
@@ -95,7 +108,7 @@ async function asyncPrompt(): Promise<string> {
             }
             break
         }
-        case "listactors": {  
+        case "listactors": {
             actormanager.listactors()
             break;
         }
@@ -105,7 +118,7 @@ async function asyncPrompt(): Promise<string> {
             actormanager.command(remoteportal, "h_listactors", portalActor)
             break;
         }
-        case "hlistactors": {  
+        case "hlistactors": {
             actormanager.command(portalActor, "h_listactors", portalActor)
             break;
         }
@@ -162,79 +175,54 @@ actormanager.listactors() */
 
 //PROGRAM STARTS HERE
 
-const actormanager = new actorManager(localfullip) //create actormanager
+const actormanager = new actorManager(localfullip);
 
-//CREATE VR INPUT MODULE
-const ovrInput  = actormanager.add(new aOVRInput(await IP(), ovrIPath))
+const ovrInput = actormanager.add(new aOVRInput(await IP(), ovrIPath));
 
-//CREATE RELATIVE OVERLAY ACTORS
-const posSer = new RelativePositionService()
-const relativeoverlay1 = actormanager.add(new RelativeOverlayActor(await IP(), "relative overlay1", 0, posSer, ovrPath))
-const debw = actormanager.add(new ServerActor("debw",await IP(), posSer))
-actormanager.command(debw, "h_startServer", null)
+const overlay = actormanager.add(new SimpleOverlayActor(await IP(), "overlay"));
 
-await wait(3000)
+const interactionManager = actormanager.add(new aInteractionManager("interactionManager", await IP()),);
 
-const absImgPath = `${Deno.cwd()}/../${"../resources/PetPlay.png"}`;
 
-//#region overlay creation commands
-const createBasicOverlay1 = {
-    type: "CreateBasicOverlay",
-    payload: {
-        overlayName : "exampleOverlay1",
-        pathToTexture : absImgPath,
-    }
+actormanager.command(overlay, "h_startOverlayProcess", ovrPath);
+
+const createBasicOverlay1: OverlayCommand = {
+  type: "CreateBasicOverlay",
+  payload: {
+    overlayName: "exampleOverlay1",
+    pathToTexture: absImgPath,
+  } satisfies CreateBasicOverlayPayload,
 };
-const createBasicOverlay2 = {
-    type: "CreateBasicOverlay",
-    payload: {
-        overlayName : "exampleOverlay2",
-        pathToTexture : absImgPath,
-    }
-};
-const createBasicOverlay3 = {
-    type: "CreateBasicOverlay",
-    payload: {
-        overlayName : "exampleOverlay3",
-        pathToTexture : absImgPath,
-    }
-};
-const createBasicOverlay4 = {
-    type: "CreateBasicOverlay",
-    payload: {
-        overlayName : "exampleOverlay4",
-        pathToTexture : absImgPath,
-    }
-};
-//#endregion
+
+await wait(3000);
+
+actormanager.command(overlay, "h_commandOverlay", createBasicOverlay1);
+
+actormanager.command(interactionManager, "h_start", null);
+
+actormanager.command(interactionManager, "h_addInput", ovrInput);
+actormanager.command(interactionManager, "h_addInteractable", overlay);
 
 
-//create overlays
 
 
-const cloud : cloudSpace = new cloudSpace(await IP())
 
-const overlayCloud : CloudAddress<Address<RelativeOverlayActor>>  = await actormanager.transferToCloudSpace(relativeoverlay1, cloud)
-cloud.command(overlayCloud, "h_sendToOverlay", createBasicOverlay1)
 
-//bind relative overlay to hmd
-cloud.command(overlayCloud, "h_bindToHMD", ovrInput)
+
 
 
 if (import.meta.main) {
+  console.log(`Your IP is ${await IP()}`);
 
-    console.log(`Your IP is ${await IP()}`)
+  while (true) {
+    const msg = await asyncPrompt() ?? "";
 
-    while (true) {
-
-        const msg = await asyncPrompt() ?? ""
-
-        if (msg.startsWith("/")) {
-            console.log("Command")
-            //await processcommand(msg)
-        } else {
-            // clear line
-            await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"))
-        }
+    if (msg.startsWith("/")) {
+      console.log("Command");
+      //await processcommand(msg)
+    } else {
+      // clear line
+      await Deno.stdout.write(new TextEncoder().encode("\x1b[1A\r\x1b[K"));
     }
+  }
 }

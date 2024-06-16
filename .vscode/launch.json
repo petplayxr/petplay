@@ -4,18 +4,20 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        {   "name": "DebugPETPLAYcpp1",
+        {
+            "name": "DebugPETPLAYcpp1",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/OVRINTERFACE/out/build/default/Debug/petplay.exe",
-            "args": ["true","27015"],
+            "args": ["true", "27015"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/OVRINTERFACE",
             "environment": [],
             "console": "integratedTerminal",
             "preLaunchTask": "cmake-build-debug"
         },
-        {   "name": "DebugCPPPIPE",
+        {
+            "name": "DebugCPPPIPE",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/OVRINTERFACE/out/build/user/Debug/petplay.exe",
@@ -26,18 +28,20 @@
             "console": "integratedTerminal",
             "preLaunchTask": "cmake-build-debug"
         },
-        {   "name": "DebugPETPLAYcpp2",
+        {
+            "name": "DebugPETPLAYcpp2",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/OVRINTERFACE/out/build/default/Debug/petplay.exe",
-            "args": ["false","27016"],
+            "args": ["false", "27016"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/OVRINTERFACE",
             "environment": [],
             "console": "integratedTerminal",
             "preLaunchTask": "cmake-build-debug"
         },
-        {   "name": "DEBUGFYOUNET1",
+        {
+            "name": "DEBUGFYOUNET1",
             "request": "launch",
             "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET",
@@ -57,7 +61,8 @@
             ],
             "attachSimplePort": 9228
         },
-        {   "name": "DEBUGFYOUNET2",
+        {
+            "name": "DEBUGFYOUNET2",
             "request": "launch",
             "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET",
@@ -73,11 +78,11 @@
                 "8081",
                 "127.0.0.1:8080",
                 "p2"
-
             ],
             "attachSimplePort": 9229
         },
-        {   "name": "DEBUGINTERNET1",
+        {
+            "name": "DEBUGINTERNET1",
             "request": "launch",
             "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET",
@@ -97,7 +102,8 @@
             ],
             "attachSimplePort": 9228
         },
-        {   "name": "DEBUGINTERNET2",
+        {
+            "name": "DEBUGINTERNET2",
             "request": "launch",
             "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET",
@@ -113,11 +119,11 @@
                 "172.26.159.31:25565",
                 "172.26.187.120:25567",
                 "p2"
-
             ],
             "attachSimplePort": 9229
         },
-        {   "name": "RUN PETPLAY",
+        {
+            "name": "RUN PETPLAY",
             "request": "launch",
             "type": "node",
             "cwd": "${workspaceFolder}/petplayApp/out",
@@ -133,11 +139,13 @@
                 "../petplay.ts",
                 "MyUsername",
                 "172.26.187.120:25567",
-                "172.26.159.31:25565",
+                "172.26.159.31:25565"
             ],
             "attachSimplePort": 9228
         },
-        {   "name": "debugdenoapp2",
+
+        {
+            "name": "debugdenoapp2",
             "request": "launch",
             "type": "node",
             "cwd": "${workspaceFolder}/denoApp/out",
@@ -158,7 +166,8 @@
             ],
             "attachSimplePort": 9228
         },
-        {   "name": "debugovrmodtest",
+        {
+            "name": "debugovrmodtest",
             "request": "launch",
             "type": "node",
             "cwd": "${workspaceFolder}/FYOUNET/",
@@ -171,13 +180,14 @@
                 "--unstable",
                 "--allow-ffi",
                 "--allow-net",
-                
+
                 "--allow-run",
-                "testspawner.ts",
+                "testspawner.ts"
             ],
             "attachSimplePort": 9228
         },
-        {   "name": "VRCPOSLOGGER",
+        {
+            "name": "VRCPOSLOGGER",
             "request": "launch",
             "type": "node",
             "program": "${workspaceFolder}/FYOUNET/vrcposLOGGER.ts",
@@ -193,9 +203,6 @@
             ],
             "attachSimplePort": 9229
         }
-
-
-        
     ],
     "compounds": [
         {

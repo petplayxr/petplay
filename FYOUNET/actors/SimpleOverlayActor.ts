@@ -14,7 +14,7 @@ export interface OverlayCommand {
     payload?: CreateBasicOverlayPayload | DelOverlayPayload | MoveOverlayPayload;
 }
 
-interface CreateBasicOverlayPayload {
+export interface CreateBasicOverlayPayload {
     overlayName: string;
     pathToTexture: string;
 }
@@ -41,15 +41,13 @@ function format(command: OverlayCommand): string {
 
 export class SimpleOverlayActor extends ActorP2P<SimpleOverlayActor> {
     private name: string; //name of overlay
-    private ovrConnector: OVRInterface; //ovr interface
+    private ovrConnector: OVRInterface | undefined = undefined; //ovr interface
+    private ovrData: string = "" //ovr data
     
-    
-
-    constructor(publicIp: string, name: string, executablePath: string) {
+    constructor(publicIp: string, name: string) {
         super(name, publicIp);
         this.name = name;
-        this.ovrConnector = new OVRInterface(this.name, executablePath);
-        this.onStart();
+        
     }
 
     async onStart() {
@@ -61,7 +59,12 @@ export class SimpleOverlayActor extends ActorP2P<SimpleOverlayActor> {
         await this.ovrConnector.disconnect();
     }
 
-    async h_sendToOverlay(_ctx: actorManager, data: string | OverlayCommand) {
+    async h_startOverlayProcess(_ctx: actorManager, executablePath: string) {
+        this.ovrConnector = new OVRInterface(this.name, executablePath);
+        this.onStart();
+    }
+
+    async h_commandOverlay(_ctx: actorManager, data: string | OverlayCommand) {
 
         if (typeof data !== "string") {
             data = format(data);
@@ -71,8 +74,22 @@ export class SimpleOverlayActor extends ActorP2P<SimpleOverlayActor> {
         await this.ovrConnector.send(data);
     }
 
+    async h_setOverlayState(_ctx: actorManager, data: string) {
+        this.ovrData = data
+    }
+
+    async h_getOVRData(callback: (data : string) => void) { 
+        if (!this.ovrData) {
+            callback("this.ovrData is empty")
+        }
+        callback(this.ovrData) 
+    };
+
     private onOverlayMessage(data: string) {
-        console.log(`Received overlay message: ${data}`);
+        /* console.log(`Received overlay message: ${data}`); */
+        const splitData = data.split(";")
+        
+        this.ovrData = splitData[splitData.length - 1];
         // Notify other actors or handle the message accordingly
     }
 
@@ -80,6 +97,6 @@ export class SimpleOverlayActor extends ActorP2P<SimpleOverlayActor> {
 
 
         console.log(`OverlayActor received message: ${msg.data}`);
-        await this.h_sendToOverlay(ctx,msg.data);
+        await this.h_commandOverlay(ctx,msg.data);
     }
 }
