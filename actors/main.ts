@@ -69,6 +69,7 @@ async function main(_payload: Payload["MAIN"]) {
   //vrccoordinateactor
   const vrccoordinateactor = await Postman.create(worker, "vrccoordinate.ts", state);
 
+  //example of getting coords from vrc
   while (true) {
     const a = await Postman.PostMessage(worker, {
       address: { fm: state.id, to: vrccoordinateactor },
