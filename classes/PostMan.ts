@@ -69,6 +69,7 @@ export class Postman {
       }));
     },
     CB: (payload) => {
+      if (!Postman.customCB) throw new Error("UNEXPECTED CALLBACK");
       Postman.customCB.trigger(payload);
     },
   };

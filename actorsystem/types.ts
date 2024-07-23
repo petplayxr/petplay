@@ -137,6 +137,14 @@ export const xPayloadPortal = type({
   payload: "null|Array",
 });
 
+export const xPayloadPetplay = type({
+  type: "'ASSIGNVRC'",
+  payload: xToAddress
+}).or({
+  type: "'CB:GETCOORDINATE'|'GETCOORDINATE'",
+  payload: "any",
+})
+
 export const xPayload = type(
   xPayloadSys,
 ).or(
@@ -149,7 +157,9 @@ export const xPayload = type(
   xPayloadSignaling,
 ).or(
   xPayloadPortal,
-);
+).or(
+  xPayloadPetplay,
+)
 
 export type xPayload = typeof xPayload.infer;
 export type MessageType = typeof xPayload.infer.type;

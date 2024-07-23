@@ -2,6 +2,7 @@ import {
   ActorFunctions,
   BaseState,
   Payload,
+  ToAddress,
   worker,
 } from "../actorsystem/types.ts";
 import { OnMessage, Postman } from "../classes/PostMan.ts";
@@ -39,7 +40,8 @@ const functions: ActorFunctions = {
 async function main(_payload: Payload["MAIN"]) {
   console.log("main!");
 
-  const remoteid = await Postman.create(worker, "subactor.ts", state);
+  //#region a
+  /* const remoteid = await Postman.create(worker, "subactor.ts", state);
 
   // create rtc socket on self
   Postman.functions?.RTC?.(null, state.id);
@@ -61,11 +63,36 @@ async function main(_payload: Payload["MAIN"]) {
     address: { fm: state.id, to: remoteid },
     type: "LOG",
     payload: null,
-  }, true);
+  }, true); */
+  //#endregion
+
+  //vrccoordinateactor
+  const vrccoordinateactor = await Postman.create(worker, "vrccoordinate.ts", state);
+
+  while (true) {
+    const a = await Postman.PostMessage(worker, {
+      address: { fm: state.id, to: vrccoordinateactor },
+      type: "GETCOORDINATE",
+      payload: null,
+    }, true)
+    console.log("a:", a);
+    await wait(11);
+  }
+
+
+  //overlayactor
+  /*  const overlayactor = await Postman.create(worker, "overlayactor.ts", state);
+   Postman.PostMessage(worker, {
+     address: { fm: state.id, to: overlayactor },
+     type: "ASSIGNVRC",
+     payload: vrccoordinateactor,
+   }) */
+
 }
 
 new Postman(worker, functions, state);
 
 OnMessage((message) => {
+  console.log("RUNmessage:", message);
   Postman.runFunctions(message);
 });
