@@ -1,0 +1,39 @@
+{
+  "version": "0.2.0",
+  "compounds": [
+    {
+      "name": "Debug Deno with Workers",
+      "configurations": ["Main thread only", "Attach Worker 1"]
+    }
+  ],
+  "configurations": [
+    {
+      "request": "launch",
+      "name": "Main thread only",
+      "type": "node",
+      "program": "${workspaceFolder}/init.ts",
+      "cwd": "${workspaceFolder}",
+      "console": "internalConsole",
+      "outputCapture": "std",
+      "autoAttachChildProcesses": true,
+      "env": {},
+      "runtimeExecutable": "Deno",
+      "runtimeArgs": [
+        "run",
+        "--inspect-wait",
+        "--allow-all",
+        "--unstable-worker-options",
+        "--allow-read"
+      ],
+      "attachSimplePort": 9229
+    },
+    {
+      "name": "Attach Worker 1",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "address": "127.0.0.1",
+      "restart": false
+    }
+  ]
+}
