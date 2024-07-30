@@ -70,30 +70,35 @@ async function main(_payload: Payload["MAIN"]) {
   const vrccoordinateactor = await Postman.create(worker, "vrccoordinate.ts", state);
 
   //example of getting coords from vrc
-  while (true) {
+  /* while (true) {
     const a = await Postman.PostMessage(worker, {
       address: { fm: state.id, to: vrccoordinateactor },
       type: "GETCOORDINATE",
       payload: null,
     }, true)
     console.log("a:", a);
-    await wait(11);
-  }
+    await wait(1);
+  } */
 
 
   //overlayactor
-  /*  const overlayactor = await Postman.create(worker, "overlayactor.ts", state);
-   Postman.PostMessage(worker, {
-     address: { fm: state.id, to: overlayactor },
-     type: "ASSIGNVRC",
-     payload: vrccoordinateactor,
-   }) */
+  const overlayactor = await Postman.create(worker, "overlayactor.ts", state);
+  const overlayactor2 = await Postman.create(worker, "overlayactor2.ts", state);
+  Postman.PostMessage(worker, {
+    address: { fm: state.id, to: overlayactor },
+    type: "ASSIGNVRC",
+    payload: vrccoordinateactor,
+  })
+  Postman.PostMessage(worker, {
+    address: { fm: state.id, to: overlayactor2 },
+    type: "ASSIGNVRC",
+    payload: vrccoordinateactor,
+  })
 
 }
 
 new Postman(worker, functions, state);
 
 OnMessage((message) => {
-  console.log("RUNmessage:", message);
   Postman.runFunctions(message);
 });
