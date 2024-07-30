@@ -1,5 +1,5 @@
 NodeWebRTC/node_modules/
 /*.exe
-OVRINTERFACE\out
-OVRINTERFACE\vcpkg
-OVRINTERFACE\vcpkg_installed
+OVRINTERFACE/out/
+OVRINTERFACE/vcpkg/
+OVRINTERFACE/vcpkg_installed/

@@ -1,0 +1,12 @@
+{
+    "dependencies": [
+      "opengl",
+      "glm",
+      "glew",
+      "glfw3",
+      "zeromq",
+      "cppzmq",
+      "openvr",
+      "nlohmann-json"
+    ]
+}

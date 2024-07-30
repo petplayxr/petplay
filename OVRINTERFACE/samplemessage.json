@@ -1,0 +1,7 @@
+{
+    "function": "CreateBasicOverlay",
+    "properties": {
+      "overlayname": "exampleOverlay",
+      "pathToTexture": "C:/path/to/texture.png"
+    }
+}
