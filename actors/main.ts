@@ -7,6 +7,8 @@ import {
 } from "../actorsystem/types.ts";
 import { OnMessage, Postman } from "../classes/PostMan.ts";
 import { wait } from "../actorsystem/utils.ts";
+import { OpenVRType } from "../OpenVR_TS/utils.ts";
+import * as OpenVR from "../OpenVR_TS/openvr_bindings.ts";
 
 
 
@@ -67,7 +69,7 @@ async function main(_payload: Payload["MAIN"]) {
   //#endregion
 
   //vrccoordinateactor
-  const vrccoordinateactor = await Postman.create(worker, "vrccoordinate.ts", state);
+  //const vrccoordinateactor = await Postman.create(worker, "vrccoordinate.ts", state);
 
   //example of getting coords from vrc
   /* while (true) {
@@ -80,9 +82,24 @@ async function main(_payload: Payload["MAIN"]) {
     await wait(1);
   } */
 
+  //overlayactor3.0
+  const overlayactor3 = await Postman.create(worker, "overlayactor3.ts", state);
+  const location = await Postman.PostMessage(worker, {
+    address: { fm: state.id, to: overlayactor3 },
+    type: "GETOVERLAYLOCATION",
+    payload: null,
+  }, true);
+  console.log("location:", location);
+
+  const inputactor = await Postman.create(worker, "inputactor.ts", state);
+
+  inputloop(inputactor, overlayactor3);
+
+
+// fumos
 
   //overlayactor
-  const overlayactor = await Postman.create(worker, "overlayactor.ts", state);
+  /* const overlayactor = await Postman.create(worker, "overlayactor.ts", state);
   const overlayactor2 = await Postman.create(worker, "overlayactor2.ts", state);
   Postman.PostMessage(worker, {
     address: { fm: state.id, to: overlayactor },
@@ -93,8 +110,27 @@ async function main(_payload: Payload["MAIN"]) {
     address: { fm: state.id, to: overlayactor2 },
     type: "ASSIGNVRC",
     payload: vrccoordinateactor,
-  })
+  }) */
 
+}
+
+async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
+  while (true) {
+    const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData ] = await Postman.PostMessage(worker, {
+      address: { fm: state.id, to: inputactor },
+      type: "GETCONTROLLERDATA",
+      payload: null,
+    }, true) as [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData];
+    console.log("inputstate:", inputstate[1].bState);
+    if (inputstate[1].bState == 1) {
+      Postman.PostMessage(worker, {
+        address: { fm: state.id, to: overlayactor },
+        type: "SETOVERLAYLOCATION",
+        payload: inputstate[0].pose.mDeviceToAbsoluteTracking,
+      });
+
+    }
+  }
 }
 
 new Postman(worker, functions, state);

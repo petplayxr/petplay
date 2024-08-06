@@ -143,6 +143,15 @@ export const xPayloadPetplay = type({
 }).or({
   type: "'CB:GETCOORDINATE'|'GETCOORDINATE'",
   payload: "any",
+}).or({
+  type: "'CB:GETOVERLAYLOCATION'|'GETOVERLAYLOCATION'",
+  payload: "any",
+}).or({
+  type: "'SETOVERLAYLOCATION'",
+  payload: "any",
+}).or({
+  type: "'CB:GETCONTROLLERDATA'|'GETCONTROLLERDATA'",
+  payload: "any",
 })
 
 export const xPayload = type(

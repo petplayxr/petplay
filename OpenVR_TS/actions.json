@@ -1,0 +1,32 @@
+{
+    "actions": [
+      {
+        "name": "/actions/main/in/HandPoseLeft",
+        "type": "pose"
+      },
+      {
+        "name": "/actions/main/in/HandPoseRight",
+        "type": "pose"
+      },
+      {
+        "name": "/actions/main/in/TriggerLeft",
+        "type": "boolean"
+      },
+      {
+        "name": "/actions/main/in/TriggerRight",
+        "type": "boolean"
+      }
+    ],
+    "action_sets": [
+      {
+        "name": "/actions/main",
+        "usage": "leftright"
+      }
+    ],
+    "default_bindings": [
+      {
+        "controller_type": "oculus_touch",
+        "binding_url": "bindings_oculus_touch.json"
+      }
+    ]
+  }

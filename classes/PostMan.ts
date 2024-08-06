@@ -16,6 +16,7 @@ import { ActorWorker } from "../actorsystem/ActorWorker.ts";
 import { wait } from "../actorsystem/utils.ts";
 import { WebRTCServer } from "./webrtcClass.ts";
 import { getAvailablePort } from "jsr:@std/net";
+import * as JSON from "../classes/JSON.ts";
 
 
 export const OnMessage = (handler: (message: Message) => void) => {

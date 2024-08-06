@@ -3,7 +3,6 @@
   "compounds": [
     {
       "name": "Debug Deno with Workers",
-      ,
       "configurations": [
         "Main thread only",
         "Attach Worker 1"
