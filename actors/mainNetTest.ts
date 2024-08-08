@@ -71,6 +71,7 @@ async function main(_payload: Payload["MAIN"]) {
     const net2actor = await Postman.create(worker, "netTestActor.ts", state); */
 
     const overlayactor1 = await Postman.create(worker, "overlayactor.ts", state);
+    state.overlayactor1 = overlayactor1;
 
     console.log()
 
