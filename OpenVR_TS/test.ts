@@ -1,7 +1,7 @@
 import * as OpenVR from "./openvr_bindings.ts";
 import { fillBuffer, readBufferStructured } from "../utils.ts";
 import { P } from "../pointers.ts";
-import { Struct, calculateTotalSize, SizedStruct, ArrayType, u8, i8, u16, i16, u32, i32, f32, u64, i64, f64 } from "../../byte_type/mod.ts";
+import { Struct, calculateTotalSize, SizedStruct, ArrayType, u8, i8, u16, i16, u32, i32, f32, u64, i64, f64 } from "../byte_type/mod.ts";
 
 const manifestPath = Deno.realPathSync("./test/actions.json");
 
