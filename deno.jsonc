@@ -2,6 +2,7 @@
   "imports": {
     "arktype": "https://esm.sh/arktype@2.0.0-dev.25",
   },
+  "unstable": ["net", "worker-options"],
   "lint": {
     "rules": { "exclude": ["no-case-declarations"] }
   }
