@@ -22,6 +22,7 @@ const state: State & BaseState = {
     name: "main",
     id: "",
     db: {},
+    overlayactor1: null,
     socket: null,
     numbah: 0,
     addressbook: [],
@@ -35,6 +36,24 @@ const functions: ActorFunctions = {
         console.log(state.id);
     },
     STDIN: (payload) => {
+        if (payload.startsWith("connect")){
+            payload = payload.replace("connect", "");
+            Postman.PostMessage(worker, {
+                address: { fm: state.id, to: state.overlayactor1 },
+                type: "CONNECT",
+                payload: payload,
+            })
+        }
+        if (payload.startsWith("addaddress")){
+            payload = payload.replace("addaddress", "");
+            Postman.PostMessage(worker, {
+                address: { fm: state.id, to: state.overlayactor1 },
+                type: "ADDADDRESS",
+                payload: payload,
+            })
+        }
+
+
         console.log("stdin:", payload);
     },
 };
@@ -48,7 +67,9 @@ async function main(_payload: Payload["MAIN"]) {
     const net2actor = await Postman.create(worker, "netTestActor.ts", state); */
 
     const overlayactor1 = await Postman.create(worker, "overlayactor.ts", state);
-    const overlayactor2 = await Postman.create(worker, "overlayactor2.ts", state);
+
+    console.log()
+
     const inputactor = await Postman.create(worker, "inputactor.ts", state);
 
 
@@ -60,25 +81,12 @@ async function main(_payload: Payload["MAIN"]) {
         payload: net2actor,
     }) */
 
-    Postman.PostMessage(worker, {
-        address: { fm: state.id, to: overlayactor1 },
-        type: "CONNECT",
-        payload: overlayactor2,
-    })
+    
 
-    await wait(6000);
 
-    Postman.PostMessage(worker, {
-        address: { fm: state.id, to: overlayactor1 },
-        type: "ADDADDRESS",
-        payload: overlayactor2,
-    })
+    await wait(3000000);
 
-    Postman.PostMessage(worker, {
-        address: { fm: state.id, to: overlayactor2 },
-        type: "ADDADDRESS",
-        payload: overlayactor1,
-    })
+
 
     inputloop(inputactor, overlayactor1);
 
