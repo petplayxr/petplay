@@ -23,6 +23,7 @@ const state: State & BaseState = {
     id: "",
     db: {},
     overlayactor1: null,
+    inputactor: null,
     socket: null,
     numbah: 0,
     addressbook: [],
@@ -52,6 +53,9 @@ const functions: ActorFunctions = {
                 payload: payload,
             })
         }
+        if (payload.startsWith("start")){
+            inputloop(state.inputactor, state.overlayactor1);
+        }
 
 
         console.log("stdin:", payload);
@@ -71,7 +75,7 @@ async function main(_payload: Payload["MAIN"]) {
     console.log()
 
     const inputactor = await Postman.create(worker, "inputactor.ts", state);
-
+    state.inputactor = inputactor;
 
     await wait(5000);
 /* 
@@ -88,7 +92,7 @@ async function main(_payload: Payload["MAIN"]) {
 
 
 
-    inputloop(inputactor, overlayactor1);
+    //inputloop(inputactor, overlayactor1);
 
 /* 
 
