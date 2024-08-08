@@ -1,7 +1,7 @@
 import { PostalService } from "./actorsystem/PostalService.ts";
 import "./actors/main.ts";
-import "./actors/subactor.ts";
-import "./actors/signalingDenoServer.ts";
+import "./actorsOther/exampleActor.ts";
+import "./actorsOther/signalingDenoServer.ts";
 
 const postalservice = new PostalService();
 

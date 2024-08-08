@@ -9,6 +9,7 @@ import * as OpenVR from "../OpenVR_TS/openvr_bindings.ts";
 import { P } from "../OpenVR_TS/pointers.ts";
 import { stringToPointer } from "../OpenVR_TS/utils.ts";
 
+//a steamvr overlay
 
 type State = {
     id: string;

@@ -7,6 +7,8 @@ import {
 import { OnMessage, Postman } from "../classes/PostMan.ts";
 import { OscSubscriber } from "../classes/getvrcpos.ts";
 
+//vrchat integration
+
 interface coord {
     [key: string]: number;
 }

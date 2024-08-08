@@ -10,7 +10,7 @@ import * as OpenVR from "../OpenVR_TS/openvr_bindings.ts";
 import { fillBuffer, readBufferStructured } from "../OpenVR_TS/utils.ts";
 import { P } from "../OpenVR_TS/pointers.ts";
 
-
+//steamvr input handling
 
 type State = {
     id: string;

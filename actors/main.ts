@@ -10,7 +10,7 @@ import { wait } from "../actorsystem/utils.ts";
 import { OpenVRType } from "../OpenVR_TS/utils.ts";
 import * as OpenVR from "../OpenVR_TS/openvr_bindings.ts";
 
-
+//main process
 
 type State = {
   id: string;

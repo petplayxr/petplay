@@ -2,6 +2,7 @@
     "recommendations": [
         "denoland.vscode-deno",
         "yoavbls.pretty-ts-errors",
-        "arktypeio.arkdark"
+        "arktypeio.arkdark",
+        "ms-vscode.vscode-typescript-next",
     ]
 }
