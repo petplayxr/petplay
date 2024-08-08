@@ -69,7 +69,7 @@ async function main(_payload: Payload["MAIN"]) {
   //#endregion
 
   //vrccoordinateactor
-  //const vrccoordinateactor = await Postman.create(worker, "vrccoordinate.ts", state);
+  const vrccoordinateactor = await Postman.create(worker, "vrccoordinate.ts", state);
 
   //example of getting coords from vrc
   /* while (true) {
@@ -83,13 +83,13 @@ async function main(_payload: Payload["MAIN"]) {
   } */
 
   //overlayactor3.0
-  const overlayactor3 = await Postman.create(worker, "overlayactor3.ts", state);
-  const location = await Postman.PostMessage(worker, {
+  const overlayactor3 = await Postman.create(worker, "overlayactor.ts", state);
+/*   const location = await Postman.PostMessage(worker, {
     address: { fm: state.id, to: overlayactor3 },
     type: "GETOVERLAYLOCATION",
     payload: null,
   }, true);
-  console.log("location:", location);
+  console.log("location:", location); */
 
   const inputactor = await Postman.create(worker, "inputactor.ts", state);
 
@@ -122,6 +122,9 @@ async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
       payload: null,
     }, true) as [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData];
     console.log("inputstate:", inputstate[1].bState);
+    
+    
+    
     if (inputstate[1].bState == 1) {
       Postman.PostMessage(worker, {
         address: { fm: state.id, to: overlayactor },

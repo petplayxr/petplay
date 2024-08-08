@@ -1,0 +1,7 @@
+{
+    "recommendations": [
+        "denoland.vscode-deno",
+        "yoavbls.pretty-ts-errors",
+        "arktypeio.arkdark"
+    ]
+}
