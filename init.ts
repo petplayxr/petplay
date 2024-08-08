@@ -5,7 +5,8 @@ import "./actorsOther/signalingDenoServer.ts";
 
 const postalservice = new PostalService();
 
-const mainAddress = await postalservice.add("main.ts");
+//const mainAddress = await postalservice.add("main.ts");
+const mainAddress = await postalservice.add("mainNetTest.ts");
 
 console.log("mainAddress", mainAddress);
 

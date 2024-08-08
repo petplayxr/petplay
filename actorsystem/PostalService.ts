@@ -54,9 +54,14 @@ export class PostalService {
 
   //onmessage
   handleMessage = (worker: Worker, message: Message) => {
-    const addresses = Array.isArray(message.address)
-      ? message.address
-      : [message.address];
+    const addresses = Array.isArray(message.address.to)
+      ? message.address.to
+      : [message.address.to];
+
+    
+    console.error("XSFADFGADSGA")
+    
+    console.error(message.address)
 
     addresses.forEach((_address) => {
 
@@ -83,6 +88,8 @@ export class PostalService {
             console.log(PostalService.actors)
             // using portal instead
           }
+          console.error(address.to);
+          console.error(PostalService.actors)
           const targetWorker = PostalService.actors.get(address.to)!;
           targetWorker.postMessage(message);
       }

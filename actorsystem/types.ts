@@ -106,7 +106,10 @@ export const xPayloadActor = type({
 }).or({
   type: "'CB:GETID'|'GETID'",
   payload: "null|string",
-});
+}).or({
+  type: "'MESSAGE'",
+  payload: xToAddress,
+})
 
 export const xPayloadRTC = type({
   type: "'RTC'",

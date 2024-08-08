@@ -16,7 +16,7 @@ import { stringToPointer } from "../OpenVR_TS/utils.ts";
 type State = {
     id: string;
     db: Record<string, unknown>;
-    addressbook: string|null;
+    addressbook: string | null;
     overlayClass: OpenVR.IVROverlay | null;
     overlayHandle: OpenVR.OverlayHandle;
     overlayerror: OpenVR.OverlayError;
@@ -27,7 +27,7 @@ type State = {
 const state: State & BaseState = {
     id: "",
     db: {},
-    name: "overlay1",
+    name: "overlay2",
     socket: null,
     overlayClass: null,
     OverlayTransform: null,
@@ -73,7 +73,7 @@ const functions: ActorFunctions = {
     ADDADDRESS: (payload, _address) => {
         console.error("AWADGAG")
         const addr = payload as ToAddress;
-        state.addressbook= addr;
+        state.addressbook = addr;
     }
 };
 
@@ -141,7 +141,7 @@ async function main() {
 
     console.log(`Overlay created with handle: ${overlayHandle}`);
 
-    const imgpath = Deno.realPathSync("./resources/P1.png");
+    const imgpath = Deno.realPathSync("./resources/P2.png");
     overlay.SetOverlayFromFile(overlayHandle, imgpath);
     overlay.SetOverlayWidthInMeters(overlayHandle, 0.1);
     overlay.ShowOverlay(overlayHandle);
@@ -173,7 +173,7 @@ async function main() {
 async function syncloop() {
     while (true) {
         console.log(state.addressbook);
-      
+
         const m34 = GetOverlayTransformAbsolute();
         Postman.PostMessage(worker, {
             address: { fm: state.id, to: state.addressbook },

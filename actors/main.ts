@@ -71,7 +71,7 @@ async function main(_payload: Payload["MAIN"]) {
   //#endregion
 
   //vrccoordinateactor
-  const vrccoordinateactor = await Postman.create(worker, "vrccoordinate.ts", state);
+  //const vrccoordinateactor = await Postman.create(worker, "vrccoordinate.ts", state);
 
   //example of getting coords from vrc
   /* while (true) {
@@ -84,12 +84,12 @@ async function main(_payload: Payload["MAIN"]) {
     await wait(1);
   } */
 
-/*   const location = await Postman.PostMessage(worker, {
-    address: { fm: state.id, to: overlayactor3 },
-    type: "GETOVERLAYLOCATION",
-    payload: null,
-  }, true);
-  console.log("location:", location); */
+  /*   const location = await Postman.PostMessage(worker, {
+      address: { fm: state.id, to: overlayactor3 },
+      type: "GETOVERLAYLOCATION",
+      payload: null,
+    }, true);
+    console.log("location:", location); */
 
   // fumos
 
@@ -109,11 +109,36 @@ async function main(_payload: Payload["MAIN"]) {
 
   //#endregion
 
-  const overlayactor3 = await Postman.create(worker, "overlayactor.ts", state);
+
+
+
+  const net1actor = await Postman.create(worker, "netTest.ts", state);
+  const net2actor = await Postman.create(worker, "netTest.ts", state);
+
+
+  await wait(6000);
+
+  Postman.PostMessage(worker, {
+    address: { fm: state.id, to: net1actor },
+    type: "CONNECT",
+    payload: net2actor,
+  })
+
+  await wait(6000);
+
+  Postman.PostMessage(worker, {
+    address: { fm: state.id, to: net1actor },
+    type: "MESSAGE",
+    payload: net2actor,
+  })
+
+
+
+  /* const overlayactor3 = await Postman.create(worker, "overlayactor.ts", state);
 
   const inputactor = await Postman.create(worker, "inputactor.ts", state);
 
-  inputloop(inputactor, overlayactor3);
+  inputloop(inputactor, overlayactor3); */
 
 
 
@@ -121,15 +146,15 @@ async function main(_payload: Payload["MAIN"]) {
 
 async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
   while (true) {
-    const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData ] = await Postman.PostMessage(worker, {
+    const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData] = await Postman.PostMessage(worker, {
       address: { fm: state.id, to: inputactor },
       type: "GETCONTROLLERDATA",
       payload: null,
     }, true) as [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData];
     console.log("inputstate:", inputstate[1].bState);
-    
-    
-    
+
+
+
     if (inputstate[1].bState == 1) {
       Postman.PostMessage(worker, {
         address: { fm: state.id, to: overlayactor },
