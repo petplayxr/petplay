@@ -7,7 +7,7 @@ import {
 } from "../actorsystem/types.ts";
 import { OnMessage, Postman } from "../classes/PostMan.ts";
 import * as OpenVR from "../OpenVR_TS/openvr_bindings.ts";
-import { fillBuffer, readBufferStructured } from "../OpenVR_TS/utils.ts";
+import { fillBuffer, readBufferStructured, stringToPointer } from "../OpenVR_TS/utils.ts";
 import { P } from "../OpenVR_TS/pointers.ts";
 
 //steamvr input handling
@@ -21,13 +21,11 @@ type State = {
 const state: State & BaseState = {
     id: "",
     db: {},
-
     TrackingUniverseOriginPTR: null,
     name: "sub",
     inputerror: OpenVR.InputError.VRInputError_None,
     socket: null,
 
-    numbah: 0,
     addressbook: [],
 };
 
@@ -49,13 +47,9 @@ const functions: ActorFunctions = {
     },
     GETCONTROLLERDATA: (_payload, address) => {
         const addr = address as MessageAddressReal;
-
         updateActionState();
-
         let leftPoseData
-
         console.log("X", handPoseLeftHandle, posedataleftpointer);
-
         //pose
         error = vrInput.GetPoseActionDataRelativeToNow(
             handPoseLeftHandle,
@@ -68,7 +62,6 @@ const functions: ActorFunctions = {
         if (error === OpenVR.InputError.VRInputError_None) {
             leftPoseData = OpenVR.InputPoseActionDataStruct.read(poseDataViewL);
         }
-
         //button
         error = vrInput.GetDigitalActionData(
             triggerLeftHandle,
@@ -77,8 +70,7 @@ const functions: ActorFunctions = {
             OpenVR.k_ulInvalidInputValueHandle
         );
         const leftTriggerData = OpenVR.InputDigitalActionDataStruct.read(triggerDataViewL);
-
-
+        
         Postman.PostMessage(worker, {
             address: { fm: state.id, to: addr.fm },
             type: "CB:GETCONTROLLERDATA",
@@ -88,11 +80,8 @@ const functions: ActorFunctions = {
 };
 
 
-function stringToPointer(str: string): Deno.PointerValue {
-    const encoder = new TextEncoder();
-    const view = encoder.encode(str + '\0');
-    return Deno.UnsafePointer.of(view);
-}
+
+//#region openvr boilerplate 
 
 //#region input
 let error;
@@ -102,6 +91,8 @@ const TypeSafeINITERRPTR: OpenVR.InitErrorPTRType = initerrorptr
 const IVRInputPtr = OpenVR.VR_GetGenericInterface(stringToPointer(OpenVR.IVRInput_Version), TypeSafeINITERRPTR);
 const vrInput = new OpenVR.IVRInput(IVRInputPtr);
 //#endregion
+
+
 
 //#region pose
 const poseDataSize = OpenVR.InputPoseActionDataStruct.byteSize;
@@ -152,16 +143,16 @@ const triggerRightPointer = Deno.UnsafePointer.of<OpenVR.InputDigitalActionData>
 
 //#endregion
 
+//#endregion
+
 function main() {
     //Postman.functions?.RTC?.(null, state.id);
 
-
+    //#region more boilerplate
 
     let _
     let leftPoseData
     let rightPoseData
-
-
 
 
     //set action manifest path
@@ -172,12 +163,6 @@ function main() {
     }
 
     //get action set handle
-
-
-
-    //#region Get action handles
-
-
 
     error = vrInput.GetActionHandle("/actions/main/in/HandPoseLeft", handPoseLeftHandlePTR);
     if (error !== OpenVR.InputError.VRInputError_None) {
@@ -222,7 +207,7 @@ function main() {
 
 
 
-    //#endregion
+
 
 
 

@@ -63,7 +63,6 @@ const functions: ActorFunctions = {
         const hmd34view = new DataView(hmd34buf);
         const m34ptr = Deno.UnsafePointer.of<OpenVR.HmdMatrix34>(hmd34buf)!;
 
-
         error = overlay.GetOverlayTransformAbsolute(overlayHandle, TrackingUniverseOriginPTR, m34ptr);
         if (error !== OpenVR.OverlayError.VROverlayError_None) {
             console.error(`Failed to get overlay transform: ${OpenVR.OverlayError[error]}`);
@@ -94,9 +93,6 @@ function setOverlayTransformAbsolute(transform: OpenVR.HmdMatrix34)
 
     overlay.SetOverlayTransformAbsolute(state.overlayHandle, OpenVR.TrackingUniverseOrigin.TrackingUniverseStanding, transformPtr);
 }
-
-
-
 
 function main() {
 
@@ -147,13 +143,8 @@ function main() {
         ]
     };
     OpenVR.HmdMatrix34Struct.write(initialTransform, initialTransformView);
-  
-
     state.trackingUniverseOriginPTR = Deno.UnsafePointer.of<OpenVR.TrackingUniverseOrigin>(new Int32Array(1))!;
-   
     setOverlayTransformAbsolute(initialTransform)
-
-
 
     console.log("Overlay created and shown. Press Ctrl+C to exit.");
     //Postman.functions?.RTC?.(null, state.id);

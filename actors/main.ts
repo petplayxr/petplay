@@ -42,6 +42,8 @@ const functions: ActorFunctions = {
 async function main(_payload: Payload["MAIN"]) {
   console.log("main!");
 
+  //#region wip
+
   //#region a
   /* const remoteid = await Postman.create(worker, "subactor.ts", state);
 
@@ -82,8 +84,6 @@ async function main(_payload: Payload["MAIN"]) {
     await wait(1);
   } */
 
-  //overlayactor3.0
-  const overlayactor3 = await Postman.create(worker, "overlayactor.ts", state);
 /*   const location = await Postman.PostMessage(worker, {
     address: { fm: state.id, to: overlayactor3 },
     type: "GETOVERLAYLOCATION",
@@ -91,12 +91,7 @@ async function main(_payload: Payload["MAIN"]) {
   }, true);
   console.log("location:", location); */
 
-  const inputactor = await Postman.create(worker, "inputactor.ts", state);
-
-  inputloop(inputactor, overlayactor3);
-
-
-// fumos
+  // fumos
 
   //overlayactor
   /* const overlayactor = await Postman.create(worker, "overlayactor.ts", state);
@@ -111,6 +106,16 @@ async function main(_payload: Payload["MAIN"]) {
     type: "ASSIGNVRC",
     payload: vrccoordinateactor,
   }) */
+
+  //#endregion
+
+  const overlayactor3 = await Postman.create(worker, "overlayactor.ts", state);
+
+  const inputactor = await Postman.create(worker, "inputactor.ts", state);
+
+  inputloop(inputactor, overlayactor3);
+
+
 
 }
 
