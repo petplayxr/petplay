@@ -65,58 +65,23 @@ const functions: ActorFunctions = {
 async function main(_payload: Payload["MAIN"]) {
     console.log("main!");
 
-
-
     const net1actor = await Postman.create(worker, "netTestActor.ts", state);
     const net2actor = await Postman.create(worker, "netTestActor.ts", state);
 
-    await wait(5000);
-
-    console.log("trying to connect")
-
-/*     Postman.PostMessage(worker, {
-        address: { fm: state.id, to: net1actor },
-        type: "ASSIGNCHANNEL",
-        payload: "channel1",
-    })
     Postman.PostMessage(worker, {
-        address: { fm: state.id, to: net2actor },
-        type: "ASSIGNCHANNEL",
-        payload: "channel1",
-    }) */
-
-
-
-    const error = await Postman.PostMessage(worker, {
-        address: { fm: state.id, to: net1actor },
-        type: "CONNECT",
-        payload: net2actor,
-    }, true)
-    if (!error) throw new Error("connect failed");
+        address: { fm: state.id, to: [net1actor, net2actor]},
+        type: "SET_CHANNEL",
+        payload: "muffin",
+    })
 
     await wait(8000);
-    console.log("testing connection by commanding net2 to message net1")
+
     Postman.PostMessage(worker, {
         address: { fm: state.id, to: net2actor },
         type: "MESSAGE",
         payload: net1actor,
     })
 
-
-
-
-    /* const overlayactor1 = await Postman.create(worker, "overlayactor.ts", state);
-    state.overlayactor1 = overlayactor1;
-
-    console.log()
-
-    const inputactor = await Postman.create(worker, "inputactor.ts", state);
-    state.inputactor = inputactor;
- */
-
-
-
-    await wait(300);
 
 
 

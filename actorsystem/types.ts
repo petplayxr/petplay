@@ -9,12 +9,16 @@ export type ToAddress = typeof xToAddress.infer;
 export type BaseState = {
   name: string;
   id: string;
+  addressBook: Array<string>;
   [key: string]: unknown;
 };
 
 export const System = "SYSTEM";
 export const xSystem = type("'System'");
 export type SystemType = typeof xSystem.infer;
+export const xString = type("string");
+export const xStringOrStringArray = type("string").or(xString.array());
+
 
 export const xPairAddress = type({
   fm: "string",
@@ -41,16 +45,28 @@ export const xMessageAddressSingle = type(
 ).or(
   xWorkerToSystem,
 );
-export const xMessageAddressArray = type(xPairAddress.array());
+
+export const xMessageAddressArray = type(
+  {
+    fm: "string",
+    to: xStringOrStringArray,
+  }
+);
 export const xMessageAddressReal = type({
   fm: "string",
   to: xToAddress,
 });
 
 export type MessageAddressReal = typeof xMessageAddressReal.infer;
-export type MessageAddress =
-  | typeof xMessageAddressSingle.infer
-  | typeof xMessageAddressArray.infer;
+
+const xMessageAddress = type(
+  xMessageAddressSingle,
+).or(
+  xMessageAddressArray,
+);
+
+export type MessageAddress = typeof xMessageAddress.infer;
+
 
 //#endregion
 
@@ -123,7 +139,7 @@ export const xPayloadRTC = type({
   type: "'ADDREMOTE'",
   payload: xToAddress,
 }).or({
-  type: "'JOIN_CHANNEL'",
+  type: "'SET_CHANNEL'",
   payload: "string"
 }).or({
   type: "'RECEIVEADDRESS'",
@@ -135,7 +151,7 @@ export const xPayloadSignaling = type({
   payload: "number",
 });
 
-export const xString = type("string");
+
 
 export const xPayloadPortal = type({
   type: "'PREGISTER'",
@@ -194,7 +210,7 @@ export type Payload = {
 //#endregion
 
 export const xMessage = type([
-  { address: xMessageAddressSingle },
+  { address: xMessageAddress },
   "&",
   xPayload,
 ]);

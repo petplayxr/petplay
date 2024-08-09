@@ -16,7 +16,6 @@ import { stringToPointer } from "../OpenVR_TS/utils.ts";
 type State = {
     id: string;
     db: Record<string, unknown>;
-    addressbook: string|null;
     overlayClass: OpenVR.IVROverlay | null;
     overlayHandle: OpenVR.OverlayHandle;
     overlayerror: OpenVR.OverlayError;
@@ -32,7 +31,7 @@ const state: State & BaseState = {
     overlayClass: null,
     OverlayTransform: null,
     numbah: 0,
-    addressbook: null,
+    addressBook: new Array<string>(),
     overlayHandle: 0n,
     TrackingUniverseOriginPTR: null,
     overlayerror: OpenVR.OverlayError.VROverlayError_None,
@@ -69,11 +68,6 @@ const functions: ActorFunctions = {
     SETOVERLAYLOCATION: (payload, _address) => {
         const transform = payload as OpenVR.HmdMatrix34;
         setOverlayTransformAbsolute(transform);
-    },
-    ADDADDRESS: (payload, _address) => {
-        console.error("AWADGAG")
-        const addr = payload as ToAddress;
-        state.addressbook= addr;
     }
 };
 

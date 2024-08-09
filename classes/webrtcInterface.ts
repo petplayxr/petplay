@@ -1,12 +1,14 @@
 import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
+import {wait } from "../actorsystem/utils.ts";
 
 export class WebRTCInterface {
   private nodeSocket: WebSocket | null = null;
   private ipcPort: number;
   private ddnsIp: string;
   private id: string;
-  private currentChannel: string | null = null;
   private messageHandler: ((data: any) => void) | null = null;
+  private channel: string | null = null;
+  private addressBook: Set<string> = new Set();
 
   constructor(id: string, ipcPort: number) {
     this.ipcPort = ipcPort;
@@ -25,37 +27,40 @@ export class WebRTCInterface {
 
   //#region channel
 
-  public joinChannel(channelId: string) {
-    this.currentChannel = channelId;
-    this.sendToNodeProcess({
-      type: "join_channel",
-      channelId: channelId,
-      peerId: this.id
+  public isSocketOpen(): boolean {
+    return this.nodeSocket !== null && this.nodeSocket.readyState === WebSocket.OPEN;
+  }
+  
+  public async setChannel(channelId: string | null) {
+    if (this.isSocketOpen()) {
+      await wait(1000)
+      this.channel = channelId;
+      this.sendToNodeProcess({ type: "set_channel", channelId });
+      return true;
+    }
+    return false;
+  }
+
+  public broadcastAddress() {
+    if (this.channel) {
+      this.sendToNodeProcess({ type: "broadcast_address", channelId: this.channel });
+    }
+  }
+
+  public queryAddresses() {
+    if (this.channel) {
+      this.sendToNodeProcess({ type: "query_addresses", channelId: this.channel });
+    }
+  }
+
+  private updateAddressBook(addresses: string[]) {
+    const newAddresses = addresses.filter(addr => !this.addressBook.has(addr));
+    newAddresses.forEach(addr => {
+      this.addressBook.add(addr);
+      this.sendToNodeProcess({ type: "create_offer", targetPeerId: addr });
     });
   }
 
-  public leaveChannel() {
-    if (this.currentChannel) {
-      this.sendToNodeProcess({
-        type: "leave_channel",
-        channelId: this.currentChannel,
-        peerId: this.id
-      });
-      this.currentChannel = null;
-    }
-  }
-
-  public sendToChannel(message: any) {
-    if (this.currentChannel) {
-      this.sendToNodeProcess({
-        type: "send_to_channel",
-        channelId: this.currentChannel,
-        message: message
-      });
-    } else {
-      console.error("Not in a channel. Cannot send message.");
-    }
-  }
 
   //#endregion
 
@@ -95,6 +100,7 @@ export class WebRTCInterface {
         if (done) break;
         const lines = decoder.decode(value).trim().split("\n");
         for (const line of lines) {
+          return
           if (line) console.log(`[RTC NODE ${idPrefix} ${type}]: ${line}`);
         }
       }
@@ -127,16 +133,21 @@ export class WebRTCInterface {
 
   private handleNodeMessage(data: any) {
     console.log("Received message from Node process:", data);
+    if (data.type === "address_update") {
+      this.updateAddressBook(data.addresses);
+    }
     if (this.messageHandler) {
       this.messageHandler(data);
     }
   }
 
   public sendToNodeProcess(message: any) {
-    if (this.nodeSocket && this.nodeSocket.readyState === WebSocket.OPEN) {
-      this.nodeSocket.send(JSON.stringify(message));
+    if (this.isSocketOpen()) {
+      this.nodeSocket!.send(JSON.stringify(message));
+      return true;
     } else {
       console.error("Node socket is not open. Cannot send message.");
+      return false;
     }
   }
 }

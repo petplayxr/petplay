@@ -58,12 +58,13 @@ export class PostalService {
       ? message.address.to
       : [message.address.to];
 
-    
-    console.error("XSFADFGADSGA")
-    
-    console.error(message.address)
 
-    addresses.forEach((_address) => {
+    console.error("PostalService handleMessage")
+
+    console.error(message)
+
+    addresses.forEach((address) => {
+      message.address.to = address;
 
 
       // if message type starts with CB
@@ -72,10 +73,9 @@ export class PostalService {
         message.type = "CB";
       }
 
-      const address: nonArrayAddress = message.address as nonArrayAddress;
-      console.log("postalService handleMessage", message.type);
+      console.log("postalService handleMessage", message.address.to, message.type);
       // redirect message
-      switch (address.to) {
+      switch (message.address.to) {
         case null:
           throw new Error();
         case System:
@@ -83,14 +83,14 @@ export class PostalService {
           break;
         default:
           // message address is to another actor
-          if (!PostalService.actors.has(address.to)) {
+          if (!PostalService.actors.has(message.address.to)) {
             console.error("No actor found");
             console.log(PostalService.actors)
             // using portal instead
           }
-          console.error(address.to);
+          console.error(message.address.to);
           console.error(PostalService.actors)
-          const targetWorker = PostalService.actors.get(address.to)!;
+          const targetWorker = PostalService.actors.get(message.address.to)!;
           targetWorker.postMessage(message);
       }
     });

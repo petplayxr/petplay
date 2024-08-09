@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@roamhq/wrtc": "^0.8.0",
+    "@types/ws": "8.5.12",
     "ts-node": "^10.9.2",
     "ws": "^8.17.1"
   }

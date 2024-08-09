@@ -34,6 +34,11 @@ export class Postman {
   static customCB: Signal<unknown>;
   static portals: Array<ToAddress>;
   static webRTCInterface: WebRTCInterface;
+  private static channel: string | null = null;
+  static addressBook: Array<string>;
+
+
+  private static pendingChannelSet: string | null = null;
 
   public static functions: ActorFunctions = {
     //initialize actor
@@ -66,7 +71,7 @@ export class Postman {
     RTC: async (_payload) => {
       console.log("Initializing WebRTC interface");
       await Postman.initWebRTCInterface();
-    },  
+    },
 
     CONNECT: async (payload, address) => {
       const addr = address as MessageAddressReal;
@@ -85,6 +90,10 @@ export class Postman {
         payload: isConnected,
       });
     },
+    SET_CHANNEL: (payload) => {
+      const channelId = payload as string | null;
+      Postman.attemptSetChannel(channelId);
+    },
 
 
   };
@@ -95,7 +104,63 @@ export class Postman {
     state: BaseState,
   ) {
     Postman.state = state;
+    Postman.addressBook = Postman.state.addressBook;
     Postman.functions = { ...Postman.functions, ...functions };
+  }
+
+  private static broadcastInterval: number | null = null;
+  private static queryInterval: number | null = null;
+
+  private static attemptSetChannel(channelId: string | null) {
+    if (Postman.webRTCInterface.isSocketOpen()) {
+      Postman.setChannelImmediate(channelId);
+    } else {
+      console.log("WebSocket not open. Scheduling channel set attempt.");
+      Postman.pendingChannelSet = channelId;
+      Postman.scheduleSetChannelAttempt();
+    }
+  }
+
+  private static scheduleSetChannelAttempt() {
+    setTimeout(() => {
+      if (Postman.pendingChannelSet !== null) {
+        if (Postman.webRTCInterface.isSocketOpen()) {
+          Postman.setChannelImmediate(Postman.pendingChannelSet);
+        } else {
+          console.log("WebSocket still not open. Rescheduling channel set attempt.");
+          Postman.scheduleSetChannelAttempt();
+        }
+      }
+    }, 1000); // Check every second
+  }
+
+  private static setChannelImmediate(channelId: string | null) {
+    Postman.channel = channelId;
+    Postman.webRTCInterface.setChannel(channelId);
+    if (channelId) {
+      Postman.startChannelBroadcastAndQuery();
+    } else {
+      Postman.stopChannelBroadcastAndQuery();
+    }
+    Postman.pendingChannelSet = null;
+    console.log(`Channel set to: ${Postman.channel}`);
+  }
+
+  
+
+  private static startChannelBroadcastAndQuery() {
+    Postman.broadcastInterval = setInterval(() => {
+      Postman.webRTCInterface.broadcastAddress();
+    }, 30000); // Broadcast every 30 seconds
+
+    Postman.queryInterval = setInterval(() => {
+      Postman.webRTCInterface.queryAddresses();
+    }, 100000); // Query every 10 seconds
+  }
+
+  private static stopChannelBroadcastAndQuery() {
+    if (Postman.broadcastInterval) clearInterval(Postman.broadcastInterval);
+    if (Postman.queryInterval) clearInterval(Postman.queryInterval);
   }
 
   static runFunctions(message: Message) {
@@ -130,9 +195,14 @@ export class Postman {
   }
 
   static async posterr(worker: ActorWorker, message: Message) {
-    if (
-      Postman.webRTCInterface
-    ) {
+    const addr = message.address as MessageAddressReal;
+    if (Postman.webRTCInterface && Postman.addressBook.includes(addr.to)) {
+      Postman.webRTCInterface.sendToNodeProcess({
+        type: "send_message",
+        targetPeerId: addr.to,
+        payload: message,
+      });
+    } else if (Postman.webRTCInterface) {
       //check portal
 
       Postman.portalCheckSignal = new Signal<boolean>();
@@ -178,6 +248,9 @@ export class Postman {
 
     return result;
   }
+  private static updateAddressBook(addresses: string[]) {
+    addresses.forEach(addr => Postman.state.addressBook.push(addr));
+  }
 
 
   static async initWebRTCInterface() {
@@ -190,16 +263,25 @@ export class Postman {
 
     Postman.webRTCInterface.onMessage((data) => {
       console.log("Received message from WebRTC interface:", data);
-      if (data.type === "webrtc_message_custom") {
+      if (data.type === "address_update") {
+        Postman.updateAddressBook(data.addresses);
+      } else if (data.type === "webrtc_message_custom") {
         const message = JSON.parse(data.rtcmessage) as Message;
         if (message.address.to === Postman.state.id) {
           Postman.runFunctions(message);
         } else {
           throw new Error("Message not to self");
         }
-      } else if (data.type === "query_dataPeersReturn") {
+      }
+      if (Postman.pendingChannelSet !== null) {
+        Postman.attemptSetChannel(Postman.pendingChannelSet);
+      }
+      
+      else if (data.type === "query_dataPeersReturn") {
         Postman.portalCheckSignal.trigger(data.rtcmessage);
       }
+
+
     });
   }
 }
