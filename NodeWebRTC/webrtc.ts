@@ -36,6 +36,7 @@ wsSignaling.on("message", (message) => {
   handleSignalingMessage(data);
 });
 
+
 function handleIPCMessage(data: any) {
   console.log("handleIPCMessage", data);
   switch (data.type) {
@@ -114,7 +115,7 @@ function createPeerConnection(targetPeerId: string) {
   };
 
   peerConnection.onicecandidate = (event) => {
-    console.log("ICE candidate", event.candidate);
+    //console.log("ICE candidate", event.candidate);
     if (event.candidate) {
       wsSignaling.send(JSON.stringify({
         to: targetPeerId,

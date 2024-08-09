@@ -9,7 +9,6 @@ export type ToAddress = typeof xToAddress.infer;
 export type BaseState = {
   name: string;
   id: string;
-  socket: WebSocket | null;
   [key: string]: unknown;
 };
 
@@ -118,9 +117,18 @@ export const xPayloadRTC = type({
   type: "'CONNECT'",
   payload: xToAddress,
 }).or({
+  type: "'CB:CONNECT'",
+  payload: "boolean",
+}).or({
   type: "'ADDREMOTE'",
   payload: xToAddress,
-});
+}).or({
+  type: "'JOIN_CHANNEL'",
+  payload: "string"
+}).or({
+  type: "'RECEIVEADDRESS'",
+  payload: "string"
+})
 
 export const xPayloadSignaling = type({
   type: "'STARTSERVER'",

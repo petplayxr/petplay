@@ -37,7 +37,7 @@ const functions: ActorFunctions = {
         console.log(state.id);
     },
     STDIN: (payload) => {
-        if (payload.startsWith("connect")){
+        if (payload.startsWith("connect")) {
             payload = payload.replace("connect", "");
             Postman.PostMessage(worker, {
                 address: { fm: state.id, to: state.overlayactor1 },
@@ -45,7 +45,7 @@ const functions: ActorFunctions = {
                 payload: payload,
             })
         }
-        if (payload.startsWith("addaddress")){
+        if (payload.startsWith("addaddress")) {
             payload = payload.replace("addaddress", "");
             Postman.PostMessage(worker, {
                 address: { fm: state.id, to: state.overlayactor1 },
@@ -53,7 +53,7 @@ const functions: ActorFunctions = {
                 payload: payload,
             })
         }
-        if (payload.startsWith("start")){
+        if (payload.startsWith("start")) {
             inputloop(state.inputactor, state.overlayactor1);
         }
 
@@ -67,64 +67,82 @@ async function main(_payload: Payload["MAIN"]) {
 
 
 
-/*     const net1actor = await Postman.create(worker, "netTestActor.ts", state);
-    const net2actor = await Postman.create(worker, "netTestActor.ts", state); */
+    const net1actor = await Postman.create(worker, "netTestActor.ts", state);
+    const net2actor = await Postman.create(worker, "netTestActor.ts", state);
 
-    const overlayactor1 = await Postman.create(worker, "overlayactor.ts", state);
+    await wait(5000);
+
+    console.log("trying to connect")
+
+/*     Postman.PostMessage(worker, {
+        address: { fm: state.id, to: net1actor },
+        type: "ASSIGNCHANNEL",
+        payload: "channel1",
+    })
+    Postman.PostMessage(worker, {
+        address: { fm: state.id, to: net2actor },
+        type: "ASSIGNCHANNEL",
+        payload: "channel1",
+    }) */
+
+
+
+    const error = await Postman.PostMessage(worker, {
+        address: { fm: state.id, to: net1actor },
+        type: "CONNECT",
+        payload: net2actor,
+    }, true)
+    if (!error) throw new Error("connect failed");
+
+    await wait(8000);
+    console.log("testing connection by commanding net2 to message net1")
+    Postman.PostMessage(worker, {
+        address: { fm: state.id, to: net2actor },
+        type: "MESSAGE",
+        payload: net1actor,
+    })
+
+
+
+
+    /* const overlayactor1 = await Postman.create(worker, "overlayactor.ts", state);
     state.overlayactor1 = overlayactor1;
 
     console.log()
 
     const inputactor = await Postman.create(worker, "inputactor.ts", state);
     state.inputactor = inputactor;
-
-    await wait(5000);
-/* 
-    Postman.PostMessage(worker, {
-        address: { fm: state.id, to: net1actor },
-        type: "CONNECT",
-        payload: net2actor,
-    }) */
-
-    
-
-
-    await wait(3000000);
+ */
 
 
 
-    //inputloop(inputactor, overlayactor1);
+    await wait(300);
 
-/* 
 
-    Postman.PostMessage(worker, {
-        address: { fm: state.id, to: net1actor },
-        type: "MESSAGE",
-        payload: net2actor,
-    }) */
+
 }
 
 async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
     while (true) {
-      const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData] = await Postman.PostMessage(worker, {
-        address: { fm: state.id, to: inputactor },
-        type: "GETCONTROLLERDATA",
-        payload: null,
-      }, true) as [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData];
-      console.log("inputstate:", inputstate[1].bState);
-  
-  
-  
-      if (inputstate[1].bState == 1) {
-        Postman.PostMessage(worker, {
-          address: { fm: state.id, to: overlayactor },
-          type: "SETOVERLAYLOCATION",
-          payload: inputstate[0].pose.mDeviceToAbsoluteTracking,
-        });
-  
-      }
+        const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData] = await Postman.PostMessage(worker, {
+            address: { fm: state.id, to: inputactor },
+            type: "GETCONTROLLERDATA",
+            payload: null,
+        }, true) as [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData];
+        console.log("inputstate:", inputstate[1].bState);
+
+
+
+        if (inputstate[1].bState == 1) {
+            Postman.PostMessage(worker, {
+                address: { fm: state.id, to: overlayactor },
+                type: "SETOVERLAYLOCATION",
+                payload: inputstate[0].pose.mDeviceToAbsoluteTracking,
+            });
+
+        }
     }
-  }
+}
 
 
 new Postman(worker, functions, state);
