@@ -16,7 +16,7 @@
       "type": "node",
       "program": "${workspaceFolder}/init.ts",
       "cwd": "${workspaceFolder}",
-      "console": "internalConsole",
+      "console": "externalTerminal",
       "outputCapture": "std",
       "autoAttachChildProcesses": true,
       "env": {},

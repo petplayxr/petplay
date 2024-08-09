@@ -159,7 +159,7 @@ async function main() {
     console.log("Overlay created and shown.");
     //#endregion
 
-    await wait(13000)
+    await wait(5000)
     syncloop()
 
 }
@@ -170,11 +170,11 @@ async function syncloop() {
       
         const m34 = GetOverlayTransformAbsolute();
         Postman.PostMessage(worker, {
-            address: { fm: state.id, to: state.addressbook },
+            address: { fm: state.id, to: state.addressBook },
             type: "SETOVERLAYLOCATION",
             payload: m34,
         });
-        await wait(100);
+        await wait(300);
     }
 }
 

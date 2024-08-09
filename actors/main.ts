@@ -24,7 +24,7 @@ const state: State & BaseState = {
   db: {},
   socket: null,
   numbah: 0,
-  addressbook: [],
+  addressBook: new Array<string>(),
 };
 
 const functions: ActorFunctions = {
@@ -43,7 +43,6 @@ async function main(_payload: Payload["MAIN"]) {
   console.log("main!");
 
   const overlayactor = await Postman.create(worker, "overlayactor.ts", state);
-  const overlayactor2 = await Postman.create(worker, "overlayactor2.ts", state);
   const inputactor = await Postman.create(worker, "inputactor.ts", state);
 
   Postman.PostMessage(worker, {
