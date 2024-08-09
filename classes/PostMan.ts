@@ -155,7 +155,7 @@ export class Postman {
 
     Postman.queryInterval = setInterval(() => {
       Postman.webRTCInterface.queryAddresses();
-    }, 100000); // Query every 10 seconds
+    }, 5000); // Query every 10 seconds
   }
 
   private static stopChannelBroadcastAndQuery() {
