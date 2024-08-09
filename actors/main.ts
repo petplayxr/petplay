@@ -79,6 +79,7 @@ async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
       });
 
     }
+    await wait(3000);
   }
 }
 

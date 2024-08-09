@@ -174,7 +174,7 @@ async function syncloop() {
             type: "SETOVERLAYLOCATION",
             payload: m34,
         });
-        await wait(300);
+        await wait(3000);
     }
 }
 
