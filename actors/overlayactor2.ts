@@ -48,7 +48,7 @@ const functions: ActorFunctions = {
     GETID: (_payload, address) => {
         // use a check here
         const addr = address as MessageAddressReal;
-        Postman.PostMessage(worker, {
+        Postman.PostMessage({
             address: { fm: state.id, to: addr.fm },
             type: "CB:GETID",
             payload: state.id,
@@ -59,7 +59,7 @@ const functions: ActorFunctions = {
 
         const m34 = GetOverlayTransformAbsolute();
 
-        Postman.PostMessage(worker, {
+        Postman.PostMessage({
             address: { fm: state.id, to: addr.fm },
             type: "CB:GETOVERLAYLOCATION",
             payload: m34,
@@ -169,7 +169,7 @@ async function syncloop() {
         console.log(state.addressbook);
 
         const m34 = GetOverlayTransformAbsolute();
-        Postman.PostMessage(worker, {
+        Postman.PostMessage({
             address: { fm: state.id, to: state.addressBook },
             type: "SETOVERLAYLOCATION",
             payload: m34,

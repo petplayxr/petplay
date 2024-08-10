@@ -39,7 +39,7 @@ const functions: ActorFunctions = {
     STDIN: (payload) => {
         if (payload.startsWith("connect")) {
             payload = payload.replace("connect", "");
-            Postman.PostMessage(worker, {
+            Postman.PostMessage({
                 address: { fm: state.id, to: state.overlayactor1 },
                 type: "CONNECT",
                 payload: payload,
@@ -47,7 +47,7 @@ const functions: ActorFunctions = {
         }
         if (payload.startsWith("addaddress")) {
             payload = payload.replace("addaddress", "");
-            Postman.PostMessage(worker, {
+            Postman.PostMessage({
                 address: { fm: state.id, to: state.overlayactor1 },
                 type: "ADDADDRESS",
                 payload: payload,
@@ -65,18 +65,18 @@ const functions: ActorFunctions = {
 async function main(_payload: Payload["MAIN"]) {
     console.log("main!");
 
-    const net1actor = await Postman.create(worker, "netTestActor.ts", state);
-    const net2actor = await Postman.create(worker, "netTestActor.ts", state);
+    const net1actor = await Postman.create("netTestActor.ts");
+    const net2actor = await Postman.create("netTestActor.ts");
 
-    Postman.PostMessage(worker, {
-        address: { fm: state.id, to: [net1actor, net2actor]},
+    Postman.PostMessage({
+        address: { fm: state.id, to: [net1actor, net2actor] },
         type: "SET_CHANNEL",
         payload: "muffin",
     })
 
     await wait(8000);
 
-    Postman.PostMessage(worker, {
+    Postman.PostMessage({
         address: { fm: state.id, to: net2actor },
         type: "MESSAGE",
         payload: net1actor,
@@ -89,7 +89,7 @@ async function main(_payload: Payload["MAIN"]) {
 
 async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
     while (true) {
-        const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData] = await Postman.PostMessage(worker, {
+        const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData] = await Postman.PostMessage({
             address: { fm: state.id, to: inputactor },
             type: "GETCONTROLLERDATA",
             payload: null,
@@ -99,7 +99,7 @@ async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
 
 
         if (inputstate[1].bState == 1) {
-            Postman.PostMessage(worker, {
+            Postman.PostMessage({
                 address: { fm: state.id, to: overlayactor },
                 type: "SETOVERLAYLOCATION",
                 payload: inputstate[0].pose.mDeviceToAbsoluteTracking,

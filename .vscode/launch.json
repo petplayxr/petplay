@@ -16,7 +16,7 @@
       "type": "node",
       "program": "${workspaceFolder}/init.ts",
       "cwd": "${workspaceFolder}",
-      "console": "externalTerminal",
+      "console": "internalConsole",
       "outputCapture": "std",
       "autoAttachChildProcesses": true,
       "env": {},
@@ -24,7 +24,9 @@
       "runtimeArgs": [
         "run",
         "--inspect-wait",
-        "--allow-all",
+        "-A",
+        "--allow-ffi",
+        "--unstable-ffi",
         "--unstable-net",
         "--unstable-worker-options",
         "--allow-read"
