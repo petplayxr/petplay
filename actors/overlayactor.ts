@@ -40,7 +40,7 @@ const state: State & BaseState = {
 const functions: ActorFunctions = {
     CUSTOMINIT: (_payload) => {
         Postman.functions?.RTC?.(null, state.id);
-        main()
+        //main()
     },
     LOG: (_payload) => {
         console.log(state.id);
@@ -53,6 +53,11 @@ const functions: ActorFunctions = {
             type: "CB:GETID",
             payload: state.id,
         }, false);
+    },
+    STARTOVERLAY: (payload, _address) => {
+
+        startOverlay(payload.name, payload.texture);
+
     },
     GETOVERLAYLOCATION: (_payload, address) => {
         const addr = address as MessageAddressReal;
@@ -104,7 +109,11 @@ function GetOverlayTransformAbsolute(): OpenVR.HmdMatrix34 {
     return m34;
 }
 
-async function main() {
+function startOverlay(overlayname, ovelaytexture) {
+    mainX(overlayname, ovelaytexture);
+}
+
+async function mainX(overlaymame: string, overlaytexture: string) {
 
     //#region init openvr
     let error;
@@ -129,13 +138,13 @@ async function main() {
 
     //#region overlay
     const overlayHandlePTR = P.BigUint64P<OpenVR.OverlayHandle>();
-    error = overlay.CreateOverlay(state.name, state.name, overlayHandlePTR);
+    error = overlay.CreateOverlay(overlaymame, overlaymame, overlayHandlePTR);
     const overlayHandle = new Deno.UnsafePointerView(overlayHandlePTR).getBigUint64();
     state.overlayHandle = overlayHandle;
 
     console.log(`Overlay created with handle: ${overlayHandle}`);
 
-    const imgpath = Deno.realPathSync("./resources/P1.png");
+    const imgpath = Deno.realPathSync(overlaytexture);
     overlay.SetOverlayFromFile(overlayHandle, imgpath);
     overlay.SetOverlayWidthInMeters(overlayHandle, 0.1);
     overlay.ShowOverlay(overlayHandle);
@@ -174,7 +183,7 @@ async function syncloop() {
             type: "SETOVERLAYLOCATION",
             payload: m34,
         });
-        await wait(3000);
+        await wait(100);
     }
 }
 

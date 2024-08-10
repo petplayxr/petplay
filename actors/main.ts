@@ -43,15 +43,36 @@ async function main(_payload: Payload["MAIN"]) {
   console.log("main!");
 
   const overlayactor = await Postman.create("overlayactor.ts");
-  const inputactor = await Postman.create("inputactor.ts");
+  const overlayactor2 = await Postman.create("overlayactor.ts");
 
   Postman.PostMessage({
     address: { fm: state.id, to: overlayactor },
+    type: "STARTOVERLAY",
+    payload: {
+      name: "overlay1",
+      texture: "./resources/P1.png",
+    },
+  });
+
+  Postman.PostMessage({
+    address: { fm: state.id, to: overlayactor2 },
+    type: "STARTOVERLAY",
+    payload: {
+      name: "overlay2",
+      texture: "./resources/P2.png",
+    },
+  });
+
+  const inputactor = await Postman.create("inputactor.ts");
+
+
+
+
+  Postman.PostMessage({
+    address: { fm: state.id, to: [overlayactor, overlayactor2] },
     type: "SET_CHANNEL",
     payload: "muffin",
   })
-
-  await wait(8000);
 
 
   inputloop(inputactor, overlayactor);
@@ -79,7 +100,7 @@ async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
       });
 
     }
-    await wait(3000);
+    await wait(1);
   }
 }
 

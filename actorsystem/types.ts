@@ -179,6 +179,12 @@ export const xPayloadPetplay = type({
 }).or({
   type: "'CB:GETCONTROLLERDATA'|'GETCONTROLLERDATA'",
   payload: "any",
+}).or({
+  type: "'STARTOVERLAY'",
+  payload: {
+    name: "string",
+    texture: "string",
+  },
 })
 
 export const xPayload = type(

@@ -25,8 +25,7 @@ const state: State & BaseState = {
     name: "sub",
     inputerror: OpenVR.InputError.VRInputError_None,
     socket: null,
-
-    addressbook: [],
+    addressBook: new Array<string>(),
 };
 
 const functions: ActorFunctions = {
