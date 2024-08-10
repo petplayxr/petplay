@@ -47,10 +47,17 @@ async function main(_payload: Payload["MAIN"]) {
 
   Postman.PostMessage({
     address: { fm: state.id, to: overlayactor },
+    type: "ADDADDRESS",
+    payload: overlayactor2,
+  });
+
+  Postman.PostMessage({
+    address: { fm: state.id, to: overlayactor },
     type: "STARTOVERLAY",
     payload: {
       name: "overlay1",
       texture: "./resources/P1.png",
+      sync: true,
     },
   });
 
@@ -60,6 +67,7 @@ async function main(_payload: Payload["MAIN"]) {
     payload: {
       name: "overlay2",
       texture: "./resources/P2.png",
+      sync: false,
     },
   });
 
@@ -68,11 +76,11 @@ async function main(_payload: Payload["MAIN"]) {
 
 
 
-  Postman.PostMessage({
+  /* Postman.PostMessage({
     address: { fm: state.id, to: [overlayactor, overlayactor2] },
     type: "SET_CHANNEL",
     payload: "muffin",
-  })
+  }) */
 
 
   inputloop(inputactor, overlayactor);

@@ -55,9 +55,12 @@ const functions: ActorFunctions = {
         }, false);
     },
     STARTOVERLAY: (payload, _address) => {
+        
+        mainX(payload.name, payload.texture, payload.sync);
 
-        startOverlay(payload.name, payload.texture);
-
+    },
+    ADDADDRESS: (payload, _address) => {
+        state.addressBook.push(payload);
     },
     GETOVERLAYLOCATION: (_payload, address) => {
         const addr = address as MessageAddressReal;
@@ -109,11 +112,7 @@ function GetOverlayTransformAbsolute(): OpenVR.HmdMatrix34 {
     return m34;
 }
 
-function startOverlay(overlayname, ovelaytexture) {
-    mainX(overlayname, ovelaytexture);
-}
-
-async function mainX(overlaymame: string, overlaytexture: string) {
+async function mainX(overlaymame: string, overlaytexture: string, sync: boolean) {
 
     //#region init openvr
     let error;
@@ -169,7 +168,10 @@ async function mainX(overlaymame: string, overlaytexture: string) {
     //#endregion
 
     await wait(5000)
-    syncloop()
+
+    if (sync) {
+        syncloop()
+    }
 
 }
 
@@ -183,7 +185,9 @@ async function syncloop() {
             type: "SETOVERLAYLOCATION",
             payload: m34,
         });
-        await wait(100);
+        await wait(300);
+        console.log("teaqu" + state.addressbook);
+        console.log("teaqu" + m34.m[0][3]);
     }
 }
 
