@@ -42,10 +42,10 @@ const functions: ActorFunctions = {
 async function main(_payload: Payload["MAIN"]) {
   console.log("main!");
 
-  const overlayactor = await Postman.create(worker, "overlayactor.ts", state);
-  const inputactor = await Postman.create(worker, "inputactor.ts", state);
+  const overlayactor = await Postman.create("overlayactor.ts");
+  const inputactor = await Postman.create("inputactor.ts");
 
-  Postman.PostMessage(worker, {
+  Postman.PostMessage({
     address: { fm: state.id, to: overlayactor },
     type: "SET_CHANNEL",
     payload: "muffin",
@@ -62,7 +62,7 @@ async function main(_payload: Payload["MAIN"]) {
 
 async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
   while (true) {
-    const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData] = await Postman.PostMessage(worker, {
+    const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData] = await Postman.PostMessage({
       address: { fm: state.id, to: inputactor },
       type: "GETCONTROLLERDATA",
       payload: null,
@@ -72,7 +72,7 @@ async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
 
 
     if (inputstate[1].bState == 1) {
-      Postman.PostMessage(worker, {
+      Postman.PostMessage({
         address: { fm: state.id, to: overlayactor },
         type: "SETOVERLAYLOCATION",
         payload: inputstate[0].pose.mDeviceToAbsoluteTracking,

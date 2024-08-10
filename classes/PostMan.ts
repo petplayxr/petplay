@@ -10,7 +10,6 @@ import {
   PayloadHandler,
   System,
   ToAddress,
-  worker,
 } from "../actorsystem/types.ts";
 import { ActorWorker } from "../actorsystem/ActorWorker.ts";
 import { wait } from "../actorsystem/utils.ts";
@@ -20,6 +19,7 @@ import * as JSON from "../classes/JSON.ts";
 
 
 export const OnMessage = (handler: (message: Message) => void) => {
+  const worker = self as unknown as ActorWorker;
   worker.onmessage = (event: MessageEvent) => {
     const message = event.data as Message;
     handler(message);
@@ -27,7 +27,7 @@ export const OnMessage = (handler: (message: Message) => void) => {
 };
 
 export class Postman {
-  static worker: ActorWorker;
+  static worker: ActorWorker = self as unknown as ActorWorker;
   static state: BaseState;
   static creationSignal: Signal<ToAddress>;
   static portalCheckSignal: Signal<boolean>;
@@ -44,7 +44,7 @@ export class Postman {
     //initialize actor
     INIT: (payload) => {
       Postman.state.id = `${Postman.state.name}@${crypto.randomUUID()}`;
-      Postman.PostMessage(worker, {
+      Postman.PostMessage({
         address: { fm: Postman.state.id, to: System },
         type: "LOADED",
         payload: Postman.state.id,
@@ -65,7 +65,7 @@ export class Postman {
     //terminate
     SHUT: (_payload) => {
       console.log("Shutting down...");
-      worker.terminate();
+      this.worker.terminate();
     },
 
     RTC: async (_payload) => {
@@ -84,7 +84,7 @@ export class Postman {
 
       // This needs to be adjusted based on how we determine connection status
       const isConnected = true; // Placeholder
-      Postman.PostMessage(worker, {
+      Postman.PostMessage({
         address: { fm: Postman.state.id, to: addr.fm },
         type: "CB:CONNECT",
         payload: isConnected,
@@ -151,7 +151,7 @@ export class Postman {
   private static startChannelBroadcastAndQuery() {
     Postman.broadcastInterval = setInterval(() => {
       Postman.webRTCInterface.broadcastAddress();
-    }, 30000); // Broadcast every 30 seconds
+    }, 3000); // Broadcast every 30 seconds
 
     Postman.queryInterval = setInterval(() => {
       Postman.webRTCInterface.queryAddresses();
@@ -178,23 +178,22 @@ export class Postman {
   }
 
   static async PostMessage(
-    worker: ActorWorker,
     message: Message,
     cb?: boolean,
   ): Promise<unknown | undefined> {
     if (cb) {
       console.log("cb enabled");
       Postman.customCB = new Signal<unknown>();
-      Postman.posterr(worker, message);
+      Postman.posterr(message);
       const result = await Postman.customCB.wait();
       return result;
     } //use return false if fail to send msg for some reason
     else {
-      Postman.posterr(worker, message);
+      Postman.posterr(message);
     }
   }
 
-  static async posterr(worker: ActorWorker, message: Message) {
+  static async posterr(message: Message) {
     const addr = message.address as MessageAddressReal;
     if (Postman.webRTCInterface && Postman.addressBook.includes(addr.to)) {
       Postman.webRTCInterface.sendToNodeProcess({
@@ -223,23 +222,21 @@ export class Postman {
         });
       } else {
         console.error("trough rtc failed, trying locally");
-        worker.postMessage(message);
+        this.worker.postMessage(message);
       }
     }
     else {
-      worker.postMessage(message);
+      this.worker.postMessage(message);
     }
   }
 
   static async create(
-    worker: ActorWorker,
     actorname: string,
-    state: BaseState,
   ): Promise<ToAddress> {
     Postman.creationSignal = new Signal<ToAddress>();
 
-    worker.postMessage({
-      address: { fm: state.id, to: System },
+    this.worker.postMessage({
+      address: { fm: Postman.state.id, to: System },
       type: "CREATE",
       payload: actorname,
     });

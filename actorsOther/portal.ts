@@ -80,7 +80,7 @@ function lookup(name: string, returnAddress: ToAddress) {
   const address = state.registry[name];
   const result = address ? address : `No address found for ${name}`;
 
-  Postman.PostMessage(worker, {
+  Postman.PostMessage({
     address: { fm: state.id, to: returnAddress },
     type: "CB:LOOKUP",
     payload: result,
@@ -93,7 +93,7 @@ function getAllEntries(returnAddress: ToAddress) {
     return null;
   }
 
-  Postman.PostMessage(worker, {
+  Postman.PostMessage({
     address: { fm: state.id, to: returnAddress },
     type: "CB:GET_ALL",
     payload: Object.entries(state.registry),

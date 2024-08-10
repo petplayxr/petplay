@@ -39,7 +39,7 @@ const functions: ActorFunctions = {
     GETID: (_payload, address) => {
         // use a check here
         const addr = address as MessageAddressReal;
-        Postman.PostMessage(worker, {
+        Postman.PostMessage({
             address: { fm: state.id, to: addr.fm },
             type: "CB:GETID",
             payload: state.id,
@@ -70,8 +70,8 @@ const functions: ActorFunctions = {
             OpenVR.k_ulInvalidInputValueHandle
         );
         const leftTriggerData = OpenVR.InputDigitalActionDataStruct.read(triggerDataViewL);
-        
-        Postman.PostMessage(worker, {
+
+        Postman.PostMessage({
             address: { fm: state.id, to: addr.fm },
             type: "CB:GETCONTROLLERDATA",
             payload: [leftPoseData, leftTriggerData]

@@ -36,7 +36,7 @@ const functions: ActorFunctions = {
     },
     GETCOORDINATE: (_payload, address) => {
         const addr = address as MessageAddressReal;
-        Postman.PostMessage(worker, {
+        Postman.PostMessage({
             address: { fm: state.id, to: addr.fm },
             type: "CB:GETCOORDINATE",
             payload: state.coordinate
