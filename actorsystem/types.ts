@@ -144,6 +144,9 @@ export const xPayloadRTC = type({
 }).or({
   type: "'RECEIVEADDRESS'",
   payload: "string"
+}).or({
+  type: "'ADDADDRESS'",
+  payload: xToAddress,
 })
 
 export const xPayloadSignaling = type({
@@ -184,6 +187,7 @@ export const xPayloadPetplay = type({
   payload: {
     name: "string",
     texture: "string",
+    sync: "boolean",
   },
 })
 

@@ -1,11 +1,12 @@
 import { Message } from "https://deno.land/x/osc@v0.1.0/mod.ts";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 type Callback = (address: string, value: number) => void;
 
 export class OscSubscriber {
   private subscribers: Callback[] = [];
 
-  constructor(private addresses: string[]) {}
+  constructor(private addresses: string[]) { }
 
   public subscribe(callback: Callback) {
     this.subscribers.push(callback);
@@ -20,7 +21,7 @@ export class OscSubscriber {
 
 
   public async listenForOscMessages() {
-    console.log("Listening for OSC messages...");
+    CustomLogger.log("class", "Listening for OSC messages...");
     const conn = Deno.listenDatagram({ port: 9001, transport: "udp" });
     const addressSet = new Set(this.addresses);
 

@@ -16,6 +16,7 @@ import { wait } from "../actorsystem/utils.ts";
 import { WebRTCInterface } from "./webrtcInterface.ts";
 import { getAvailablePort } from "jsr:@std/net";
 import * as JSON from "../classes/JSON.ts";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 
 export const OnMessage = (handler: (message: Message) => void) => {
@@ -50,7 +51,7 @@ export class Postman {
         payload: Postman.state.id,
       });
       Postman.functions.CUSTOMINIT?.(null, Postman.state.id);
-      console.log(`initied ${Postman.state.id} actor with args:`, payload);
+      CustomLogger.log("class", `initied ${Postman.state.id} actor with args:`, payload);
     },
     CB: (payload) => {
       if (!Postman.customCB) throw new Error("UNEXPECTED CALLBACK");
@@ -64,12 +65,12 @@ export class Postman {
 
     //terminate
     SHUT: (_payload) => {
-      console.log("Shutting down...");
+      CustomLogger.log("class", "Shutting down...");
       this.worker.terminate();
     },
 
     RTC: async (_payload) => {
-      console.log("Initializing WebRTC interface");
+      CustomLogger.log("class", "Initializing WebRTC interface");
       await Postman.initWebRTCInterface();
     },
 
@@ -115,7 +116,7 @@ export class Postman {
     if (Postman.webRTCInterface.isSocketOpen()) {
       Postman.setChannelImmediate(channelId);
     } else {
-      console.log("WebSocket not open. Scheduling channel set attempt.");
+      CustomLogger.log("class", "WebSocket not open. Scheduling channel set attempt.");
       Postman.pendingChannelSet = channelId;
       Postman.scheduleSetChannelAttempt();
     }
@@ -127,7 +128,7 @@ export class Postman {
         if (Postman.webRTCInterface.isSocketOpen()) {
           Postman.setChannelImmediate(Postman.pendingChannelSet);
         } else {
-          console.log("WebSocket still not open. Rescheduling channel set attempt.");
+          CustomLogger.log("class", "WebSocket still not open. Rescheduling channel set attempt.");
           Postman.scheduleSetChannelAttempt();
         }
       }
@@ -143,10 +144,10 @@ export class Postman {
       Postman.stopChannelBroadcastAndQuery();
     }
     Postman.pendingChannelSet = null;
-    console.log(`Channel set to: ${Postman.channel}`);
+    CustomLogger.log("class", `Channel set to: ${Postman.channel}`);
   }
 
-  
+
 
   private static startChannelBroadcastAndQuery() {
     Postman.broadcastInterval = setInterval(() => {
@@ -166,7 +167,7 @@ export class Postman {
   static runFunctions(message: Message) {
     if (notAddressArray(message.address)) {
       const address = message.address as MessageAddressReal;
-      console.log(
+      CustomLogger.log("class",
         `[${address.to}]Actor running function, type: ${message.type}, payload: ${JSON.stringify(message.payload)}`,
       );
 
@@ -182,7 +183,7 @@ export class Postman {
     cb?: boolean,
   ): Promise<unknown | undefined> {
     if (cb) {
-      console.log("cb enabled");
+      CustomLogger.log("class", "cb enabled");
       Postman.customCB = new Signal<unknown>();
       Postman.posterr(message);
       const result = await Postman.customCB.wait();
@@ -205,9 +206,9 @@ export class Postman {
       //check portal
 
       Postman.portalCheckSignal = new Signal<boolean>();
-      console.log("trying to query dataPeers")
-      console.log(Postman.state.id)
-      console.log(message.address.to)
+      CustomLogger.log("class", "trying to query dataPeers")
+      CustomLogger.log("class", Postman.state.id)
+      CustomLogger.log("class", message.address.to)
       Postman.webRTCInterface.sendToNodeProcess({
         type: "query_dataPeers",
         from: Postman.state.id,
@@ -221,7 +222,7 @@ export class Postman {
           payload: message,
         });
       } else {
-        console.error("trough rtc failed, trying locally");
+        CustomLogger.error("classerr", "trough rtc failed, trying locally");
         this.worker.postMessage(message);
       }
     }
@@ -259,7 +260,7 @@ export class Postman {
     await Postman.webRTCInterface.start();
 
     Postman.webRTCInterface.onMessage((data) => {
-      console.log("Received message from WebRTC interface:", data);
+      CustomLogger.log("class", "Received message from WebRTC interface:", data);
       if (data.type === "address_update") {
         Postman.updateAddressBook(data.addresses);
       } else if (data.type === "webrtc_message_custom") {
@@ -273,7 +274,7 @@ export class Postman {
       if (Postman.pendingChannelSet !== null) {
         Postman.attemptSetChannel(Postman.pendingChannelSet);
       }
-      
+
       else if (data.type === "query_dataPeersReturn") {
         Postman.portalCheckSignal.trigger(data.rtcmessage);
       }

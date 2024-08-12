@@ -9,6 +9,7 @@ import { OnMessage, Postman } from "../classes/PostMan.ts";
 import { wait } from "../actorsystem/utils.ts";
 import { OpenVRType } from "../OpenVR_TS_Bindings_Deno/utils.ts";
 import * as OpenVR from "../OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 //main process
 
@@ -32,15 +33,17 @@ const functions: ActorFunctions = {
     main(payload);
   },
   LOG: (_payload) => {
-    console.log(state.id);
+    CustomLogger.log("actor", state.id);
   },
   STDIN: (payload) => {
-    console.log("stdin:", payload);
+    CustomLogger.log("actor", "stdin:", payload);
   },
 };
 
 async function main(_payload: Payload["MAIN"]) {
-  console.log("main!");
+  CustomLogger.setChannel("syncloop")
+
+  CustomLogger.log("actor", "main!");
 
   const overlayactor = await Postman.create("overlayactor.ts");
   const overlayactor2 = await Postman.create("overlayactor.ts");
@@ -96,7 +99,6 @@ async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
       type: "GETCONTROLLERDATA",
       payload: null,
     }, true) as [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData];
-    console.log("inputstate:", inputstate[1].bState);
 
 
 

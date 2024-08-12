@@ -1,3 +1,5 @@
+import { CustomLogger } from "../classes/customlogger.ts";
+
 export function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(() => resolve(), ms));
 }
@@ -18,7 +20,7 @@ export class Signal<T> {
 
   trigger(value: T): void {
     if (this.resolve) {
-      console.log("signal triggered");
+      CustomLogger.log("actorsys", "signal triggered");
       this.resolve(value);
     }
   }

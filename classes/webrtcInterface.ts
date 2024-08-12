@@ -1,5 +1,6 @@
 import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
-import {wait } from "../actorsystem/utils.ts";
+import { wait } from "../actorsystem/utils.ts";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 export class WebRTCInterface {
   private nodeSocket: WebSocket | null = null;
@@ -30,7 +31,7 @@ export class WebRTCInterface {
   public isSocketOpen(): boolean {
     return this.nodeSocket !== null && this.nodeSocket.readyState === WebSocket.OPEN;
   }
-  
+
   public async setChannel(channelId: string | null) {
     if (this.isSocketOpen()) {
       await wait(1000)
@@ -101,7 +102,7 @@ export class WebRTCInterface {
         const lines = decoder.decode(value).trim().split("\n");
         for (const line of lines) {
           return
-          if (line) console.log(`[RTC NODE ${idPrefix} ${type}]: ${line}`);
+          if (line) CustomLogger.log("class", `[RTC NODE ${idPrefix} ${type}]: ${line}`);
         }
       }
     })();
@@ -116,7 +117,7 @@ export class WebRTCInterface {
         const { socket, response } = Deno.upgradeWebSocket(req);
 
         socket.addEventListener("open", () => {
-          console.log("IPC client connected!");
+          CustomLogger.log("class", "IPC client connected!");
           this.nodeSocket = socket;
           resolve(socket);
         });
@@ -127,12 +128,12 @@ export class WebRTCInterface {
 
         return response;
       });
-      console.log(`IPC server is running on ws://localhost:${this.ipcPort}`);
+      CustomLogger.log("class", `IPC server is running on ws://localhost:${this.ipcPort}`);
     });
   }
 
   private handleNodeMessage(data: any) {
-    console.log("Received message from Node process:", data);
+    CustomLogger.log("class", "Received message from Node process:", data);
     if (data.type === "address_update") {
       this.updateAddressBook(data.addresses);
     }
@@ -146,7 +147,7 @@ export class WebRTCInterface {
       this.nodeSocket!.send(JSON.stringify(message));
       return true;
     } else {
-      console.error("Node socket is not open. Cannot send message.");
+      CustomLogger.error("classerr", "Node socket is not open. Cannot send message.");
       return false;
     }
   }

@@ -10,6 +10,7 @@ import { wait } from "../actorsystem/utils.ts";
 import * as OpenVR from "../OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
 import { P } from "../OpenVR_TS_Bindings_Deno/pointers.ts";
 import { stringToPointer } from "../OpenVR_TS_Bindings_Deno/utils.ts";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 //a steamvr overlay
 
@@ -28,6 +29,7 @@ const state: State & BaseState = {
     db: {},
     name: "overlay1",
     socket: null,
+    sync: false,
     overlayClass: null,
     OverlayTransform: null,
     numbah: 0,
@@ -43,7 +45,7 @@ const functions: ActorFunctions = {
         //main()
     },
     LOG: (_payload) => {
-        console.log(state.id);
+        CustomLogger.log("actor", state.id);
     },
     GETID: (_payload, address) => {
         // use a check here
@@ -55,7 +57,7 @@ const functions: ActorFunctions = {
         }, false);
     },
     STARTOVERLAY: (payload, _address) => {
-        
+
         mainX(payload.name, payload.texture, payload.sync);
 
     },
@@ -80,6 +82,12 @@ const functions: ActorFunctions = {
 };
 
 function setOverlayTransformAbsolute(transform: OpenVR.HmdMatrix34) {
+    if (state.sync== false)
+    {
+        CustomLogger.log("syncloop", "set transform " + transform.m[0][3]);
+    }
+
+
     const overlay = state.overlayClass!;
     const transformBuffer = new ArrayBuffer(OpenVR.HmdMatrix34Struct.byteSize);
     const transformView = new DataView(transformBuffer);
@@ -104,7 +112,7 @@ function GetOverlayTransformAbsolute(): OpenVR.HmdMatrix34 {
 
     error = overlay.GetOverlayTransformAbsolute(overlayHandle, TrackingUniverseOriginPTR, m34ptr);
     if (error !== OpenVR.OverlayError.VROverlayError_None) {
-        console.error(`Failed to get overlay transform: ${OpenVR.OverlayError[error]}`);
+        CustomLogger.error("actorerr", `Failed to get overlay transform: ${OpenVR.OverlayError[error]}`);
         throw new Error("Failed to get overlay transform");
     }
     const m34 = OpenVR.HmdMatrix34Struct.read(hmd34view) as OpenVR.HmdMatrix34;
@@ -113,6 +121,9 @@ function GetOverlayTransformAbsolute(): OpenVR.HmdMatrix34 {
 }
 
 async function mainX(overlaymame: string, overlaytexture: string, sync: boolean) {
+    CustomLogger.setChannel("syncloop")
+
+    state.sync = sync;
 
     //#region init openvr
     let error;
@@ -125,7 +136,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
     const errorX = Deno.UnsafePointer.of(new Int32Array(1))!;
     OpenVR.VR_InitInternal(errorX, OpenVR.ApplicationType.VRApplication_Overlay);
     error = new Deno.UnsafePointerView(errorX).getInt32();
-    console.log(error)
+    CustomLogger.log("actor", error)
 
 
     const overlayPtr = OpenVR.VR_GetGenericInterface(stringToPointer(OpenVR.IVROverlay_Version), TypeSafeINITERRPTR);
@@ -141,7 +152,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
     const overlayHandle = new Deno.UnsafePointerView(overlayHandlePTR).getBigUint64();
     state.overlayHandle = overlayHandle;
 
-    console.log(`Overlay created with handle: ${overlayHandle}`);
+    CustomLogger.log("actor", `Overlay created with handle: ${overlayHandle}`);
 
     const imgpath = Deno.realPathSync(overlaytexture);
     overlay.SetOverlayFromFile(overlayHandle, imgpath);
@@ -164,7 +175,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
     state.trackingUniverseOriginPTR = Deno.UnsafePointer.of<OpenVR.TrackingUniverseOrigin>(new Int32Array(1))!;
     setOverlayTransformAbsolute(initialTransform)
 
-    console.log("Overlay created and shown.");
+    CustomLogger.log("actor", "Overlay created and shown.");
     //#endregion
 
     await wait(5000)
@@ -177,7 +188,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
 
 async function syncloop() {
     while (true) {
-        console.log(state.addressbook);
+
 
         const m34 = GetOverlayTransformAbsolute();
         Postman.PostMessage({
@@ -185,9 +196,11 @@ async function syncloop() {
             type: "SETOVERLAYLOCATION",
             payload: m34,
         });
-        await wait(300);
-        console.log("teaqu" + state.addressbook);
-        console.log("teaqu" + m34.m[0][3]);
+        await wait(30);
+        CustomLogger.log("syncloop1", "adrbook " + state.addressBook);
+        CustomLogger.log("syncloop1", "m34 " + m34.m[0][3]);
+
+
     }
 }
 

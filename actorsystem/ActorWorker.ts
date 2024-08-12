@@ -6,12 +6,13 @@ import {
 } from "./types.ts";
 import { PostalService } from "./PostalService.ts";
 import { Signal } from "./utils.ts";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 export class ActorWorker extends Worker {
     static signal: Signal<ToAddress>;
     constructor(scriptURL: string | URL, options?: WorkerOptions) {
         super(scriptURL, options);
-        console.log("ActorWorker constructor called");
+        CustomLogger.log("actorsys", "ActorWorker constructor called");
     }
 
     postMessage(message: Message, transfer: Transferable[]): void;
@@ -24,7 +25,7 @@ export class ActorWorker extends Worker {
         const address = message.address as MessageAddressReal;
 
         if (PostalService.actors.has(address.to) || address.to == System) {
-            console.log(
+            CustomLogger.log("actorsys",
                 `sending from actor ${address.fm} to actor ${address.to}`,
             );
 
@@ -34,14 +35,14 @@ export class ActorWorker extends Worker {
                 super.postMessage(message, transferOrOptions);
             }
         } else if (address.fm == System && address.to == null) {
-            console.log("sending from system to actor");
+            CustomLogger.log("actorsys", "sending from system to actor");
             if (Array.isArray(transferOrOptions)) {
                 super.postMessage(message, transferOrOptions);
             } else {
                 super.postMessage(message, transferOrOptions);
             }
         } else {
-            console.log(address.to);
+            CustomLogger.log("actorsys", address.to);
             throw new Error("No route found");
         }
     }

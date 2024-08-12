@@ -1,8 +1,9 @@
 // IPCOVRSpawner.ts
 import { getAvailablePort } from "jsr:@std/net";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 class ExecRunner {
-  constructor(private executablePath: string) {}
+  constructor(private executablePath: string) { }
 
   async run(args: string[]) {
     const command = new Deno.Command(this.executablePath, {
@@ -12,7 +13,7 @@ class ExecRunner {
     });
 
     const child = command.spawn();
-    console.log(`Spawned child pid: ${child.pid}`);
+    CustomLogger.log("class", `Spawned child pid: ${child.pid}`);
 
     // Function to handle continuous stream reading and logging
     const continuouslyLogStream = async (
@@ -25,10 +26,10 @@ class ExecRunner {
           const { done, value } = await reader.read();
           if (done) break;
           const text = new TextDecoder().decode(value);
-          console.log(`${label}: ${text}`);
+          CustomLogger.log("class", `${label}: ${text}`);
         }
       } catch (err) {
-        console.error(`Error reading from ${label}:`, err);
+        CustomLogger.error("classerr", `Error reading from ${label}:`, err);
       } finally {
         reader.releaseLock();
       }
@@ -41,13 +42,13 @@ class ExecRunner {
     // Monitor the process exit status in the background
     const status = await child.status;
     if (status.code !== 0) {
-      console.error(`Process exited with code ${status.code}`);
+      CustomLogger.error("classerr", `Process exited with code ${status.code}`);
     }
 
     // Ensure resources are cleaned up
     child.stdout.cancel(); // Cancel the stream to prevent memory leaks
     child.stderr.cancel();
-    console.log("Resources have been cleaned up.");
+    CustomLogger.log("class", "Resources have been cleaned up.");
   }
 }
 
@@ -70,31 +71,31 @@ class OVRInterface {
       throw new Error("Failed to get an available port.");
     }
     this.port = availablePort;
-    console.log(`Using port: ${this.port}`);
+    CustomLogger.log("class", `Using port: ${this.port}`);
 
     OVRInterface.overlayPortMap.set(this.overlayId, this.port);
 
     this.execRunner.run([this.port.toString()]);
-    console.log(`Executed ${this.executablePath} with port ${this.port}`);
+    CustomLogger.log("class", `Executed ${this.executablePath} with port ${this.port}`);
 
     this.conn = await Deno.connect({ hostname: "127.0.0.1", port: this.port });
-    console.log(`Connected to server on port ${this.port}`);
+    CustomLogger.log("class", `Connected to server on port ${this.port}`);
 
     // Start listening for incoming data
     this.receive();
   }
 
   async send(data: string) {
-        if (!this.conn) {
+    if (!this.conn) {
       throw new Error("No connection established.");
     }
     const encoder = new TextEncoder();
-        await this.conn.write(encoder.encode(data + "\n"));
-    //console.log(`Sent data: ${data}`);
+    await this.conn.write(encoder.encode(data + "\n"));
+    //CustomLogger.log("class", `Sent data: ${data}`);
   }
 
   async receive() {
-        if (!this.conn) {
+    if (!this.conn) {
       throw new Error("No connection established.");
     }
     const buffer = new Uint8Array(4096);
@@ -104,7 +105,7 @@ class OVRInterface {
     while (true) {
       const bytesRead = await this.conn.read(buffer);
       if (bytesRead === null) {
-        console.log("connection closed");
+        CustomLogger.log("class", "connection closed");
         break;
       }
       const chunk = decoder.decode(buffer.subarray(0, bytesRead), {
@@ -120,21 +121,21 @@ class OVRInterface {
           lengthPrefix === -1 || dataPrefix === -1 || lengthPrefix >= dataPrefix
         ) {
           // Not enough data to determine the length or data, wait for more
-          /* console.log("not enough data2") */
+          /* CustomLogger.log("class", "not enough data2") */
           break;
         }
 
         const lengthStr = partialMessage.slice(lengthPrefix + 3, dataPrefix);
         const messageLength = parseInt(lengthStr, 10);
         if (isNaN(messageLength)) {
-          console.log("invalid message length");
+          CustomLogger.log("class", "invalid message length");
           throw new Error(`Invalid message length: ${lengthStr}`);
         }
 
         // Check if we have the complete message
         if (partialMessage.length < dataPrefix + 3 + messageLength) {
           // Not enough data, wait for more
-          /* console.log("not enough data1") */
+          /* CustomLogger.log("class", "not enough data1") */
           break;
         }
 
@@ -152,7 +153,7 @@ class OVRInterface {
 
     // Handle any remaining partial message (if necessary)
     if (partialMessage.length > 0) {
-      console.log("partial message");
+      CustomLogger.log("class", "partial message");
       this.notifySubscribers(partialMessage);
     }
   }
@@ -163,7 +164,7 @@ class OVRInterface {
       this.conn = null;
     }
     OVRInterface.overlayPortMap.delete(this.overlayId);
-    console.log("TCP connection has been closed and port mapping removed.");
+    CustomLogger.log("class", "TCP connection has been closed and port mapping removed.");
   }
 
   static getPortByOverlayId(overlayId: string): number | undefined {

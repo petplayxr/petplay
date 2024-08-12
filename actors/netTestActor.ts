@@ -10,6 +10,7 @@ import {
 import { wait } from "../actorsystem/utils.ts";
 
 import { OnMessage, Postman } from "../classes/PostMan.ts";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 type State = {
   id: string;
@@ -31,13 +32,13 @@ const functions: ActorFunctions = {
     NET()
   },
   LOG: (_payload) => {
-    console.log(state.id);
-    console.log(state.addressBook);
+    CustomLogger.log("actor", state.id);
+    CustomLogger.log("actor", state.addressBook);
   },
   MESSAGE: (payload, _address) => {
     const addr = payload as ToAddress;
 
-    console.log("trying")
+    CustomLogger.log("actor", "trying")
 
 
 

@@ -7,8 +7,9 @@ import {
 } from "../actorsystem/types.ts";
 import { OnMessage, Postman } from "../classes/PostMan.ts";
 import { wait } from "../actorsystem/utils.ts";
-import { OpenVRType } from "../OpenVR_TS/utils.ts";
-import * as OpenVR from "../OpenVR_TS/openvr_bindings.ts";
+import { OpenVRType } from "../OpenVR_TS_Bindings_Deno/utils.ts";
+import * as OpenVR from "../OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 //main process
 
@@ -34,7 +35,7 @@ const functions: ActorFunctions = {
         main(payload);
     },
     LOG: (_payload) => {
-        console.log(state.id);
+        CustomLogger.log("actor", state.id);
     },
     STDIN: (payload) => {
         if (payload.startsWith("connect")) {
@@ -58,12 +59,12 @@ const functions: ActorFunctions = {
         }
 
 
-        console.log("stdin:", payload);
+        CustomLogger.log("actor", "stdin:", payload);
     },
 };
 
 async function main(_payload: Payload["MAIN"]) {
-    console.log("main!");
+    CustomLogger.log("actor", "main!");
 
     const net1actor = await Postman.create("netTestActor.ts");
     const net2actor = await Postman.create("netTestActor.ts");
@@ -94,7 +95,7 @@ async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
             type: "GETCONTROLLERDATA",
             payload: null,
         }, true) as [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData];
-        console.log("inputstate:", inputstate[1].bState);
+        CustomLogger.log("actor", "inputstate:", inputstate[1].bState);
 
 
 

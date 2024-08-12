@@ -6,6 +6,7 @@ import {
 } from "../actorsystem/types.ts";
 import { OnMessage, Postman } from "../classes/PostMan.ts";
 import { OscSubscriber } from "../classes/getvrcpos.ts";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 //vrchat integration
 
@@ -32,7 +33,7 @@ const functions: ActorFunctions = {
         main();
     },
     LOG: (_payload) => {
-        console.log(state.id);
+        CustomLogger.log("actor", state.id);
     },
     GETCOORDINATE: (_payload, address) => {
         const addr = address as MessageAddressReal;
@@ -84,7 +85,7 @@ function main() {
     if (state.oscSubscriber) {
         state.oscSubscriber.subscribe(handleOscMessage.bind(state));
         state.oscSubscriber.listenForOscMessages().then(() => {
-            console.log("Finished listening for OSC messages.");
+            CustomLogger.log("actor", "Finished listening for OSC messages.");
         });
     }
 

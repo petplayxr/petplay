@@ -1,9 +1,10 @@
 // deno_server.ts
+import { CustomLogger } from "../classes/customlogger.ts";
 
 export class SignalingServer {
   private clients = new Map();
 
-  constructor(private port: number) {}
+  constructor(private port: number) { }
 
   start() {
     this.startSignalingServer();
@@ -18,31 +19,31 @@ export class SignalingServer {
       const { socket, response } = Deno.upgradeWebSocket(req);
 
       socket.addEventListener("open", () => {
-        console.log("Signaling client connected!");
+        CustomLogger.log("class", "Signaling client connected!");
         this.clients.set(socket, {});
       });
 
       socket.addEventListener("close", () => {
-        console.log("WebSocket connection closed");
+        CustomLogger.log("class", "WebSocket connection closed");
         this.clients.delete(socket);
       });
 
       socket.addEventListener("message", (event) => {
         const data = JSON.parse(event.data);
         if (data.type !== "candidate") {
-          console.log("Signaling server received data:", data.type);
+          CustomLogger.log("class", "Signaling server received data:", data.type);
         }
 
         this.handleWebSocketMessage(socket, data);
       });
 
       socket.addEventListener("close", () => {
-        console.log("Signaling client disconnected");
+        CustomLogger.log("class", "Signaling client disconnected");
       });
 
       return response;
     });
-    console.log(
+    CustomLogger.log("class",
       `Signaling server is running on ws://localhost:${this.port}`,
     );
   }

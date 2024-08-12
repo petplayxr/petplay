@@ -10,6 +10,7 @@ import {
   ToAddress,
 } from "./types.ts";
 import { ActorWorker } from "./ActorWorker.ts";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 export class PostalService {
   public static actors: Map<string, ActorWorker> = new Map();
@@ -39,7 +40,7 @@ export class PostalService {
     });
 
     const id = await PostalService.signal.wait();
-    console.log("created", id);
+    CustomLogger.log("actorsys", "created", id);
     PostalService.actors.set(id, worker);
     return id;
   }
@@ -59,9 +60,9 @@ export class PostalService {
       : [message.address.to];
 
 
-    console.error("PostalService handleMessage")
+    CustomLogger.error("actorsyserr", "PostalService handleMessage")
 
-    console.error(message)
+    CustomLogger.error("actorsyserr", message)
 
     addresses.forEach((address) => {
       message.address.to = address;
@@ -69,11 +70,11 @@ export class PostalService {
 
       // if message type starts with CB
       if (message.type.startsWith("CB")) {
-        //console.log("CB message", message);
+        //CustomLogger.log("actorsys", "CB message", message);
         message.type = "CB";
       }
 
-      console.log("postalService handleMessage", message.address.to, message.type);
+      CustomLogger.log("actorsys", "postalService handleMessage", message.address.to, message.type);
       // redirect message
       switch (message.address.to) {
         case null:
@@ -84,12 +85,12 @@ export class PostalService {
         default:
           // message address is to another actor
           if (!PostalService.actors.has(message.address.to)) {
-            console.error("No actor found");
-            console.log(PostalService.actors)
+            CustomLogger.error("actorsyserr", "No actor found");
+            CustomLogger.log("actorsys", PostalService.actors)
             // using portal instead
           }
-          console.error(message.address.to);
-          console.error(PostalService.actors)
+          CustomLogger.error("actorsyserr", message.address.to);
+          CustomLogger.error("actorsyserr", PostalService.actors)
           const targetWorker = PostalService.actors.get(message.address.to)!;
           targetWorker.postMessage(message);
       }
@@ -149,7 +150,7 @@ export class PostalService {
     }
 
     const address = JSON.parse(rMessage.address as unknown as string);
-    console.log(
+    CustomLogger.log("default",
       `PostalService processing message:\n${rMessage.address}\nmessage type: ${rMessage.type}\npayload: ${rMessage.payload}\n`,
     );
     if (!notAddressArray(address)) {
@@ -165,7 +166,7 @@ export class PostalService {
         payload: rMessage.payload,
       } as Message);
     } else {
-      console.error(`No worker found for address ${address.to}`);
+      CustomLogger.error("actorsyserr", `No worker found for address ${address.to}`);
     }
   }
 }

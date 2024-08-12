@@ -9,6 +9,7 @@ import { OnMessage, Postman } from "../classes/PostMan.ts";
 import * as OpenVR from "../OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
 import { fillBuffer, readBufferStructured, stringToPointer } from "../OpenVR_TS_Bindings_Deno/utils.ts";
 import { P } from "../OpenVR_TS_Bindings_Deno/pointers.ts";
+import { CustomLogger } from "../classes/customlogger.ts";
 
 //steamvr input handling
 
@@ -33,7 +34,7 @@ const functions: ActorFunctions = {
         main()
     },
     LOG: (_payload) => {
-        console.log(state.id);
+        CustomLogger.log("actor", state.id);
     },
     GETID: (_payload, address) => {
         // use a check here
@@ -48,7 +49,7 @@ const functions: ActorFunctions = {
         const addr = address as MessageAddressReal;
         updateActionState();
         let leftPoseData
-        console.log("X", handPoseLeftHandle, posedataleftpointer);
+        CustomLogger.log("actor", "X", handPoseLeftHandle, posedataleftpointer);
         //pose
         error = vrInput.GetPoseActionDataRelativeToNow(
             handPoseLeftHandle,
@@ -104,7 +105,7 @@ const posedataleftpointer = Deno.UnsafePointer.of<OpenVR.InputPoseActionData>(bu
 const actionSetHandlePTR = P.BigUint64P<OpenVR.ActionSetHandle>();
 error = vrInput.GetActionSetHandle("/actions/main", actionSetHandlePTR);
 if (error !== OpenVR.InputError.VRInputError_None) {
-    console.error(`Failed to get action set handle: ${OpenVR.InputError[error]}`);
+    CustomLogger.error("actorerr", `Failed to get action set handle: ${OpenVR.InputError[error]}`);
     throw new Error("Failed to get action set handle");
 }
 if (actionSetHandlePTR === null) throw new Error("Invalid pointer");
@@ -125,7 +126,7 @@ const triggerRightHandlePTR = P.BigUint64P<OpenVR.ActionHandle>();
 
 error = vrInput.GetActionHandle("/actions/main/in/TriggerLeft", triggerLeftHandlePTR);
 if (error !== OpenVR.InputError.VRInputError_None) {
-    console.error(`Failed to get left trigger action handle: ${OpenVR.InputError[error]}`);
+    CustomLogger.error("actorerr", `Failed to get left trigger action handle: ${OpenVR.InputError[error]}`);
     throw new Error("Failed to get left trigger action handle");
 }
 if (triggerLeftHandlePTR === null) throw new Error("Invalid pointer");
@@ -157,7 +158,7 @@ function main() {
     //set action manifest path
     error = vrInput.SetActionManifestPath(manifestPath);
     if (error !== OpenVR.InputError.VRInputError_None) {
-        console.error(`Failed to set action manifest path: ${OpenVR.InputError[error]}`);
+        CustomLogger.error("actorerr", `Failed to set action manifest path: ${OpenVR.InputError[error]}`);
         throw new Error("Failed to set action manifest path");
     }
 
@@ -165,22 +166,22 @@ function main() {
 
     error = vrInput.GetActionHandle("/actions/main/in/HandPoseLeft", handPoseLeftHandlePTR);
     if (error !== OpenVR.InputError.VRInputError_None) {
-        console.error(`Failed to get action handle: ${OpenVR.InputError[error]}`);
+        CustomLogger.error("actorerr", `Failed to get action handle: ${OpenVR.InputError[error]}`);
         throw new Error("Failed to get action handle");
     }
     if (handPoseLeftHandlePTR === null) throw new Error("Invalid pointer");
     handPoseLeftHandle = new Deno.UnsafePointerView(handPoseLeftHandlePTR).getBigUint64();
-    console.log("handPoseLeftHandle:", handPoseLeftHandle);
+    CustomLogger.log("actor", "handPoseLeftHandle:", handPoseLeftHandle);
 
     error = vrInput.GetActionHandle("/actions/main/in/HandPoseRight", handPoseRightHandlePTR);
     if (error !== OpenVR.InputError.VRInputError_None) {
-        console.error(`Failed to get action handle: ${OpenVR.InputError[error]}`);
+        CustomLogger.error("actorerr", `Failed to get action handle: ${OpenVR.InputError[error]}`);
         throw new Error("Failed to get action handle");
     }
     if (handPoseRightHandlePTR === null) throw new Error("Invalid pointer");
     handPoseRightHandle = new Deno.UnsafePointerView(handPoseRightHandlePTR).getBigUint64();
 
-    console.log(handPoseLeftHandle, handPoseRightHandle);
+    CustomLogger.log("actor", handPoseLeftHandle, handPoseRightHandle);
 
 
     let triggerLeftHandle: OpenVR.ActionHandle = OpenVR.k_ulInvalidActionHandle;
@@ -190,7 +191,7 @@ function main() {
 
     error = vrInput.GetActionHandle("/actions/main/in/TriggerLeft", triggerLeftHandlePTR);
     if (error !== OpenVR.InputError.VRInputError_None) {
-        console.error(`Failed to get left trigger action handle: ${OpenVR.InputError[error]}`);
+        CustomLogger.error("actorerr", `Failed to get left trigger action handle: ${OpenVR.InputError[error]}`);
         throw new Error("Failed to get left trigger action handle");
     }
     if (triggerLeftHandlePTR === null) throw new Error("Invalid pointer");
@@ -198,7 +199,7 @@ function main() {
 
     error = vrInput.GetActionHandle("/actions/main/in/TriggerRight", triggerRightHandlePTR);
     if (error !== OpenVR.InputError.VRInputError_None) {
-        console.error(`Failed to get right trigger action handle: ${OpenVR.InputError[error]}`);
+        CustomLogger.error("actorerr", `Failed to get right trigger action handle: ${OpenVR.InputError[error]}`);
         throw new Error("Failed to get right trigger action handle");
     }
     if (triggerRightHandlePTR === null) throw new Error("Invalid pointer");
@@ -232,7 +233,7 @@ function updateActionState() {
 
     error = vrInput.UpdateActionState(activeActionSetPtr, activeActionSetSize, 1);
     if (error !== OpenVR.InputError.VRInputError_None) {
-        console.error(`Failed to update action state: ${OpenVR.InputError[error]}`);
+        CustomLogger.error("actorerr", `Failed to update action state: ${OpenVR.InputError[error]}`);
         throw new Error("Failed to update action state");
     }
 }
