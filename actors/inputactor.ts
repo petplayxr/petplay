@@ -6,9 +6,9 @@ import {
     MessageAddressReal,
 } from "../actorsystem/types.ts";
 import { OnMessage, Postman } from "../classes/PostMan.ts";
-import * as OpenVR from "../OpenVR_TS/openvr_bindings.ts";
-import { fillBuffer, readBufferStructured, stringToPointer } from "../OpenVR_TS/utils.ts";
-import { P } from "../OpenVR_TS/pointers.ts";
+import * as OpenVR from "../OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
+import { fillBuffer, readBufferStructured, stringToPointer } from "../OpenVR_TS_Bindings_Deno/utils.ts";
+import { P } from "../OpenVR_TS_Bindings_Deno/pointers.ts";
 
 //steamvr input handling
 
@@ -84,7 +84,7 @@ const functions: ActorFunctions = {
 
 //#region input
 let error;
-const manifestPath = Deno.realPathSync("./OpenVR_TS/actions.json");
+const manifestPath = Deno.realPathSync("./resources/actions.json");
 const initerrorptr = Deno.UnsafePointer.of<OpenVR.InitError>(new Int32Array(1))!
 const TypeSafeINITERRPTR: OpenVR.InitErrorPTRType = initerrorptr
 const IVRInputPtr = OpenVR.VR_GetGenericInterface(stringToPointer(OpenVR.IVRInput_Version), TypeSafeINITERRPTR);

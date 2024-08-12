@@ -7,8 +7,8 @@ import {
 } from "../actorsystem/types.ts";
 import { OnMessage, Postman } from "../classes/PostMan.ts";
 import { wait } from "../actorsystem/utils.ts";
-import { OpenVRType } from "../OpenVR_TS/utils.ts";
-import * as OpenVR from "../OpenVR_TS/openvr_bindings.ts";
+import { OpenVRType } from "../OpenVR_TS_Bindings_Deno/utils.ts";
+import * as OpenVR from "../OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
 
 //main process
 

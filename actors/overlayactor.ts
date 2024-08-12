@@ -7,9 +7,9 @@ import {
 } from "../actorsystem/types.ts";
 import { OnMessage, Postman } from "../classes/PostMan.ts";
 import { wait } from "../actorsystem/utils.ts";
-import * as OpenVR from "../OpenVR_TS/openvr_bindings.ts";
-import { P } from "../OpenVR_TS/pointers.ts";
-import { stringToPointer } from "../OpenVR_TS/utils.ts";
+import * as OpenVR from "../OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
+import { P } from "../OpenVR_TS_Bindings_Deno/pointers.ts";
+import { stringToPointer } from "../OpenVR_TS_Bindings_Deno/utils.ts";
 
 //a steamvr overlay
 
