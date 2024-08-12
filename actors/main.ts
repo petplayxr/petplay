@@ -76,15 +76,6 @@ async function main(_payload: Payload["MAIN"]) {
   const inputactor = await Postman.create("inputactor.ts");
 
 
-
-
-  /* Postman.PostMessage({
-    address: { fm: state.id, to: [overlayactor, overlayactor2] },
-    type: "SET_CHANNEL",
-    payload: "muffin",
-  }) */
-
-
   inputloop(inputactor, overlayactor);
 
 
@@ -94,15 +85,15 @@ async function main(_payload: Payload["MAIN"]) {
 async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
   CustomLogger.log("default", "inputloop started");
   while (true) {
-    const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData] = await Postman.PostMessage({
+    const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData, OpenVR.InputDigitalActionData] = await Postman.PostMessage({
       address: { fm: state.id, to: inputactor },
       type: "GETCONTROLLERDATA",
       payload: null,
-    }, true) as [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData];
+    }, true) as [OpenVR.InputPoseActionData, OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData, OpenVR.InputDigitalActionData];
 
 
 
-    if (inputstate[1].bState == 1) {
+    if (inputstate[2].bState == 1) {
       Postman.PostMessage({
         address: { fm: state.id, to: overlayactor },
         type: "SETOVERLAYLOCATION",
@@ -110,6 +101,17 @@ async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
       });
 
     }
+    else if (inputstate[3].bState == 1) {
+      Postman.PostMessage({
+        address: { fm: state.id, to: overlayactor },
+        type: "SETOVERLAYLOCATION",
+        payload: inputstate[1].pose.mDeviceToAbsoluteTracking,
+      });
+
+    }
+
+
+
     await wait(10);
   }
 }

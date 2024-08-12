@@ -48,33 +48,57 @@ const functions: ActorFunctions = {
     GETCONTROLLERDATA: (_payload, address) => {
         const addr = address as MessageAddressReal;
         updateActionState();
+
+        //#region pose
         let leftPoseData
-        CustomLogger.log("actor", "X", handPoseLeftHandle, posedataleftpointer);
-        //pose
+        let rightPoseData
         error = vrInput.GetPoseActionDataRelativeToNow(
             handPoseLeftHandle,
             OpenVR.TrackingUniverseOrigin.TrackingUniverseStanding,
             0,
             posedataleftpointer,
-            96,
+            OpenVR.InputPoseActionDataStruct.byteSize,
             OpenVR.k_ulInvalidInputValueHandle
         );
         if (error === OpenVR.InputError.VRInputError_None) {
             leftPoseData = OpenVR.InputPoseActionDataStruct.read(poseDataViewL);
         }
-        //button
+        error = vrInput.GetPoseActionDataRelativeToNow(
+            handPoseRightHandle,
+            OpenVR.TrackingUniverseOrigin.TrackingUniverseStanding,
+            0,
+            posedatarightpointer,
+            OpenVR.InputPoseActionDataStruct.byteSize,
+            OpenVR.k_ulInvalidInputValueHandle
+        );
+        if (error === OpenVR.InputError.VRInputError_None) {
+            rightPoseData = OpenVR.InputPoseActionDataStruct.read(poseDataViewR);
+        }
+        //#endregion
+
+
+        //#region button
         error = vrInput.GetDigitalActionData(
             triggerLeftHandle,
             triggerLeftPointer,
-            24,
+            OpenVR.InputDigitalActionDataStruct.byteSize,
             OpenVR.k_ulInvalidInputValueHandle
         );
         const leftTriggerData = OpenVR.InputDigitalActionDataStruct.read(triggerDataViewL);
 
+        error = vrInput.GetDigitalActionData(
+            triggerRightHandle,
+            triggerRightPointer,
+            OpenVR.InputDigitalActionDataStruct.byteSize,
+            OpenVR.k_ulInvalidInputValueHandle
+        );
+        const rightTriggerData = OpenVR.InputDigitalActionDataStruct.read(triggerDataViewR);
+        //#endregion
+
         Postman.PostMessage({
             address: { fm: state.id, to: addr.fm },
             type: "CB:GETCONTROLLERDATA",
-            payload: [leftPoseData, leftTriggerData]
+            payload: [leftPoseData, rightPoseData, leftTriggerData, rightTriggerData]
         });
     }
 };
@@ -97,10 +121,13 @@ const vrInput = new OpenVR.IVRInput(IVRInputPtr);
 //#region pose
 const poseDataSize = OpenVR.InputPoseActionDataStruct.byteSize;
 const bufferL = new ArrayBuffer(poseDataSize);
+const bufferR = new ArrayBuffer(poseDataSize);
 
 const poseDataViewL = new DataView(bufferL);
+const poseDataViewR = new DataView(bufferR);
 
 const posedataleftpointer = Deno.UnsafePointer.of<OpenVR.InputPoseActionData>(bufferL)!;
+const posedatarightpointer = Deno.UnsafePointer.of<OpenVR.InputPoseActionData>(bufferR)!;
 
 const actionSetHandlePTR = P.BigUint64P<OpenVR.ActionSetHandle>();
 error = vrInput.GetActionSetHandle("/actions/main", actionSetHandlePTR);
@@ -131,6 +158,17 @@ if (error !== OpenVR.InputError.VRInputError_None) {
 }
 if (triggerLeftHandlePTR === null) throw new Error("Invalid pointer");
 triggerLeftHandle = new Deno.UnsafePointerView(triggerLeftHandlePTR).getBigUint64();
+
+error = vrInput.GetActionHandle("/actions/main/in/TriggerRight", triggerRightHandlePTR);
+if (error !== OpenVR.InputError.VRInputError_None) {
+    CustomLogger.error("actorerr", `Failed to get left trigger action handle: ${OpenVR.InputError[error]}`);
+    throw new Error("Failed to get left trigger action handle");
+}
+if (triggerRightHandlePTR === null) throw new Error("Invalid pointer");
+triggerRightHandle = new Deno.UnsafePointerView(triggerRightHandlePTR).getBigUint64();
+
+
+
 
 const triggerDataSize = OpenVR.InputDigitalActionDataStruct.byteSize;
 const triggerDataBufferL = new ArrayBuffer(triggerDataSize);
@@ -180,7 +218,6 @@ function main() {
     }
     if (handPoseRightHandlePTR === null) throw new Error("Invalid pointer");
     handPoseRightHandle = new Deno.UnsafePointerView(handPoseRightHandlePTR).getBigUint64();
-
     CustomLogger.log("actor", handPoseLeftHandle, handPoseRightHandle);
 
 
