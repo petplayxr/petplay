@@ -41,9 +41,8 @@ const functions: ActorFunctions = {
 };
 
 async function main(_payload: Payload["MAIN"]) {
-  CustomLogger.setChannel("syncloop")
 
-  CustomLogger.log("actor", "main!");
+  CustomLogger.log("default", "main actor started");
 
   const overlayactor = await Postman.create("overlayactor.ts");
   const overlayactor2 = await Postman.create("overlayactor.ts");
@@ -54,12 +53,6 @@ async function main(_payload: Payload["MAIN"]) {
     payload: "muffin",
   });
 
-/*   Postman.PostMessage({
-    address: { fm: state.id, to: overlayactor },
-    type: "ADDADDRESS",
-    payload: overlayactor2,
-  });
- */
   Postman.PostMessage({
     address: { fm: state.id, to: overlayactor },
     type: "STARTOVERLAY",
@@ -99,6 +92,7 @@ async function main(_payload: Payload["MAIN"]) {
 }
 
 async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
+  CustomLogger.log("default", "inputloop started");
   while (true) {
     const inputstate: [OpenVR.InputPoseActionData, OpenVR.InputDigitalActionData] = await Postman.PostMessage({
       address: { fm: state.id, to: inputactor },
@@ -116,7 +110,7 @@ async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
       });
 
     }
-    await wait(1);
+    await wait(10);
   }
 }
 

@@ -176,10 +176,10 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
     state.trackingUniverseOriginPTR = Deno.UnsafePointer.of<OpenVR.TrackingUniverseOrigin>(new Int32Array(1))!;
     setOverlayTransformAbsolute(initialTransform)
 
-    CustomLogger.log("actor", "Overlay created and shown.");
+    CustomLogger.log("default", "Overlay created and shown.");
     //#endregion
 
-    await wait(5000)
+    await wait(3000)
 
     if (sync) {
         syncloop()
@@ -188,6 +188,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
 }
 
 async function syncloop() {
+    CustomLogger.log("default", "syncloop started");
     while (true) {
 
 
@@ -197,16 +198,7 @@ async function syncloop() {
             type: "SETOVERLAYLOCATION",
             payload: m34,
         });
-        /*         if (state.sync== true)
-                {
-                    CustomLogger.log("syncloop", "sendsync ");
-                } */
-
-        await wait(1);
-        /*         CustomLogger.log("syncloop", "adrbook " + state.addressBook);
-                CustomLogger.log("syncloop", "m34 " + m34.m[0][3]); */
-
-
+        await wait(10);
     }
 }
 

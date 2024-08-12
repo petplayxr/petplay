@@ -201,17 +201,10 @@ export class Postman {
 
     const addr = message.address as MessageAddressReal;
 
-
-
-
     await Promise.all(addresses.map(async (address) => {
       message.address.to = address!;
 
       
-
-
-
-
       if (Postman.webRTCInterface && Postman.addressBook.includes(addr.to)) {
         if (message.address.to.startsWith("overlay")) {
           CustomLogger.log("syncloop", "address " + message.address.to);
