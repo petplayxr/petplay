@@ -43,15 +43,33 @@ const functions: ActorFunctions = {
 async function main(_payload: Payload["MAIN"]) {
   CustomLogger.log("default", "main actor started");
 
-  const overlayactor = await Postman.create("overlayactor.ts");
-  const overlayactor2 = await Postman.create("overlayactor.ts");
+/*   const overlayactor = await Postman.create("overlayactor.ts");
+  const overlayactor2 = await Postman.create("overlayactor.ts"); */
+  const vrc = await Postman.create("vrccoordinate.ts");
 
+  const overlayactorVRC = await Postman.create("overlayactorVRC.ts");
+
+  Postman.PostMessage({
+    address: { fm: state.id, to: overlayactorVRC },
+    type: "ASSIGNVRC",
+    payload: vrc,
+  });
+
+  Postman.PostMessage({
+    address: { fm: state.id, to: overlayactorVRC },
+    type: "STARTOVERLAY",
+    payload: {
+      name: "overlay1",
+      texture: "./resources/P1.png",
+      sync: true,
+    },
+  });
 
   
 
 
 
-  Postman.PostMessage({
+/*   Postman.PostMessage({
     address: { fm: state.id, to: [overlayactor, overlayactor2] },
     type: "SET_CHANNEL",
     payload: "muffin",
@@ -75,8 +93,8 @@ async function main(_payload: Payload["MAIN"]) {
       texture: "./resources/P2.png",
       sync: false,
     },
-  });
-
+  }); */
+/* 
   await wait(1000);
   const inputactor = await Postman.create("inputactor.ts");
 
@@ -87,7 +105,7 @@ async function main(_payload: Payload["MAIN"]) {
 
 
 
-  inputloop(inputactor, overlayactor);
+  inputloop(inputactor, overlayactor); */
 
 
 

@@ -25,7 +25,8 @@ const state: State & BaseState = {
     name: "vrccoordinate",
     socket: null,
     coordinate: {},
-    oscSubscriber: null
+    oscSubscriber: null,
+    addressBook: new Array<string>(),
 };
 
 const functions: ActorFunctions = {
