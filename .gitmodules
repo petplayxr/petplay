@@ -1,0 +1,4 @@
+[submodule "OpenVR_TS_Bindings_Deno"]
+	path = OpenVR_TS_Bindings_Deno
+	url = https://github.com/mommysgoodpuppy/OpenVR_TS_Bindings_Deno.git
+	branch = main
