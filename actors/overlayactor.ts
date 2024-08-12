@@ -121,7 +121,6 @@ function GetOverlayTransformAbsolute(): OpenVR.HmdMatrix34 {
 }
 
 async function mainX(overlaymame: string, overlaytexture: string, sync: boolean) {
-    CustomLogger.setChannel("syncloop")
 
     state.sync = sync;
 
