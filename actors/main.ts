@@ -49,11 +49,17 @@ async function main(_payload: Payload["MAIN"]) {
   const overlayactor2 = await Postman.create("overlayactor.ts");
 
   Postman.PostMessage({
+    address: { fm: state.id, to: [overlayactor, overlayactor2] },
+    type: "SET_CHANNEL",
+    payload: "muffin",
+  });
+
+/*   Postman.PostMessage({
     address: { fm: state.id, to: overlayactor },
     type: "ADDADDRESS",
     payload: overlayactor2,
   });
-
+ */
   Postman.PostMessage({
     address: { fm: state.id, to: overlayactor },
     type: "STARTOVERLAY",

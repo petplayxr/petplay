@@ -23,7 +23,7 @@ const state: State & BaseState = {
     id: "",
     db: {},
     TrackingUniverseOriginPTR: null,
-    name: "sub",
+    name: "ovrinput",
     inputerror: OpenVR.InputError.VRInputError_None,
     socket: null,
     addressBook: new Array<string>(),

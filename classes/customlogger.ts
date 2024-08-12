@@ -1,5 +1,5 @@
 export const CustomLogger = (() => {
-    let activeChannel = "default";
+    let activeChannel = "syncloop";
 
     const setChannel = (channel) => {
         activeChannel = channel;

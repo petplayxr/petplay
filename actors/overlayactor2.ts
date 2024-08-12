@@ -27,7 +27,7 @@ type State = {
 const state: State & BaseState = {
     id: "",
     db: {},
-    name: "overlay1",
+    name: "overlay2",
     socket: null,
     sync: false,
     overlayClass: null,
@@ -125,6 +125,12 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
 
     state.sync = sync;
 
+    if (sync == false) {
+        state.name = "overlay1";
+    }
+    if (sync == true) {
+        state.name = "xxxfr";
+    }
 
     //#region init openvr
     let error;
@@ -202,7 +208,7 @@ async function syncloop() {
                     CustomLogger.log("syncloop", "sendsync ");
                 } */
 
-        await wait(1);
+        await wait(100);
         /*         CustomLogger.log("syncloop", "adrbook " + state.addressBook);
                 CustomLogger.log("syncloop", "m34 " + m34.m[0][3]); */
 

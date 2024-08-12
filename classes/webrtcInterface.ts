@@ -101,8 +101,7 @@ export class WebRTCInterface {
         if (done) break;
         const lines = decoder.decode(value).trim().split("\n");
         for (const line of lines) {
-          return
-          if (line) CustomLogger.log("class", `[RTC NODE ${idPrefix} ${type}]: ${line}`);
+          if (line) CustomLogger.log("NODE", `[RTC NODE ${idPrefix} ${type}]: ${line}`);
         }
       }
     })();
@@ -147,7 +146,7 @@ export class WebRTCInterface {
       this.nodeSocket!.send(JSON.stringify(message));
       return true;
     } else {
-      CustomLogger.error("classerr", "Node socket is not open. Cannot send message.");
+      CustomLogger.error("syncloop", "Node socket is not open. Cannot send message.");
       return false;
     }
   }

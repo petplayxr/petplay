@@ -195,40 +195,65 @@ export class Postman {
   }
 
   static async posterr(message: Message) {
-    const addr = message.address as MessageAddressReal;
-    if (Postman.webRTCInterface && Postman.addressBook.includes(addr.to)) {
-      Postman.webRTCInterface.sendToNodeProcess({
-        type: "send_message",
-        targetPeerId: addr.to,
-        payload: message,
-      });
-    } else if (Postman.webRTCInterface) {
-      //check portal
+    const addresses = Array.isArray(message.address.to)
+      ? message.address.to
+      : [message.address.to];
 
-      Postman.portalCheckSignal = new Signal<boolean>();
-      CustomLogger.log("class", "trying to query dataPeers")
-      CustomLogger.log("class", Postman.state.id)
-      CustomLogger.log("class", message.address.to)
-      Postman.webRTCInterface.sendToNodeProcess({
-        type: "query_dataPeers",
-        from: Postman.state.id,
-        targetPeerId: message.address.to,
-      });
-      const result: boolean = await Postman.portalCheckSignal.wait();
-      if (result) {
+    const addr = message.address as MessageAddressReal;
+
+
+
+
+    await Promise.all(addresses.map(async (address) => {
+      message.address.to = address!;
+
+      
+
+
+
+
+      if (Postman.webRTCInterface && Postman.addressBook.includes(addr.to)) {
+        if (message.address.to.startsWith("overlay")) {
+          CustomLogger.log("syncloop", "address " + message.address.to);
+        }
         Postman.webRTCInterface.sendToNodeProcess({
           type: "send_message",
-          targetPeerId: message.address.to,
+          targetPeerId: addr.to,
           payload: message,
         });
-      } else {
-        CustomLogger.error("classerr", "trough rtc failed, trying locally");
+
+
+      } else if (Postman.webRTCInterface) {
+        //check portal
+        CustomLogger.log("syncloop", "portal check? ");
+
+        throw new Error("not implemented");
+
+        Postman.portalCheckSignal = new Signal<boolean>();
+        CustomLogger.log("class", "trying to query dataPeers")
+        CustomLogger.log("class", Postman.state.id)
+        CustomLogger.log("class", message.address.to)
+        Postman.webRTCInterface.sendToNodeProcess({
+          type: "query_dataPeers",
+          from: Postman.state.id,
+          targetPeerId: message.address.to,
+        });
+        const result: boolean = await Postman.portalCheckSignal.wait();
+        if (result) {
+          Postman.webRTCInterface.sendToNodeProcess({
+            type: "send_message",
+            targetPeerId: message.address.to,
+            payload: message,
+          });
+        } else {
+          CustomLogger.error("classerr", "trough rtc failed, trying locally");
+          this.worker.postMessage(message);
+        }
+      }
+      else {
         this.worker.postMessage(message);
       }
-    }
-    else {
-      this.worker.postMessage(message);
-    }
+    }));
   }
 
   static async create(
