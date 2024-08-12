@@ -178,7 +178,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
     CustomLogger.log("default", "Overlay created and shown.");
     //#endregion
 
-    await wait(3000)
+    await wait(7000)
 
     if (sync) {
         syncloop()

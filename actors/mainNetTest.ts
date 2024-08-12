@@ -27,7 +27,7 @@ const state: State & BaseState = {
     inputactor: null,
     socket: null,
     numbah: 0,
-    addressbook: [],
+    addressBook: new Array<string>(),
 };
 
 const functions: ActorFunctions = {

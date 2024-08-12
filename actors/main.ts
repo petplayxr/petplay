@@ -41,11 +41,12 @@ const functions: ActorFunctions = {
 };
 
 async function main(_payload: Payload["MAIN"]) {
-
   CustomLogger.log("default", "main actor started");
 
   const overlayactor = await Postman.create("overlayactor.ts");
   const overlayactor2 = await Postman.create("overlayactor.ts");
+
+
 
   Postman.PostMessage({
     address: { fm: state.id, to: [overlayactor, overlayactor2] },
@@ -73,7 +74,14 @@ async function main(_payload: Payload["MAIN"]) {
     },
   });
 
+  await wait(1000);
   const inputactor = await Postman.create("inputactor.ts");
+
+
+
+  await wait(5000);
+
+
 
 
   inputloop(inputactor, overlayactor);

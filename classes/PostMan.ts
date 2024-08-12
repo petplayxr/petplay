@@ -216,7 +216,7 @@ export class Postman {
         });
 
 
-      } else if (Postman.webRTCInterface) {
+      } /* else if (Postman.webRTCInterface) {
         //check portal
         CustomLogger.log("syncloop", "portal check? ");
 
@@ -242,7 +242,7 @@ export class Postman {
           CustomLogger.error("classerr", "trough rtc failed, trying locally");
           this.worker.postMessage(message);
         }
-      }
+      } */
       else {
         this.worker.postMessage(message);
       }
@@ -265,7 +265,11 @@ export class Postman {
     return result;
   }
   private static updateAddressBook(addresses: string[]) {
-    addresses.forEach(addr => Postman.state.addressBook.push(addr));
+    addresses.forEach(addr => {
+      if (!Postman.state.addressBook.includes(addr)) {
+        Postman.state.addressBook.push(addr);
+      }
+    });
   }
 
 

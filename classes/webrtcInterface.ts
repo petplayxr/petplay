@@ -1,6 +1,7 @@
 import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
 import { wait } from "../actorsystem/utils.ts";
 import { CustomLogger } from "../classes/customlogger.ts";
+import * as JSON from "../classes/JSON.ts";
 
 export class WebRTCInterface {
   private nodeSocket: WebSocket | null = null;
