@@ -38,7 +38,17 @@ async function main(_payload: Payload["MAIN"]) {
   CustomLogger.log("default", "main actor started");
 
   const overlayactor = await Postman.create("overlayactor.ts");
+  const overlay2 = await Postman.create("overlayactorVRCground.ts");
 
+  Postman.PostMessage({
+    address: { fm: state.id, to: overlay2 },
+    type: "STARTOVERLAY",
+    payload: {
+      name: "overlayXX",
+      texture: "./resources/P1.png",
+      sync: false,
+    },
+  });
 
 
   await Postman.PostMessage({
@@ -52,8 +62,8 @@ async function main(_payload: Payload["MAIN"]) {
     type: "STARTOVERLAY",
     payload: {
       name: "overlay1",
-      texture: "./resources/P1.png",
-      sync: false,
+      texture: "./resources/PetPlay.png",
+      sync: true,
     },
   });
 

@@ -153,7 +153,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
 
     const imgpath = Deno.realPathSync(overlaytexture);
     overlay.SetOverlayFromFile(overlayHandle, imgpath);
-    overlay.SetOverlayWidthInMeters(overlayHandle, 0.1);
+    overlay.SetOverlayWidthInMeters(overlayHandle, 0.2);
     overlay.ShowOverlay(overlayHandle);
 
 
@@ -197,7 +197,7 @@ async function syncloop() {
             });
         });
 
-        await wait(5100);
+        await wait(50);
     }
 }
 

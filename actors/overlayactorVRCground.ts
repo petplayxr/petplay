@@ -35,7 +35,7 @@ const state: State & BaseState = {
     overlayClass: null,
     OverlayTransform: null,
     numbah: 0,
-    addressBook: new Array<string>(),
+    addressBook: new Set(),
     overlayHandle: 0n,
     TrackingUniverseOriginPTR: null,
     overlayerror: OpenVR.OverlayError.VROverlayError_None,
@@ -65,9 +65,6 @@ const functions: ActorFunctions = {
 
         mainX(payload.name, payload.texture, payload.sync);
 
-    },
-    ADDADDRESS: (payload, _address) => {
-        state.addressBook.push(payload);
     },
     GETOVERLAYLOCATION: (_payload, address) => {
         const addr = address as MessageAddressReal;
@@ -164,7 +161,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
 
     const imgpath = Deno.realPathSync(overlaytexture);
     overlay.SetOverlayFromFile(overlayHandle, imgpath);
-    overlay.SetOverlayWidthInMeters(overlayHandle, 0.1);
+    overlay.SetOverlayWidthInMeters(overlayHandle, 0.2);
     overlay.ShowOverlay(overlayHandle);
 
 
@@ -195,75 +192,29 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
 
     await wait(7000)
 
-    while (true) {
+    await wait(10)
 
-        if (state.vrc != "") {
-            interface coord {
-                [key: string]: number;
-            }
+    // Angle of rotation (in radians)
+    const angle = -Math.PI / 2; // -90 degrees, pointing straight down
 
+    // Sin and cos of the angle
+    const s = Math.sin(angle);
+    const c = Math.cos(angle);
 
+    const matrix: OpenVR.HmdMatrix34 = {
+        m: [
+            [1, 0, 0, 0],    // First column: No change in X
+            [0, c, -s, 0.1],  // Second column: Rotate around X, slight elevation
+            [0, -s, -c, 0]    // Third column: Rotate around X, inverted
+        ]
+    };
 
-            const coordinate = await Postman.PostMessage({
-                address: { fm: state.id, to: state.vrc },
-                type: "GETCOORDINATE",
-                payload: null,
-            }, true) as coord;
+    setOverlayTransformAbsolute(matrix)
 
-            // Update lastKnownPosition with new values, if available
-            if (coordinate["/avatar/parameters/CustomObjectSync/PositionX"] !== undefined) {
-                lastKnownPosition.x = coordinate["/avatar/parameters/CustomObjectSync/PositionX"];
-            }
-            if (coordinate["/avatar/parameters/CustomObjectSync/PositionY"] !== undefined) {
-                lastKnownPosition.y = coordinate["/avatar/parameters/CustomObjectSync/PositionY"];
-            }
-            if (coordinate["/avatar/parameters/CustomObjectSync/PositionZ"] !== undefined) {
-                lastKnownPosition.z = coordinate["/avatar/parameters/CustomObjectSync/PositionZ"];
-            }
-
-            // Angle of rotation (in radians)
-            const angle = -Math.PI / 2; // -90 degrees, pointing straight down
-
-            // Sin and cos of the angle
-            const s = Math.sin(angle);
-            const c = Math.cos(angle);
-
-            const matrix: OpenVR.HmdMatrix34 = {
-                m: [
-                    [1, 0, 0, 0],    // First column: No change in X
-                    [0, c, -s, 0.1],  // Second column: Rotate around X, slight elevation
-                    [0, -s, -c, 0]    // Third column: Rotate around X, inverted
-                ]
-            }; 
-
-            setOverlayTransformAbsolute(matrix)
-
-        };
-        await wait(10)
-
-
-
-
-    }
 
 }
 
 
-
-async function syncloop() {
-    CustomLogger.log("default", "syncloop started");
-    while (true) {
-
-
-        const m34 = GetOverlayTransformAbsolute();
-        Postman.PostMessage({
-            address: { fm: state.id, to: state.addressBook },
-            type: "SETOVERLAYLOCATION",
-            payload: m34,
-        });
-        await wait(10);
-    }
-}
 
 
 
