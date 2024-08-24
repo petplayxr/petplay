@@ -197,7 +197,7 @@ async function syncloop() {
             });
         });
 
-        await wait(10);
+        await wait(5100);
     }
 }
 
