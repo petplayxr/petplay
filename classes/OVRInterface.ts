@@ -158,7 +158,7 @@ class OVRInterface {
     }
   }
 
-  async disconnect() {
+  disconnect() {
     if (this.conn) {
       this.conn.close();
       this.conn = null;

@@ -25,7 +25,7 @@ const state: State & BaseState = {
   db: {},
   socket: null,
   numbah: 0,
-  addressBook: new Array<string>(),
+  addressBook: new Set(),
 };
 
 const functions: ActorFunctions = {
@@ -43,8 +43,8 @@ const functions: ActorFunctions = {
 async function main(_payload: Payload["MAIN"]) {
   CustomLogger.log("default", "main actor started");
 
-/*   const overlayactor = await Postman.create("overlayactor.ts");
-  const overlayactor2 = await Postman.create("overlayactor.ts"); */
+  /*   const overlayactor = await Postman.create("overlayactor.ts");
+    const overlayactor2 = await Postman.create("overlayactor.ts"); */
   const vrc = await Postman.create("vrccoordinate.ts");
 
   const overlayactorVRC = await Postman.create("overlayactorVRC.ts");
@@ -65,47 +65,47 @@ async function main(_payload: Payload["MAIN"]) {
     },
   });
 
+
+
+
+
+  /*   Postman.PostMessage({
+      address: { fm: state.id, to: [overlayactor, overlayactor2] },
+      type: "SET_CHANNEL",
+      payload: "muffin",
+    });
   
-
-
-
-/*   Postman.PostMessage({
-    address: { fm: state.id, to: [overlayactor, overlayactor2] },
-    type: "SET_CHANNEL",
-    payload: "muffin",
-  });
-
-  Postman.PostMessage({
-    address: { fm: state.id, to: overlayactor },
-    type: "STARTOVERLAY",
-    payload: {
-      name: "overlay1",
-      texture: "./resources/P1.png",
-      sync: true,
-    },
-  });
-
-  Postman.PostMessage({
-    address: { fm: state.id, to: overlayactor2 },
-    type: "STARTOVERLAY",
-    payload: {
-      name: "overlay2",
-      texture: "./resources/P2.png",
-      sync: false,
-    },
-  }); */
-/* 
-  await wait(1000);
-  const inputactor = await Postman.create("inputactor.ts");
-
-
-
-  await wait(5000);
-
-
-
-
-  inputloop(inputactor, overlayactor); */
+    Postman.PostMessage({
+      address: { fm: state.id, to: overlayactor },
+      type: "STARTOVERLAY",
+      payload: {
+        name: "overlay1",
+        texture: "./resources/P1.png",
+        sync: true,
+      },
+    });
+  
+    Postman.PostMessage({
+      address: { fm: state.id, to: overlayactor2 },
+      type: "STARTOVERLAY",
+      payload: {
+        name: "overlay2",
+        texture: "./resources/P2.png",
+        sync: false,
+      },
+    }); */
+  /* 
+    await wait(1000);
+    const inputactor = await Postman.create("inputactor.ts");
+  
+  
+  
+    await wait(5000);
+  
+  
+  
+  
+    inputloop(inputactor, overlayactor); */
 
 
 

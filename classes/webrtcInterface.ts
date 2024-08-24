@@ -6,80 +6,43 @@ import * as JSON from "../classes/JSON.ts";
 export class WebRTCInterface {
   private nodeSocket: WebSocket | null = null;
   private ipcPort: number;
-  private ddnsIp: string;
   private id: string;
-  private messageHandler: ((data: any) => void) | null = null;
-  private channel: string | null = null;
-  private addressBook: Set<string> = new Set();
+  private messageHandler: ((data: unknown) => void) | null = null;
+  private topic: string | null = null;
 
   constructor(id: string, ipcPort: number) {
     this.ipcPort = ipcPort;
-    this.ddnsIp = "";
     this.id = id;
   }
+
   async start() {
-    this.ddnsIp = await this.getddnsIP();
     await this.startNodeProcess();
     return this.startIPCServer();
   }
 
-  public onMessage(handler: (data: any) => void) {
+  public onMessage(handler: (data: unknown) => void) {
     this.messageHandler = handler;
   }
-
-  //#region channel
 
   public isSocketOpen(): boolean {
     return this.nodeSocket !== null && this.nodeSocket.readyState === WebSocket.OPEN;
   }
 
-  public async setChannel(channelId: string | null) {
+  public async setTopic(topicId: string | null) {
     if (this.isSocketOpen()) {
       await wait(1000)
-      this.channel = channelId;
-      this.sendToNodeProcess({ type: "set_channel", channelId });
+      this.topic = topicId;
+      this.sendToNodeProcess({ type: "set_topic", topicId });
       return true;
     }
     return false;
-  }
-
-  public broadcastAddress() {
-    if (this.channel) {
-      this.sendToNodeProcess({ type: "broadcast_address", channelId: this.channel });
-    }
-  }
-
-  public queryAddresses() {
-    if (this.channel) {
-      this.sendToNodeProcess({ type: "query_addresses", channelId: this.channel });
-    }
-  }
-
-  private updateAddressBook(addresses: string[]) {
-    const newAddresses = addresses.filter(addr => !this.addressBook.has(addr));
-    newAddresses.forEach(addr => {
-      this.addressBook.add(addr);
-      this.sendToNodeProcess({ type: "create_offer", targetPeerId: addr });
-    });
-  }
-
-
-  //#endregion
-
-
-  private async getddnsIP(): Promise<string> {
-    const publicIp = await getIP();
-    const resolved = await Deno.resolveDns("petplay.ddns.net", "A", {
-      nameServer: { ipAddr: "8.8.8.8", port: 53 },
-    });
-    return publicIp == resolved ? "ws://192.168.1.178:8081" : "ws://petplay.ddns.net:8081";
   }
 
   private startNodeProcess() {
     const command = new Deno.Command("node", {
       args: [
         "-e",
-        `require('child_process').execSync('npx ts-node nodeWebRTC/webrtc.ts ${this.id} ${this.ipcPort} ${this.ddnsIp}', {stdio: 'inherit'})`,
+        `require('child_process').execSync('npx ts-node nodeWebRTC/webrtc.ts ${this.id} ${this.ipcPort}', {stdio: 'inherit'})`,
       ],
       stdin: "piped",
       stdout: "piped",
@@ -102,7 +65,7 @@ export class WebRTCInterface {
         if (done) break;
         const lines = decoder.decode(value).trim().split("\n");
         for (const line of lines) {
-          if (line) CustomLogger.log("NODE", `[RTC NODE ${idPrefix} ${type}]: ${line}`);
+          if (line) CustomLogger.log("default", `[RTC NODE ${idPrefix} ${type}]: ${line}`);
         }
       }
     })();
@@ -132,17 +95,14 @@ export class WebRTCInterface {
     });
   }
 
-  private handleNodeMessage(data: any) {
+  private handleNodeMessage(data: unknown) {
     CustomLogger.log("class", "Received message from Node process:", data);
-    if (data.type === "address_update") {
-      this.updateAddressBook(data.addresses);
-    }
     if (this.messageHandler) {
       this.messageHandler(data);
     }
   }
 
-  public sendToNodeProcess(message: any) {
+  public sendToNodeProcess(message: unknown) {
     if (this.isSocketOpen()) {
       this.nodeSocket!.send(JSON.stringify(message));
       return true;

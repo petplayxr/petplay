@@ -33,7 +33,7 @@ const state: State & BaseState = {
     overlayClass: null,
     OverlayTransform: null,
     numbah: 0,
-    addressBook: new Array<string>(),
+    addressBook: new Set(),
     overlayHandle: 0n,
     TrackingUniverseOriginPTR: null,
     overlayerror: OpenVR.OverlayError.VROverlayError_None,
@@ -60,9 +60,6 @@ const functions: ActorFunctions = {
 
         mainX(payload.name, payload.texture, payload.sync);
 
-    },
-    ADDADDRESS: (payload, _address) => {
-        state.addressBook.push(payload);
     },
     GETOVERLAYLOCATION: (_payload, address) => {
         const addr = address as MessageAddressReal;
@@ -192,11 +189,14 @@ async function syncloop() {
 
 
         const m34 = GetOverlayTransformAbsolute();
-        Postman.PostMessage({
-            address: { fm: state.id, to: state.addressBook },
-            type: "SETOVERLAYLOCATION",
-            payload: m34,
+        state.addressBook.forEach((address) => {
+            Postman.PostMessage({
+                address: { fm: state.id, to: address },
+                type: "SETOVERLAYLOCATION",
+                payload: m34,
+            });
         });
+
         await wait(10);
     }
 }

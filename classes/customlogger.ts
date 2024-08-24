@@ -1,11 +1,11 @@
 export const CustomLogger = (() => {
     let activeChannel = "default";
 
-    const setChannel = (channel) => {
+    const setChannel = (channel: string) => {
         activeChannel = channel;
     };
 
-    const log = (channelOrMessage, ...messages) => {
+    const log = (channelOrMessage: string, ...messages: unknown[]) => {
         if (typeof channelOrMessage === 'string' && messages.length > 0) {
             // A channel was specified
             if (channelOrMessage === activeChannel) {
@@ -19,7 +19,7 @@ export const CustomLogger = (() => {
         }
     };
 
-    const error = (channelOrMessage, ...messages) => {
+    const error = (channelOrMessage: string, ...messages: unknown[]) => {
         if (typeof channelOrMessage === 'string' && messages.length > 0) {
             // A channel was specified
             if (channelOrMessage === activeChannel) {

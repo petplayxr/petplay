@@ -29,7 +29,7 @@ async function asyncPrompt(): Promise<string> {
 if (import.meta.main) {
   while (true) {
     const msgD = await asyncPrompt() ?? "";
-    const msg = msgD.replace(/\r/g, '');
+    const msg = msgD.replace(/\r/g, "");
     postalservice.Post({
       address: { fm: "system", to: mainAddress },
       type: "STDIN",

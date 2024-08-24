@@ -1,366 +1,259 @@
-// @deno-types="npm:@types/ws"
+// deno-lint-ignore-file
+import Hyperswarm from "hyperswarm";
+import crypto from "crypto";
 import WebSocket from "ws";
-import wrtc from "@roamhq/wrtc";
 
-const peerConnections: Map<string, wrtc.RTCPeerConnection> = new Map();
-const dataChannels: Map<string, wrtc.RTCDataChannel> = new Map();
+interface TopicInfo {
+  name: string;
+  hash: Buffer;
+  peerIds: Map<string, string>; // Map of Deno peerId to Hyperswarm ID
+}
 
-let currentChannel: any = null;
-const channelMembers = new Set();
+interface IPCMessage {
+  type: string;
+  [key: string]: any;
+}
 
-const peerId = process.argv[2];
-console.log(peerId);
-const ipcPort = process.argv[3];
-const ddnsIp = process.argv[4];
-const SIGNALING_SERVER_URL = ddnsIp;
-console.log(ipcPort);
-const DENO_SERVER_URL = `ws://localhost:${ipcPort}`;
+const peerId: string = process.argv[2];
+const ipcPort: string = process.argv[3];
+console.log("PeerId:", peerId);
+console.log("IPC Port:", ipcPort);
 
-const wsSignaling = new WebSocket(SIGNALING_SERVER_URL);
-const wsIPC = new WebSocket(DENO_SERVER_URL);
+const DENO_SERVER_URL: string = `ws://localhost:${ipcPort}`;
 
-wsIPC.on("open", () => {
-  console.log(`IPC CONNECTED`);
-  wsIPC.send(JSON.stringify({
-    peerIdSet: peerId,
-  }));
-});
+const swarm: Hyperswarm = new Hyperswarm();
+let currentTopic: TopicInfo | null = null;
+const ourHyperswarmId = swarm.keyPair.publicKey.toString("hex");
 
-wsIPC.on("message", (message) => {
-  const data = JSON.parse(message.toString());
-  handleIPCMessage(data);
-});
+let wsIPC: WebSocket;
 
-wsSignaling.on("open", () => {
-  console.log(`Connected to signaling server`);
-});
+function createTopicBuffer(topicName: string): TopicInfo {
+  const hash = crypto.createHash("sha256").update(topicName).digest();
+  return { name: topicName, hash, peerIds: new Map() };
+}
 
-wsSignaling.on("message", (message) => {
-  const data = JSON.parse(message.toString());
-  handleSignalingMessage(data);
-});
+async function initIPC(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    wsIPC = new WebSocket(DENO_SERVER_URL);
+    wsIPC.on("open", () => {
+      console.log(`IPC CONNECTED`);
+      wsIPC.send(JSON.stringify({ peerIdSet: peerId }));
+      wsIPC.on("message", (message: WebSocket.Data) => {
+        const data: IPCMessage = JSON.parse(message.toString());
+        handleIPCMessage(data);
+      });
+      resolve();
+    });
+    wsIPC.on("error", reject);
+  });
+}
 
-
-function handleIPCMessage(data: any) {
+function handleIPCMessage(data: IPCMessage): void {
   console.log("handleIPCMessage", data);
   switch (data.type) {
-    case "set_channel":
-      setChannel(data.channelId);
-      break;
-    case "broadcast_address":
-      broadcastAddress(data.channelId);
-      break;
-    case "query_addresses":
-      queryAddresses(data.channelId);
-      break;
-    case "create_offer":
-      console.log("create_offer");
-      createOffer(data.targetPeerId);
+    case "set_topic":
+      setTopic(data.topicId);
       break;
     case "send_message":
+      console.log(data.targetPeerId, data.payload);
       sendMessage(data.targetPeerId, data.payload);
-      break;
-    case "query_dataPeers":
-      queryDataPeers(data.from, data.targetPeerId);
       break;
     default:
       console.log("Unknown IPC message type:", data.type);
-      console.log("Unknown IPC message type:", data);
   }
 }
 
-function setChannel(channelId) {
-  if (currentChannel) {
-    wsSignaling.send(JSON.stringify({
-      channelId: currentChannel,
-      to: currentChannel,
-      from: peerId,
-      type: "leave_channel",
-    }));
+async function setTopic(topicName: string | null) {
+  if (currentTopic) {
+    await swarm.leave(currentTopic.hash);
+    console.log(
+      `Left topic: ${currentTopic.name} (${currentTopic.hash.toString("hex")})`,
+    );
   }
-  currentChannel = channelId;
-  if (channelId) {
-    wsSignaling.send(JSON.stringify({
-      channelId: currentChannel,
-      to: channelId,
-      from: peerId,
-      type: "join_channel",
-    }));
+
+  if (topicName === null) {
+    currentTopic = null;
+    console.log("No active topic");
+    return;
+  }
+
+  currentTopic = createTopicBuffer(topicName);
+  console.log(
+    `Joining topic: ${currentTopic.name} (${
+      currentTopic.hash.toString("hex")
+    })`,
+  );
+
+  swarm.join(currentTopic.hash, { server: true, client: true });
+  console.log(
+    `Topic joined, not flushed`,
+  );
+  
+  await writePeerIdToTopic(currentTopic, peerId, ourHyperswarmId);
+  wsIPC.send(
+    JSON.stringify(
+      {
+        type: "topic_connected",
+        topicId: topicName,
+      },
+    ),
+  );
+  await swarm.flush();
+  console.log(
+    `Topic fully announced and connected to available peers: ${currentTopic.name}`,
+  );
+}
+
+async function writePeerIdToTopic(
+  topic: TopicInfo,
+  denoPeerId: string,
+  hyperswarmId: string,
+) {
+  console.log(`Writing peerId to topic: ${topic.name}`);
+  const message = JSON.stringify({ type: "peerId", denoPeerId, hyperswarmId });
+  for (const conn of swarm.connections) {
+    (conn as any).write(message);
   }
 }
 
-function broadcastAddress(channelId) {
-  wsSignaling.send(JSON.stringify({
-    channelId: currentChannel,
-    to: channelId,
-    from: peerId,
-    type: "broadcast_address",
-  }));
+function startPeerIdCheck() {
+  setInterval(() => {
+    console.log("Checking for new peers...");
+    if (currentTopic) {
+      for (const conn of swarm.connections) {
+        (conn as any).write(JSON.stringify({ type: "requestPeerIds" }));
+      }
+    }
+  }, 10000);
 }
 
+swarm.on("connection", (conn, info) => {
+  const remotePeerId = info.publicKey.toString("hex");
+  console.log(`Connected to peer: ${remotePeerId}`);
 
-function queryAddresses(channelId) {
-  wsSignaling.send(JSON.stringify({
-    channelId: currentChannel,
-    to: channelId,
-    from: peerId,
-    type: "query_addresses",
-  }));
-}
-
-function updateChannelMembers(members) {
-  console.log("Updating channel members:", members);
-  const newMembers = members.filter(member => !channelMembers.has(member) && member !== peerId);
-  newMembers.forEach(member => {
-    channelMembers.add(member);
-    createOffer(member);
+  conn.on("data", (data) => {
+    try {
+      const message = JSON.parse(data.toString());
+      handlePeerMessage(message, remotePeerId);
+    } catch (error) {
+      console.error("Error parsing peer message:", error);
+    }
   });
-  wsIPC.send(JSON.stringify({ type: "address_update", addresses: Array.from(channelMembers) }));
-}
 
-async function handleSignalingMessage(data: any) {
-  try {
-    const { channelId, to, from, type } = data;
-    console.error("Received signaling message: ", channelId, to, from, type)
+  conn.on("close", () => {
+    console.log(`Disconnected from peer: ${remotePeerId}`);
+    wsIPC.send(JSON.stringify({
+      type: "peer_disconnected",
+      peerId: remotePeerId,
+    }));
+  });
+});
 
-    if (channelId !== currentChannel) {
-      console.error(`Message not for us: ${channelId} != ${currentChannel}\n skipping message ${data}`);
-      return;
-    }
-    if (to !== peerId) {
-      switch (type) {
-        case "join_channel":
-          console.log(`Peer ${from} joined channel ${channelId}`);
-          channelMembers.add(from);
-          updateChannelMembers(Array.from(channelMembers));
-          break;
-        case "leave_channel":
-          console.log(`Peer ${from} left channel ${channelId}`);
-          channelMembers.delete(from);
-          updateChannelMembers(Array.from(channelMembers));
-          break;
-        case "broadcast_address":
-          console.log(`Received broadcast from ${from} in channel ${channelId}`);
-          if (!channelMembers.has(from)) {
-            channelMembers.add(from);
-            updateChannelMembers(Array.from(channelMembers));
-          }
-          break;
-        case "query_addresses":
-          console.log(`Received query from ${from} in channel ${channelId}`);
-          wsSignaling.send(JSON.stringify({
-            to: channelId,
-            from: peerId,
-            type: "address_response",
-            channelId,
-            addresses: Array.from(channelMembers)
-          }));
-          break;
-        case "address_response":
-          console.log(`Received address response in channel ${channelId}`);
-          updateChannelMembers(data.addresses);
-          break;
-        default:
-          console.log(`Unhandled message type: ${type}`);
+function handlePeerMessage(message: any, remotePeerId: string) {
+  switch (message.type) {
+    case "peerId":
+      if (currentTopic) {
+        currentTopic.peerIds.set(message.denoPeerId, remotePeerId);
+        /* console.log(
+          `initAssociated Deno peerId ${message.denoPeerId} with Hyperswarm ID ${remotePeerId}`,
+        ); */
+        notifyDenoOfPeerAvailability(message.denoPeerId);
       }
-
-    }
-
-
-
-
-    if (!peerConnections.has(from)) {
-      console.log("Creating peer connection for", from);
-      createPeerConnection(from);
-    }
-
-    const peerConnection = peerConnections.get(from)!;
-    if (to === peerId) {
-      if (type === "offer") {
-        const peerConnection = peerConnections.get(from) || createPeerConnection(from);
-        const offerCollision = peerConnection.signalingState !== 'stable';
-        const polite = from > peerId; // Determine which peer is 'polite'
-
-        if (offerCollision) {
-          if (!polite) {
-            console.log('Ignoring offer collision');
-            return;
-          }
-          // If we're the polite peer, roll back local description
-          await Promise.all([
-            peerConnection.setLocalDescription({ type: "rollback" }),
-            peerConnection.setRemoteDescription(new wrtc.RTCSessionDescription(data))
-          ]);
-        } else {
-          await peerConnection.setRemoteDescription(new wrtc.RTCSessionDescription(data));
-        }
-
-
-
-
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        wsSignaling.send(JSON.stringify({
-          channelId: currentChannel,
-          to: from,
-          from: peerId,
-          type: "answer",
-          sdp: answer.sdp,
-        }));
-      } else if (type === "answer") {
-
-        if (peerConnections.has(from)) {
-          const peerConnection = peerConnections.get(from);
-          await peerConnection.setRemoteDescription(new wrtc.RTCSessionDescription(data));
-        }
-      } else if (type === "candidate") {
-        await peerConnection.addIceCandidate(
-          new wrtc.RTCIceCandidate(data.candidate),
+      break;
+    case "requestPeerIds":
+      if (currentTopic) {
+        console.log(`received requestPeerIds from ${remotePeerId}`)
+        const conn = Array.from(swarm.connections).find((c) =>
+          (c as any).remotePublicKey.toString("hex") === remotePeerId
         );
+        if (conn) {
+          (conn as any).write(JSON.stringify({
+            type: "peerIdResponse",
+            denoPeerId: peerId,
+            hyperswarmId: ourHyperswarmId,
+          }));
+        }
       }
+      break;
+    case "peerIdResponse":
+      if (currentTopic) {
+        currentTopic.peerIds.set(message.denoPeerId, message.hyperswarmId);
+        /* console.log(
+          `Associated Deno peerId ${message.denoPeerId} with Hyperswarm ID ${message.hyperswarmId}`,
+        ); */
+        notifyDenoOfPeerAvailability(message.denoPeerId);
+      }
+      break;
+    case "petplay_message":
+      wsIPC.send(JSON.stringify(
+        {
+          type: "petplay_message",
+          payload: JSON.stringify(message.payload),
+        },
+      ));
+      break;
+    default:
+      console.log("Unknown peer message type:", message.type);
+      break;
+  }
+}
+
+function notifyDenoOfPeerAvailability(denoPeerId: string) {
+  wsIPC.send(JSON.stringify({
+    type: "peer_available",
+    peerId: denoPeerId,
+  }));
+}
+
+function sendMessage(targetPeerId: string, payload: any): void {
+  if (currentTopic && currentTopic.peerIds.has(targetPeerId)) {
+    const targetHyperswarmId = currentTopic.peerIds.get(targetPeerId);
+    const targetConn = Array.from(swarm.connections).find((
+      conn,
+    ) => ((conn as any).remotePublicKey.toString("hex") ===
+      targetHyperswarmId)
+    );
+    if (targetConn) {
+      (targetConn as any).write(JSON.stringify(
+        {
+          type: "petplay_message",
+          payload: payload
+        }
+      ));
+      console.log(`Message sent to ${targetPeerId} (${targetHyperswarmId})`);
     } else {
-      console.error(to + "!=" + peerId);
+      console.log(
+        `Connection not found for ${targetPeerId} (${targetHyperswarmId})`,
+      );
     }
-  } catch (error) {
-    console.error("Error handling signaling message:", error);
-  }
-}
-
-function createPeerConnection(targetPeerId: string) {
-  const configuration = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' }, // Google's public STUN server
-      // Add TURN server configuration here if needed
-    ]
-  };
-  const peerConnection = new wrtc.RTCPeerConnection(configuration);
-
-  peerConnection.onicecandidate = (event) => {
-    //console.log("ICE candidate", event.candidate);
-    if (event.candidate) {
-      wsSignaling.send(JSON.stringify({
-        channelId: currentChannel,
-        to: targetPeerId,
-        from: peerId,
-        type: "candidate",
-        candidate: event.candidate,
-      }));
-    }
-  };
-
-  peerConnection.oniceconnectionstatechange = () => {
-    console.log("ICE connection state changed to:", peerConnection.iceConnectionState);
-  };
-
-  peerConnection.onsignalingstatechange = () => {
-    console.log("Signaling state changed to:", peerConnection.signalingState);
-  };
-
-
-
-  peerConnection.ondatachannel = (event: wrtc.RTCDataChannelEvent) => {
-    console.log("ondatachannel event fired", event);
-    setupDataChannel(targetPeerId, event.channel);
-  };
-  console.log("Created peer connection");
-  peerConnections.set(targetPeerId, peerConnection);
-  return peerConnection;
-}
-
-function setupDataChannel(targetPeerId: string, channel: wrtc.RTCDataChannel) {
-
-  console.log(`Setting up data channel for peer ${targetPeerId}`);
-
-  channel.onopen = () => {
-    console.log(`Data channel opened with peer ${targetPeerId}`);
-    sendMessage(targetPeerId, "Hello");
-  };
-
-  channel.onclose = () => {
-    console.log(`Data channel closed with peer ${targetPeerId}`);
-  };
-
-  channel.onerror = (error) => {
-    console.error(`Data channel error with peer ${targetPeerId}:`, error);
-  };
-
-
-
-  channel.onmessage = (event: MessageEvent) => {
-    const eventData = JSON.parse(event.data);
-    console.log(
-      `Received WebRTC message from ${targetPeerId}:`,
-      eventData,
-    );
-    if (eventData == "Hello") {
-      return;
-    } else {
-      wsIPC.send(JSON.stringify({
-        type: "webrtc_message_custom",
-        rtcmessage: event.data,
-      }));
-    }
-  };
-
-  dataChannels.set(targetPeerId, channel);
-}
-
-async function createOffer(targetPeerId: string) {
-  try {
-    console.log(`Creating offer for peer ${targetPeerId}`);
-    const peerConnection = peerConnections.get(targetPeerId) || createPeerConnection(targetPeerId);
-    const dataChannel = peerConnection.createDataChannel("chat");
-    console.log("Data channel initial state:", dataChannel.readyState);
-    dataChannel.onopen = () => {
-      console.log("Data channel state changed to:", dataChannel.readyState);
-    };
-    setupDataChannel(targetPeerId, dataChannel);
-
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-
-
-    wsSignaling.send(JSON.stringify({
-      channelId: currentChannel,
-      to: targetPeerId,
-      from: peerId,
-      type: "offer",
-      sdp: peerConnection.localDescription.sdp,
-    }));
-  } catch (error) {
-    console.error("Error in createOffer:", error);
-  }
-}
-
-function sendMessage(targetPeerId: string, message: string) {
-  const dataChannel = dataChannels.get(targetPeerId);
-  if (dataChannel && dataChannel.readyState === "open") {
-    dataChannel.send(JSON.stringify(message));
-    console.log(`Sent WebRTC message to ${targetPeerId}:`, message);
   } else {
-    console.log(
-      `Data channel not open with ${targetPeerId}. Cannot send message.`,
-      message,
-    );
+    console.log(`No Hyperswarm ID found for Deno peerId: ${targetPeerId}`);
   }
 }
 
-function queryDataPeers(CallbackReturnAddress: string, targetPeerId: string) {
-  const dataChannel = dataChannels.get(targetPeerId);
-  if (dataChannel && dataChannel.readyState === "open") {
-    wsIPC.send(JSON.stringify({
-      type: "query_dataPeersReturn",
-      targetPeerId: CallbackReturnAddress,
-      rtcmessage: true,
-    }));
-  } else {
-    console.log(
-      `Dataxxx channel not open with ${targetPeerId}. return false`,
-    );
-    wsIPC.send(JSON.stringify({
-      type: "query_dataPeersReturn",
-      targetPeerId: CallbackReturnAddress,
-      rtcmessage: false,
-    }));
-  }
+async function main(): Promise<void> {
+  await initIPC();
+  console.log("Hyperswarm peer initialized");
+  startPeerIdCheck();
 }
+
+main().catch(console.error);
+
+setInterval(() => {
+  /* console.log(`Current connections: ${swarm.connections.size}`);
+  console.log(`Current topic: ${currentTopic ? currentTopic.name : "None"}`);
+  console.log(`Peers: ${swarm.peers.size}`); */
+  /* for (const [key, peerInfo] of swarm.peers) {
+    console.log(`  Peer ${key}: ${peerInfo.publicKey.toString("hex")}`);
+    console.log(`    Topics: ${peerInfo.topics.map((t) => t.toString("hex")).join(", ")}`);
+  } */
+}, 10000);
+
+process.on("SIGINT", async () => {
+  console.log("Closing connections and leaving swarm...");
+  for (const conn of swarm.connections) {
+    conn.destroy();
+  }
+  await swarm.destroy();
+  process.exit(0);
+});

@@ -55,18 +55,14 @@ export class PostalService {
 
   //onmessage
   handleMessage = (worker: Worker, message: Message) => {
-    const addresses = Array.isArray(message.address.to)
-      ? message.address.to
-      : [message.address.to];
+    const addresses = Array.isArray(message.address.to) ? message.address.to : [message.address.to];
 
+    CustomLogger.error("actorsyserr", "PostalService handleMessage");
 
-    CustomLogger.error("actorsyserr", "PostalService handleMessage")
-
-    CustomLogger.error("actorsyserr", message)
+    CustomLogger.error("actorsyserr", message);
 
     addresses.forEach((address) => {
       message.address.to = address;
-
 
       // if message type starts with CB
       if (message.type.startsWith("CB")) {
@@ -77,22 +73,25 @@ export class PostalService {
       CustomLogger.log("actorsys", "postalService handleMessage", message.address.to, message.type);
       // redirect message
       switch (message.address.to) {
-        case null:
+        case null: {
           throw new Error();
-        case System:
+        }
+        case System: {
           this.systemFunctions(worker, message);
           break;
-        default:
+        }
+        default: {
           // message address is to another actor
           if (!PostalService.actors.has(message.address.to)) {
             CustomLogger.error("actorsyserr", "No actor found");
-            CustomLogger.log("actorsys", PostalService.actors)
+            CustomLogger.log("actorsys", PostalService.actors);
             // using portal instead
           }
           CustomLogger.error("actorsyserr", message.address.to);
-          CustomLogger.error("actorsyserr", PostalService.actors)
+          CustomLogger.error("actorsyserr", PostalService.actors);
           const targetWorker = PostalService.actors.get(message.address.to)!;
           targetWorker.postMessage(message);
+        }
       }
     });
   };
@@ -150,7 +149,8 @@ export class PostalService {
     }
 
     const address = JSON.parse(rMessage.address as unknown as string);
-    CustomLogger.log("default",
+    CustomLogger.log(
+      "default",
       `PostalService processing message:\n${rMessage.address}\nmessage type: ${rMessage.type}\npayload: ${rMessage.payload}\n`,
     );
     if (!notAddressArray(address)) {

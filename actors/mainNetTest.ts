@@ -19,7 +19,7 @@ const state: State & BaseState = {
   db: {},
   socket: null,
   numbah: 0,
-  addressBook: new Set()
+  addressBook: new Set(),
 };
 
 const functions: ActorFunctions = {
@@ -37,34 +37,36 @@ const functions: ActorFunctions = {
 async function main(_payload: Payload["MAIN"]) {
   CustomLogger.log("default", "main actor started");
 
-  const overlayactor = await Postman.create("overlayactor.ts");
+  const net1 = await Postman.create("netTestActor.ts");
+  const net2 = await Postman.create("netTestActor.ts");
 
-
-
-  await Postman.PostMessage({
-    address: { fm: state.id, to: overlayactor },
-    type: "SET_TOPIC",
-    payload: "muffin",
-  });
-
-  Postman.PostMessage({
-    address: { fm: state.id, to: overlayactor },
-    type: "STARTOVERLAY",
-    payload: {
-      name: "overlay1",
-      texture: "./resources/P1.png",
-      sync: false,
-    },
-  });
-
+  console.log("net1:", net1)
+  console.log("net2:", net2)
 
 
   await wait(1000);
-  const inputactor = await Postman.create("inputactor.ts");
+
+  const _topic = await Postman.PostMessage({
+    address: { fm: state.id, to: [net1, net2] },
+    type: "SET_TOPIC",
+    payload: "muffin",
+  }, true);
+
+  while (true) {
+    await wait(10000)
+    console.log("sendmsg")
+    Postman.PostMessage({
+      address: { fm: state.id, to: net1 },
+      type: "MESSAGE",
+      payload: net2,
+    });
+  }
+
+  
 
   await wait(5000);
 
-  inputloop(inputactor, overlayactor);
+  /*  inputloop(inputactor, overlayactor); */
 }
 
 async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
@@ -75,11 +77,11 @@ async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
       type: "GETCONTROLLERDATA",
       payload: null,
     }, true) as [
-        OpenVR.InputPoseActionData,
-        OpenVR.InputPoseActionData,
-        OpenVR.InputDigitalActionData,
-        OpenVR.InputDigitalActionData,
-      ];
+      OpenVR.InputPoseActionData,
+      OpenVR.InputPoseActionData,
+      OpenVR.InputDigitalActionData,
+      OpenVR.InputDigitalActionData,
+    ];
 
     if (inputstate[2].bState == 1) {
       Postman.PostMessage({

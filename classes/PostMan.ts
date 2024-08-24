@@ -1,4 +1,3 @@
-
 import { Signal } from "../actorsystem/utils.ts";
 import {
   ActorFunctions,
@@ -18,7 +17,6 @@ import { getAvailablePort } from "jsr:@std/net";
 import * as JSON from "../classes/JSON.ts";
 import { CustomLogger } from "../classes/customlogger.ts";
 
-
 export const OnMessage = (handler: (message: Message) => void) => {
   const worker = self as unknown as ActorWorker;
   worker.onmessage = (event: MessageEvent) => {
@@ -35,11 +33,11 @@ export class Postman {
   static customCB: Signal<unknown>;
   static portals: Array<ToAddress>;
   static webRTCInterface: WebRTCInterface;
-  private static channel: string | null = null;
-  static addressBook: Array<string>;
+  private static topic: string | null = null;
+  static addressBook: Set<string>;
+  static hmm: any;
 
-
-  private static pendingChannelSet: string | null = null;
+  private static pendingTopicSet: string | null = null;
 
   public static functions: ActorFunctions = {
     //initialize actor
@@ -54,6 +52,7 @@ export class Postman {
       CustomLogger.log("class", `initied ${Postman.state.id} actor with args:`, payload);
     },
     CB: (payload) => {
+      console.log("CB", payload)
       if (!Postman.customCB) throw new Error("UNEXPECTED CALLBACK");
       Postman.customCB.trigger(payload);
     },
@@ -73,30 +72,12 @@ export class Postman {
       CustomLogger.log("class", "Initializing WebRTC interface");
       await Postman.initWebRTCInterface();
     },
-
-    CONNECT: async (payload, address) => {
+    SET_TOPIC: async (payload, address) => {
       const addr = address as MessageAddressReal;
-      Postman.webRTCInterface.sendToNodeProcess({
-        type: "create_offer",
-        targetPeerId: payload,
-      });
-
-      await wait(1000);
-
-      // This needs to be adjusted based on how we determine connection status
-      const isConnected = true; // Placeholder
-      Postman.PostMessage({
-        address: { fm: Postman.state.id, to: addr.fm },
-        type: "CB:CONNECT",
-        payload: isConnected,
-      });
+      Postman.hmm = addr.fm
+      const topicId = payload as string | null;
+      Postman.attemptSetTopic(topicId);
     },
-    SET_CHANNEL: (payload) => {
-      const channelId = payload as string | null;
-      Postman.attemptSetChannel(channelId);
-    },
-
-
   };
 
   constructor(
@@ -109,66 +90,52 @@ export class Postman {
     Postman.functions = { ...Postman.functions, ...functions };
   }
 
-  private static broadcastInterval: number | null = null;
-  private static queryInterval: number | null = null;
-
-  private static attemptSetChannel(channelId: string | null) {
+  //#region TOPIC
+  private static attemptSetTopic(topicId: string | null) {
     if (Postman.webRTCInterface.isSocketOpen()) {
-      Postman.setChannelImmediate(channelId);
+      Postman.setTopicImmediate(topicId);
     } else {
-      CustomLogger.log("class", "WebSocket not open. Scheduling channel set attempt.");
-      Postman.pendingChannelSet = channelId;
-      Postman.scheduleSetChannelAttempt();
+      CustomLogger.log("class", "WebSocket not open. Scheduling topic set attempt.");
+      Postman.pendingTopicSet = topicId;
+      Postman.scheduleSetTopicAttempt();
     }
   }
 
-  private static scheduleSetChannelAttempt() {
+  private static scheduleSetTopicAttempt() {
     setTimeout(() => {
-      if (Postman.pendingChannelSet !== null) {
+      if (Postman.pendingTopicSet !== null) {
         if (Postman.webRTCInterface.isSocketOpen()) {
-          Postman.setChannelImmediate(Postman.pendingChannelSet);
+          Postman.setTopicImmediate(Postman.pendingTopicSet);
         } else {
-          CustomLogger.log("class", "WebSocket still not open. Rescheduling channel set attempt.");
-          Postman.scheduleSetChannelAttempt();
+          CustomLogger.log("class", "WebSocket still not open. Rescheduling topic set attempt.");
+          Postman.scheduleSetTopicAttempt();
         }
       }
     }, 1000); // Check every second
   }
 
-  private static setChannelImmediate(channelId: string | null) {
-    Postman.channel = channelId;
-    Postman.webRTCInterface.setChannel(channelId);
-    if (channelId) {
-      Postman.startChannelBroadcastAndQuery();
-    } else {
-      Postman.stopChannelBroadcastAndQuery();
-    }
-    Postman.pendingChannelSet = null;
-    CustomLogger.log("class", `Channel set to: ${Postman.channel}`);
+  private static setTopicImmediate(topicId: string | null) {
+    Postman.topic = topicId;
+    Postman.webRTCInterface.setTopic(topicId);
+    Postman.pendingTopicSet = null;
+    CustomLogger.log("class", `Topic set to: ${Postman.topic}`);
   }
 
+  //#endregion
 
+  //#region peers
 
-  private static startChannelBroadcastAndQuery() {
-    Postman.broadcastInterval = setInterval(() => {
-      Postman.webRTCInterface.broadcastAddress();
-    }, 3000); // Broadcast every 30 seconds
-
-    Postman.queryInterval = setInterval(() => {
-      Postman.webRTCInterface.queryAddresses();
-    }, 5000); // Query every 10 seconds
-  }
-
-  private static stopChannelBroadcastAndQuery() {
-    if (Postman.broadcastInterval) clearInterval(Postman.broadcastInterval);
-    if (Postman.queryInterval) clearInterval(Postman.queryInterval);
-  }
+  //#endregion
 
   static runFunctions(message: Message) {
+    //console.log("customcb check: ", Postman.customCB)
     if (notAddressArray(message.address)) {
       const address = message.address as MessageAddressReal;
-      CustomLogger.log("class",
-        `[${address.to}]Actor running function, type: ${message.type}, payload: ${JSON.stringify(message.payload)}`,
+      CustomLogger.log(
+        "class",
+        `[${address.to}]Actor running function, type: ${message.type}, payload: ${
+          JSON.stringify(message.payload)
+        }`,
       );
 
       (this.functions[message.type] as PayloadHandler<typeof message.type>)?.(
@@ -184,7 +151,9 @@ export class Postman {
   ): Promise<unknown | undefined> {
     if (cb) {
       CustomLogger.log("class", "cb enabled");
+      console.log("customCB created")
       Postman.customCB = new Signal<unknown>();
+      console.log("customCB", Postman.customCB)
       Postman.posterr(message);
       const result = await Postman.customCB.wait();
       return result;
@@ -195,27 +164,19 @@ export class Postman {
   }
 
   static async posterr(message: Message) {
-    const addresses = Array.isArray(message.address.to)
-      ? message.address.to
-      : [message.address.to];
+    const addresses = Array.isArray(message.address.to) ? message.address.to : [message.address.to];
 
     const addr = message.address as MessageAddressReal;
 
     await Promise.all(addresses.map(async (address) => {
       message.address.to = address!;
-
-      
-      if (Postman.webRTCInterface && Postman.addressBook.includes(addr.to)) {
-        if (message.address.to.startsWith("overlay")) {
-          CustomLogger.log("syncloop", "address " + message.address.to);
-        }
+      console.log(Postman.addressBook)
+      if (Postman.webRTCInterface && Postman.addressBook.has(message.address.to)) {
         Postman.webRTCInterface.sendToNodeProcess({
           type: "send_message",
-          targetPeerId: addr.to,
+          targetPeerId: message.address.to,
           payload: message,
         });
-
-
       } /* else if (Postman.webRTCInterface) {
         //check portal
         CustomLogger.log("syncloop", "portal check? ");
@@ -264,14 +225,14 @@ export class Postman {
 
     return result;
   }
-  private static updateAddressBook(addresses: string[]) {
-    addresses.forEach(addr => {
-      if (!Postman.state.addressBook.includes(addr)) {
-        Postman.state.addressBook.push(addr);
-      }
-    });
-  }
 
+  static addPeerToAddressBook(peerId: string) {
+    if (!Postman.addressBook.has(peerId)) {
+      Postman.addressBook.add(peerId);
+      CustomLogger.log("class", `New peer available: ${peerId}`);
+      CustomLogger.log("class", `Current peers: ${Array.from(Postman.addressBook).join(", ")}`);
+    }
+  }
 
   static async initWebRTCInterface() {
     const port = await getAvailablePort();
@@ -281,27 +242,26 @@ export class Postman {
     Postman.webRTCInterface = new WebRTCInterface(Postman.state.id, port);
     await Postman.webRTCInterface.start();
 
-    Postman.webRTCInterface.onMessage((data) => {
+    Postman.webRTCInterface.onMessage((data:any) => {
+
       CustomLogger.log("class", "Received message from WebRTC interface:", data);
-      if (data.type === "address_update") {
-        Postman.updateAddressBook(data.addresses);
-      } else if (data.type === "webrtc_message_custom") {
-        const message = JSON.parse(data.rtcmessage) as Message;
+      if (data.type === "peer_available") {
+        console.log("Peer available adding to addressbook:", data.peerId);
+        Postman.addPeerToAddressBook(data.peerId);
+      } else if (data.type === "petplay_message") {
+        const message = JSON.parse(data.payload) as Message;
         if (message.address.to === Postman.state.id) {
           Postman.runFunctions(message);
         } else {
           throw new Error("Message not to self");
         }
+      } else if (data.type === "topic_connected") { 
+        Postman.PostMessage({
+          address: { fm: Postman.state.id, to: Postman.hmm },
+          type: "CB:SET_TOPIC",
+          payload: data.topicId,
+        });
       }
-      if (Postman.pendingChannelSet !== null) {
-        Postman.attemptSetChannel(Postman.pendingChannelSet);
-      }
-
-      else if (data.type === "query_dataPeersReturn") {
-        Postman.portalCheckSignal.trigger(data.rtcmessage);
-      }
-
-
     });
   }
 }

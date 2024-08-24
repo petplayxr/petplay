@@ -6,10 +6,15 @@ export const worker = self as unknown as ActorWorker;
 export const xToAddress = type("string");
 export type ToAddress = typeof xToAddress.infer;
 
+interface PeerInfo {
+  actorId: string;
+  hyperswarmId: string;
+}
+
 export type BaseState = {
   name: string;
   id: string;
-  addressBook: Array<string>;
+  addressBook: Set<string>;
   [key: string]: unknown;
 };
 
@@ -18,7 +23,6 @@ export const xSystem = type("'System'");
 export type SystemType = typeof xSystem.infer;
 export const xString = type("string");
 export const xStringOrStringArray = type("string").or(xString.array());
-
 
 export const xPairAddress = type({
   fm: "string",
@@ -50,7 +54,7 @@ export const xMessageAddressArray = type(
   {
     fm: "string",
     to: xStringOrStringArray,
-  }
+  },
 );
 export const xMessageAddressReal = type({
   fm: "string",
@@ -66,7 +70,6 @@ const xMessageAddress = type(
 );
 
 export type MessageAddress = typeof xMessageAddress.infer;
-
 
 //#endregion
 
@@ -124,7 +127,7 @@ export const xPayloadActor = type({
 }).or({
   type: "'MESSAGE'",
   payload: xToAddress,
-})
+});
 
 export const xPayloadRTC = type({
   type: "'RTC'",
@@ -139,22 +142,20 @@ export const xPayloadRTC = type({
   type: "'ADDREMOTE'",
   payload: xToAddress,
 }).or({
-  type: "'SET_CHANNEL'",
-  payload: "string"
+  type: "'SET_TOPIC'|'CB:SET_TOPIC'",
+  payload: "string",
 }).or({
   type: "'RECEIVEADDRESS'",
-  payload: "string"
+  payload: "string",
 }).or({
   type: "'ADDADDRESS'",
   payload: xToAddress,
-})
+});
 
 export const xPayloadSignaling = type({
   type: "'STARTSERVER'",
   payload: "number",
 });
-
-
 
 export const xPayloadPortal = type({
   type: "'PREGISTER'",
@@ -169,7 +170,7 @@ export const xPayloadPortal = type({
 
 export const xPayloadPetplay = type({
   type: "'ASSIGNVRC'",
-  payload: xToAddress
+  payload: xToAddress,
 }).or({
   type: "'CB:GETCOORDINATE'|'GETCOORDINATE'",
   payload: "any",
@@ -189,7 +190,7 @@ export const xPayloadPetplay = type({
     texture: "string",
     sync: "boolean",
   },
-})
+});
 
 export const xPayload = type(
   xPayloadSys,
@@ -205,7 +206,7 @@ export const xPayload = type(
   xPayloadPortal,
 ).or(
   xPayloadPetplay,
-)
+);
 
 export type xPayload = typeof xPayload.infer;
 export type MessageType = typeof xPayload.infer.type;

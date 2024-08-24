@@ -26,12 +26,12 @@ const state: State & BaseState = {
     name: "ovrinput",
     inputerror: OpenVR.InputError.VRInputError_None,
     socket: null,
-    addressBook: new Array<string>(),
+    addressBook: new Set(),
 };
 
 const functions: ActorFunctions = {
     CUSTOMINIT: (_payload) => {
-        Postman.functions?.RTC?.(null, state.id);
+        //Postman.functions?.RTC?.(null, state.id);
         main()
     },
     LOG: (_payload) => {
@@ -192,8 +192,8 @@ function main() {
         throw new Error("Failed to set action manifest path");
     }
 
-    //get action set handle
 
+    //
     error = vrInput.GetActionHandle("/actions/main/in/HandPoseLeft", handPoseLeftHandlePTR);
     if (error !== OpenVR.InputError.VRInputError_None) {
         CustomLogger.error("actorerr", `Failed to get action handle: ${OpenVR.InputError[error]}`);

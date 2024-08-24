@@ -1,8 +1,13 @@
 {
   "dependencies": {
     "@roamhq/wrtc": "^0.8.0",
+    "@types/node": "^22.5.0",
     "@types/ws": "8.5.12",
+    "b4a": "^1.6.6",
+    "crypto": "^1.0.1",
+    "hypercore-crypto": "^3.4.2",
+    "hyperswarm": "^4.8.2",
     "ts-node": "^10.9.2",
-    "ws": "^8.17.1"
+    "ws": "^8.18.0"
   }
 }

@@ -12,7 +12,7 @@ export class OscSubscriber {
     this.subscribers.push(callback);
   }
 
-  private async notifySubscribers(address: string, value: number) {
+  private notifySubscribers(address: string, value: number) {
     for (const subscriber of this.subscribers) {
       subscriber(address, value);
     }

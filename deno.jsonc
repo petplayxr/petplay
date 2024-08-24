@@ -1,9 +1,28 @@
 {
   "imports": {
-    "arktype": "https://esm.sh/arktype@2.0.0-dev.25",
+    "arktype": "https://esm.sh/arktype@2.0.0-dev.25"
   },
-  "unstable": ["net", "worker-options"],
+  "unstable": [
+    "net",
+    "worker-options"
+  ],
+  "fmt": {
+    "semiColons": true,
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "singleQuote": false
+  },
   "lint": {
-    "rules": { "exclude": ["no-case-declarations"] }
+    "exclude": [
+      "pear/*.js",
+    ],
+    "rules": {
+      "tags": [
+        "recommended"
+      ],
+      "exclude": [
+        "no-unused-vars"
+      ]
+    }
   }
 }
