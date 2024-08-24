@@ -45,7 +45,7 @@ async function main(_payload: Payload["MAIN"]) {
     address: { fm: state.id, to: overlayactor },
     type: "SET_TOPIC",
     payload: "muffin",
-  });
+  }, true);
 
   Postman.PostMessage({
     address: { fm: state.id, to: overlayactor },

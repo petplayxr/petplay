@@ -52,7 +52,7 @@ export class Postman {
       CustomLogger.log("class", `initied ${Postman.state.id} actor with args:`, payload);
     },
     CB: (payload) => {
-      console.log("CB", payload)
+      /* console.log("CB", payload) */
       if (!Postman.customCB) throw new Error("UNEXPECTED CALLBACK");
       Postman.customCB.trigger(payload);
     },
@@ -151,9 +151,7 @@ export class Postman {
   ): Promise<unknown | undefined> {
     if (cb) {
       CustomLogger.log("class", "cb enabled");
-      console.log("customCB created")
       Postman.customCB = new Signal<unknown>();
-      console.log("customCB", Postman.customCB)
       Postman.posterr(message);
       const result = await Postman.customCB.wait();
       return result;
