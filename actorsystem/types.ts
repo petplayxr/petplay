@@ -129,8 +129,8 @@ export const xPayloadActor = type({
   payload: xToAddress,
 });
 
-export const xPayloadRTC = type({
-  type: "'RTC'",
+export const xPayloadHYPERSWARM = type({
+  type: "'HYPERSWARM'",
   payload: "null",
 }).or({
   type: "'CONNECT'",
@@ -199,7 +199,7 @@ export const xPayload = type(
 ).or(
   xPayloadActor,
 ).or(
-  xPayloadRTC,
+  xPayloadHYPERSWARM,
 ).or(
   xPayloadSignaling,
 ).or(

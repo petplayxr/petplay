@@ -31,7 +31,7 @@ const state: State & BaseState = {
 
 const functions: ActorFunctions = {
     CUSTOMINIT: (_payload) => {
-        //Postman.functions?.RTC?.(null, state.id);
+        //Postman.functions?.HYPERSWARM?.(null, state.id);
         main()
     },
     LOG: (_payload) => {

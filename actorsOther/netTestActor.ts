@@ -61,7 +61,7 @@ const functions: ActorFunctions = {
 
 
 async function NET() {
-  Postman.functions?.RTC?.(null, state.id);
+  Postman.functions?.HYPERSWARM?.(null, state.id);
 }
 
 new Postman(worker, functions, state);

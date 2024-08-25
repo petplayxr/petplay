@@ -27,7 +27,7 @@ const state: State & BaseState = {
 
 const functions: ActorFunctions = {
   CUSTOMINIT: (_payload) => {
-    rtc()
+    hyperswarm()
   },
   LOG: (_payload) => {
     console.log(state.id);
@@ -42,8 +42,8 @@ const functions: ActorFunctions = {
     }, false);
   },
 };
-function rtc() {
-  Postman.functions?.RTC?.(null, state.id);
+function hyperswarm() {
+  Postman.functions?.HYPERSWARM?.(null, state.id);
 }
 
 new Postman(worker, functions, state);

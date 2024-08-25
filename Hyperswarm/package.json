@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "@roamhq/wrtc": "^0.8.0",
     "@types/node": "^22.5.0",
     "@types/ws": "8.5.12",
     "b4a": "^1.6.6",

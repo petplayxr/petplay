@@ -12,7 +12,7 @@ import {
 } from "../actorsystem/types.ts";
 import { ActorWorker } from "../actorsystem/ActorWorker.ts";
 import { wait } from "../actorsystem/utils.ts";
-import { WebRTCInterface } from "./webrtcInterface.ts";
+import { HyperswarmInterface } from "./hyperswarmInterface.ts";
 import { getAvailablePort } from "jsr:@std/net";
 import * as JSON from "../classes/JSON.ts";
 import { CustomLogger } from "../classes/customlogger.ts";
@@ -32,7 +32,7 @@ export class Postman {
   static portalCheckSignal: Signal<boolean>;
   static customCB: Signal<unknown>;
   static portals: Array<ToAddress>;
-  static webRTCInterface: WebRTCInterface;
+  static hyperswarmInterface: HyperswarmInterface;
   private static topic: string | null = null;
   static addressBook: Set<string>;
   static hmm: any;
@@ -68,9 +68,9 @@ export class Postman {
       this.worker.terminate();
     },
 
-    RTC: async (_payload) => {
-      CustomLogger.log("class", "Initializing WebRTC interface");
-      await Postman.initWebRTCInterface();
+    HYPERSWARM: async (_payload) => {
+      CustomLogger.log("class", "Initializing Hyperswarm interface");
+      await Postman.inithyperswarmInterface();
     },
     SET_TOPIC: async (payload, address) => {
       const addr = address as MessageAddressReal;
@@ -92,7 +92,7 @@ export class Postman {
 
   //#region TOPIC
   private static attemptSetTopic(topicId: string | null) {
-    if (Postman.webRTCInterface.isSocketOpen()) {
+    if (Postman.hyperswarmInterface.isSocketOpen()) {
       Postman.setTopicImmediate(topicId);
     } else {
       CustomLogger.log("class", "WebSocket not open. Scheduling topic set attempt.");
@@ -104,7 +104,7 @@ export class Postman {
   private static scheduleSetTopicAttempt() {
     setTimeout(() => {
       if (Postman.pendingTopicSet !== null) {
-        if (Postman.webRTCInterface.isSocketOpen()) {
+        if (Postman.hyperswarmInterface.isSocketOpen()) {
           Postman.setTopicImmediate(Postman.pendingTopicSet);
         } else {
           CustomLogger.log("class", "WebSocket still not open. Rescheduling topic set attempt.");
@@ -116,7 +116,7 @@ export class Postman {
 
   private static setTopicImmediate(topicId: string | null) {
     Postman.topic = topicId;
-    Postman.webRTCInterface.setTopic(topicId);
+    Postman.hyperswarmInterface.setTopic(topicId);
     Postman.pendingTopicSet = null;
     CustomLogger.log("class", `Topic set to: ${Postman.topic}`);
   }
@@ -133,8 +133,7 @@ export class Postman {
       const address = message.address as MessageAddressReal;
       CustomLogger.log(
         "class",
-        `[${address.to}]Actor running function, type: ${message.type}, payload: ${
-          JSON.stringify(message.payload)
+        `[${address.to}]Actor running function, type: ${message.type}, payload: ${JSON.stringify(message.payload)
         }`,
       );
 
@@ -169,13 +168,13 @@ export class Postman {
     await Promise.all(addresses.map(async (address) => {
       message.address.to = address!;
       console.log(Postman.addressBook)
-      if (Postman.webRTCInterface && Postman.addressBook.has(message.address.to)) {
-        Postman.webRTCInterface.sendToNodeProcess({
+      if (Postman.hyperswarmInterface && Postman.addressBook.has(message.address.to)) {
+        Postman.hyperswarmInterface.sendToNodeProcess({
           type: "send_message",
           targetPeerId: message.address.to,
           payload: message,
         });
-      } /* else if (Postman.webRTCInterface) {
+      } /* else if (Postman.hyperswarmInterface) {
         //check portal
         CustomLogger.log("syncloop", "portal check? ");
 
@@ -185,14 +184,14 @@ export class Postman {
         CustomLogger.log("class", "trying to query dataPeers")
         CustomLogger.log("class", Postman.state.id)
         CustomLogger.log("class", message.address.to)
-        Postman.webRTCInterface.sendToNodeProcess({
+        Postman.hyperswarmInterface.sendToNodeProcess({
           type: "query_dataPeers",
           from: Postman.state.id,
           targetPeerId: message.address.to,
         });
         const result: boolean = await Postman.portalCheckSignal.wait();
         if (result) {
-          Postman.webRTCInterface.sendToNodeProcess({
+          Postman.hyperswarmInterface.sendToNodeProcess({
             type: "send_message",
             targetPeerId: message.address.to,
             payload: message,
@@ -232,17 +231,17 @@ export class Postman {
     }
   }
 
-  static async initWebRTCInterface() {
+  static async inithyperswarmInterface() {
     const port = await getAvailablePort();
     if (!port) {
       throw new Error("No port available");
     }
-    Postman.webRTCInterface = new WebRTCInterface(Postman.state.id, port);
-    await Postman.webRTCInterface.start();
+    Postman.hyperswarmInterface = new HyperswarmInterface(Postman.state.id, port);
+    await Postman.hyperswarmInterface.start();
 
-    Postman.webRTCInterface.onMessage((data:any) => {
+    Postman.hyperswarmInterface.onMessage((data: any) => {
 
-      CustomLogger.log("class", "Received message from WebRTC interface:", data);
+      CustomLogger.log("class", "Received message from Hyperswarm interface:", data);
       if (data.type === "peer_available") {
         console.log("Peer available adding to addressbook:", data.peerId);
         Postman.addPeerToAddressBook(data.peerId);
@@ -253,7 +252,7 @@ export class Postman {
         } else {
           throw new Error("Message not to self");
         }
-      } else if (data.type === "topic_connected") { 
+      } else if (data.type === "topic_connected") {
         Postman.PostMessage({
           address: { fm: Postman.state.id, to: Postman.hmm },
           type: "CB:SET_TOPIC",

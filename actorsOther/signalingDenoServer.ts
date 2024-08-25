@@ -8,7 +8,7 @@ const state: BaseState = {
   db: {},
   socket: null,
   numbah: 0,
-  addressbook: [],
+  addressBook: new Set(),
   rtcSocket: null,
 };
 

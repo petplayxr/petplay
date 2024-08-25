@@ -1,9 +1,9 @@
 import { getIP } from "https://deno.land/x/get_ip@v2.0.0/mod.ts";
 import { wait } from "../actorsystem/utils.ts";
-import { CustomLogger } from "../classes/customlogger.ts";
-import * as JSON from "../classes/JSON.ts";
+import { CustomLogger } from "./customlogger.ts";
+import * as JSON from "./JSON.ts";
 
-export class WebRTCInterface {
+export class HyperswarmInterface {
   private nodeSocket: WebSocket | null = null;
   private ipcPort: number;
   private id: string;
@@ -42,7 +42,7 @@ export class WebRTCInterface {
     const command = new Deno.Command("node", {
       args: [
         "-e",
-        `require('child_process').execSync('npx ts-node nodeWebRTC/webrtc.ts ${this.id} ${this.ipcPort}', {stdio: 'inherit'})`,
+        `require('child_process').execSync('npx ts-node Hyperswarm/main.ts ${this.id} ${this.ipcPort}', {stdio: 'inherit'})`,
       ],
       stdin: "piped",
       stdout: "piped",
@@ -65,7 +65,7 @@ export class WebRTCInterface {
         if (done) break;
         const lines = decoder.decode(value).trim().split("\n");
         for (const line of lines) {
-          if (line) CustomLogger.log("default", `[RTC NODE ${idPrefix} ${type}]: ${line}`);
+          if (line) CustomLogger.log("default", `[Hyperswarm ${idPrefix} ${type}]: ${line}`);
         }
       }
     })();

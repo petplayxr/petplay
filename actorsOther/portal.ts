@@ -22,7 +22,7 @@ const state: State & BaseState = {
 
 const functions: ActorFunctions = {
   CUSTOMINIT: (_payload) => {
-    rtc();
+    hyperswarm();
   },
   LOG: (_payload) => {
     console.log(state.id);
@@ -40,8 +40,8 @@ const functions: ActorFunctions = {
   },
 };
 
-function rtc() {
-  Postman.functions?.RTC?.(null, state.id);
+function hyperswarm() {
+  Postman.functions?.HYPERSWARM?.(null, state.id);
 }
 
 function register(payload: { name: string; address: string }) {

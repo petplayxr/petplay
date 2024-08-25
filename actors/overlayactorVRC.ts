@@ -43,7 +43,7 @@ const state: State & BaseState = {
 
 const functions: ActorFunctions = {
     CUSTOMINIT: (_payload) => {
-        Postman.functions?.RTC?.(null, state.id);
+        Postman.functions?.HYPERSWARM?.(null, state.id);
         //main()
     },
     LOG: (_payload) => {
@@ -231,11 +231,11 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
 
         return (value - 0.5) * 220;
     }
-    
+
     function transformRotation(value: number): number {
         return value * 2 * Math.PI;
     }
-    
+
 
     while (true) {
 
@@ -243,7 +243,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
             interface coord {
                 [key: string]: number;
             }
-            const coordinate = await Postman.PostMessage( {
+            const coordinate = await Postman.PostMessage({
                 address: { fm: state.id, to: state.vrc },
                 type: "GETCOORDINATE",
                 payload: null,
@@ -252,7 +252,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
             if (coordinate[PositionX] !== undefined) lastKnownPosition.x = coordinate[PositionX];
             if (coordinate[PositionY] !== undefined) lastKnownPosition.y = coordinate[PositionY];
             if (coordinate[PositionZ] !== undefined) lastKnownPosition.z = coordinate[PositionZ];
-            
+
             if (coordinate[RotationY] !== undefined) lastKnownRotation.y = coordinate[RotationY];
 
             const transformedX = transformCoordinate(lastKnownPosition.x);
@@ -269,10 +269,10 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
             const matrix: OpenVR.HmdMatrix34 = {
                 m: [
                     [cosY, 0, sinY, rotatedX],    // First column: No change in X
-                    [0, 1, 0, -transformedY+2.2],  // Second column: Rotate around X, slight elevation
+                    [0, 1, 0, -transformedY + 2.2],  // Second column: Rotate around X, slight elevation
                     [-sinY, 0, cosY, -rotatedZ]    // Third column: Rotate around X, inverted
                 ]
-            }; 
+            };
 
             CustomLogger.log("default", "a: ", matrix.m[0][0]);
 
