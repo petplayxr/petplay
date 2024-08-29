@@ -53,7 +53,7 @@ async function main(_payload: Payload["MAIN"]) {
   }, true);
 
   while (true) {
-    await wait(10000)
+    await wait(10)
     console.log("sendmsg")
     Postman.PostMessage({
       address: { fm: state.id, to: net1 },
@@ -67,38 +67,6 @@ async function main(_payload: Payload["MAIN"]) {
   await wait(5000);
 
   /*  inputloop(inputactor, overlayactor); */
-}
-
-async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
-  CustomLogger.log("default", "inputloop started");
-  while (true) {
-    const inputstate = await Postman.PostMessage({
-      address: { fm: state.id, to: inputactor },
-      type: "GETCONTROLLERDATA",
-      payload: null,
-    }, true) as [
-      OpenVR.InputPoseActionData,
-      OpenVR.InputPoseActionData,
-      OpenVR.InputDigitalActionData,
-      OpenVR.InputDigitalActionData,
-    ];
-
-    if (inputstate[2].bState == 1) {
-      Postman.PostMessage({
-        address: { fm: state.id, to: overlayactor },
-        type: "SETOVERLAYLOCATION",
-        payload: inputstate[0].pose.mDeviceToAbsoluteTracking,
-      });
-    } else if (inputstate[3].bState == 1) {
-      Postman.PostMessage({
-        address: { fm: state.id, to: overlayactor },
-        type: "SETOVERLAYLOCATION",
-        payload: inputstate[1].pose.mDeviceToAbsoluteTracking,
-      });
-    }
-
-    await wait(10);
-  }
 }
 
 new Postman(worker, functions, state);

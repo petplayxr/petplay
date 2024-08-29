@@ -1,6 +1,11 @@
 {
   "imports": {
+    "@quentinadam/zip": "jsr:@quentinadam/zip@^0.1.0",
     "arktype": "https://esm.sh/arktype@2.0.0-dev.25"
+  },
+  "tasks": {
+    "compile": "deno run -A compile.ts",
+    "release": "deno run -A release.ts"
   },
   "unstable": [
     "net",
@@ -14,7 +19,7 @@
   },
   "lint": {
     "exclude": [
-      "pear/*.js",
+      "pear/*.js"
     ],
     "rules": {
       "tags": [

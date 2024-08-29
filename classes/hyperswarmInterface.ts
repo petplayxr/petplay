@@ -39,7 +39,7 @@ export class HyperswarmInterface {
   }
 
   private startNodeProcess() {
-    const command = new Deno.Command("node", {
+    /* const command = new Deno.Command("node", {
       args: [
         "-e",
         `require('child_process').execSync('npx ts-node Hyperswarm/main.ts ${this.id} ${this.ipcPort}', {stdio: 'inherit'})`,
@@ -47,7 +47,14 @@ export class HyperswarmInterface {
       stdin: "piped",
       stdout: "piped",
       stderr: "piped",
+    }); */
+    const command = new Deno.Command("Hyperswarm/main.exe", {
+      args: [this.id, this.ipcPort.toString()],
+      stdin: "piped",
+      stdout: "piped",
+      stderr: "piped",
     });
+
     const nodeProcess = command.spawn();
 
     this.pipeOutput(nodeProcess.stdout, "stdout");
