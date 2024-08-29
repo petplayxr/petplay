@@ -2,8 +2,6 @@ import {
     ActorFunctions,
     BaseState,
     worker,
-    ToAddress,
-    MessageAddressReal,
 } from "../actorsystem/types.ts";
 import { OnMessage, Postman } from "../classes/PostMan.ts";
 import { wait } from "../actorsystem/utils.ts";
@@ -11,21 +9,19 @@ import * as OpenVR from "../OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
 import { P } from "../OpenVR_TS_Bindings_Deno/pointers.ts";
 import { stringToPointer } from "../OpenVR_TS_Bindings_Deno/utils.ts";
 import { CustomLogger } from "../classes/customlogger.ts";
+import { getId } from "../classes/actorUtils.ts";
+import { CoordState, getOverlayLocation, getOverlayTransformAbsolute, setOverlayLocation, setOverlayTransformAbsolute } from "../classes/actorCoords.ts";
 
 //a steamvr overlay
 
-type State = {
+interface State extends CoordState, BaseState {
     id: string;
     vrc: string;
     db: Record<string, unknown>;
-    overlayClass: OpenVR.IVROverlay | null;
-    overlayHandle: OpenVR.OverlayHandle;
-    overlayerror: OpenVR.OverlayError;
-    OverlayTransform: OpenVR.HmdMatrix34 | null;
     [key: string]: unknown;
 };
 
-const state: State & BaseState = {
+const state: State = {
     id: "",
     db: {},
     name: "overlay1",
@@ -38,8 +34,9 @@ const state: State & BaseState = {
     addressBook: new Set(),
     overlayHandle: 0n,
     TrackingUniverseOriginPTR: null,
-    overlayerror: OpenVR.OverlayError.VROverlayError_None,
+    overlayError: OpenVR.OverlayError.VROverlayError_None,
 };
+
 
 const functions: ActorFunctions = {
     CUSTOMINIT: (_payload) => {
@@ -49,82 +46,18 @@ const functions: ActorFunctions = {
     LOG: (_payload) => {
         CustomLogger.log("actor", state.id);
     },
-    GETID: (_payload, address) => {
-        // use a check here
-        const addr = address as MessageAddressReal;
-        Postman.PostMessage({
-            address: { fm: state.id, to: addr.fm },
-            type: "CB:GETID",
-            payload: state.id,
-        }, false);
-    },
+    GETID: (_payload, _address) => getId(_address, state.id), 
+    STARTOVERLAY: (payload, _address) => startOverlay(payload.name, payload.texture, payload.sync),
+    SETOVERLAYLOCATION: (payload, _address) => setOverlayLocation(state, payload, _address),
+    GETOVERLAYLOCATION: (payload, _address) => getOverlayLocation(state, payload, _address),
     ASSIGNVRC: (payload) => {
         state.vrc = payload;
     },
-    STARTOVERLAY: (payload, _address) => {
-
-        mainX(payload.name, payload.texture, payload.sync);
-
-    },
-    GETOVERLAYLOCATION: (_payload, address) => {
-        const addr = address as MessageAddressReal;
-
-        const m34 = GetOverlayTransformAbsolute();
-
-        Postman.PostMessage({
-            address: { fm: state.id, to: addr.fm },
-            type: "CB:GETOVERLAYLOCATION",
-            payload: m34,
-        });
-    },
-    SETOVERLAYLOCATION: (payload, _address) => {
-        const transform = payload as OpenVR.HmdMatrix34;
-        if (state.sync == false) {
-            CustomLogger.log("syncloop", "set transform ");
-        }
-        setOverlayTransformAbsolute(transform);
-    }
 };
 
-function setOverlayTransformAbsolute(transform: OpenVR.HmdMatrix34) {
 
 
-
-    const overlay = state.overlayClass!;
-    const transformBuffer = new ArrayBuffer(OpenVR.HmdMatrix34Struct.byteSize);
-    const transformView = new DataView(transformBuffer);
-    OpenVR.HmdMatrix34Struct.write(transform, transformView);
-    const transformPtr = Deno.UnsafePointer.of<OpenVR.HmdMatrix34>(transformBuffer)!;
-
-    overlay.SetOverlayTransformAbsolute(state.overlayHandle, OpenVR.TrackingUniverseOrigin.TrackingUniverseStanding, transformPtr);
-}
-
-function GetOverlayTransformAbsolute(): OpenVR.HmdMatrix34 {
-
-    let error = state.overlayerror
-    const overlay = state.overlayClass!
-    const overlayHandle = state.overlayHandle
-
-
-    const TrackingUniverseOriginPTR = P.Int32P<OpenVR.TrackingUniverseOrigin>();
-    const hmd34size = OpenVR.HmdMatrix34Struct.byteSize;
-    const hmd34buf = new ArrayBuffer(hmd34size);
-    const hmd34view = new DataView(hmd34buf);
-    const m34ptr = Deno.UnsafePointer.of<OpenVR.HmdMatrix34>(hmd34buf)!;
-
-    error = overlay.GetOverlayTransformAbsolute(overlayHandle, TrackingUniverseOriginPTR, m34ptr);
-    if (error !== OpenVR.OverlayError.VROverlayError_None) {
-        CustomLogger.error("actorerr", `Failed to get overlay transform: ${OpenVR.OverlayError[error]}`);
-        throw new Error("Failed to get overlay transform");
-    }
-    const m34 = OpenVR.HmdMatrix34Struct.read(hmd34view) as OpenVR.HmdMatrix34;
-
-    return m34;
-}
-
-
-
-async function mainX(overlaymame: string, overlaytexture: string, sync: boolean) {
+async function startOverlay(overlaymame: string, overlaytexture: string, sync: boolean) {
 
 
     state.sync = sync;
@@ -178,7 +111,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
     };
     OpenVR.HmdMatrix34Struct.write(initialTransform, initialTransformView);
     state.trackingUniverseOriginPTR = Deno.UnsafePointer.of<OpenVR.TrackingUniverseOrigin>(new Int32Array(1))!;
-    setOverlayTransformAbsolute(initialTransform)
+    setOverlayTransformAbsolute(state, initialTransform)
 
     CustomLogger.log("default", "Overlay created and shown.");
     //#endregion
@@ -209,7 +142,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
         ]
     };
 
-    setOverlayTransformAbsolute(matrix)
+    setOverlayTransformAbsolute(state, matrix)
 
 
 }
