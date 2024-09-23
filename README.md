@@ -1,5 +1,6 @@
 # AR in VR for VRChat
 
+##### YouTube demo
 [![Demo](https://img.youtube.com/vi/2hV8siAFJfI/0.jpg)](https://www.youtube.com/watch?v=2hV8siAFJfI)
 
 Reqs: Node.js, Deno, SteamVR, probably windows, optionally vscode
