@@ -37,11 +37,45 @@ const functions: ActorFunctions = {
 async function main(_payload: Payload["MAIN"]) {
   CustomLogger.log("default", "main actor started");
 
+  const ivr = await Postman.create("InitOpenVR.ts")
+  const ivrsystem = await Postman.PostMessage({
+    address: { fm: state.id, to: ivr },
+    type: "GETOPENVRPTR",
+    payload: null
+  }, true)
+
+  //
+  const hmd = await Postman.create("hmdactor.ts");
+  Postman.PostMessage({
+    address: { fm: state.id, to: hmd },
+    type: "INITOPENVR",
+    payload: ivrsystem
+  })
+
   const overlayactor = await Postman.create("overlayactor.ts");
-  const overlay2 = await Postman.create("overlayactorVRCground.ts");
+  const overlayactor2 = await Postman.create("overlayactorVRC.ts");
+  const overlayactorVRC = await Postman.create("overlayactorVRCground.ts");
+  const vrc = await Postman.create("vrccoordinate.ts");
+
 
   Postman.PostMessage({
-    address: { fm: state.id, to: overlay2 },
+    address: { fm: state.id, to: overlayactor2 },
+    type: "STARTOVERLAY",
+    payload: {
+      name: "overlayXXxx",
+      texture: "./resources/P2.png",
+      sync: true,
+    },
+  });
+
+  Postman.PostMessage({
+    address: { fm: state.id, to: overlayactorVRC },
+    type: "ASSIGNVRC",
+    payload: vrc,
+  });
+
+  Postman.PostMessage({
+    address: { fm: state.id, to: overlayactorVRC },
     type: "STARTOVERLAY",
     payload: {
       name: "overlayXX",
@@ -49,6 +83,8 @@ async function main(_payload: Payload["MAIN"]) {
       sync: false,
     },
   });
+
+
 
 
   await Postman.PostMessage({

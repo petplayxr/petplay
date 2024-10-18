@@ -25,11 +25,8 @@
         "run",
         "--inspect-wait",
         "-A",
-        "--allow-ffi",
-        "--unstable-ffi",
         "--unstable-net",
         "--unstable-worker-options",
-        "--allow-read"
       ],
       "attachSimplePort": 9229
     },
