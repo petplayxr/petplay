@@ -83,7 +83,14 @@ const functions: ActorFunctions = {
             CustomLogger.log("syncloop", "set transform ");
         }
         setOverlayTransformAbsolute(transform);
-    }
+    },
+    INITOPENVR: (payload) => {
+        const ptrn = payload;
+        const systemPtr = Deno.UnsafePointer.create(ptrn);  // Recreate the pointer
+        state.vrSystem = new OpenVR.IVRSystem(systemPtr);   // Create the OpenVR instance
+        state.overlayClass = new OpenVR.IVROverlay(systemPtr);
+        CustomLogger.log("actor", `OpenVR system initialized in actor ${state.id} with pointer ${ptrn}`);
+    },
 };
 
 function setOverlayTransformAbsolute(transform: OpenVR.HmdMatrix34) {
@@ -133,21 +140,6 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
     //#region init openvr
     let error;
 
-
-    const initerrorptr = Deno.UnsafePointer.of<OpenVR.InitError>(new Int32Array(1))!
-    const TypeSafeINITERRPTR: OpenVR.InitErrorPTRType = initerrorptr
-
-
-    const errorX = Deno.UnsafePointer.of(new Int32Array(1))!;
-    OpenVR.VR_InitInternal(errorX, OpenVR.ApplicationType.VRApplication_Overlay);
-    error = new Deno.UnsafePointerView(errorX).getInt32();
-    CustomLogger.log("actor", error)
-
-
-    const overlayPtr = OpenVR.VR_GetGenericInterface(stringToPointer(OpenVR.IVROverlay_Version), TypeSafeINITERRPTR);
-
-
-    state.overlayClass = new OpenVR.IVROverlay(overlayPtr);
     const overlay = state.overlayClass as OpenVR.IVROverlay;
     //#endregion
 

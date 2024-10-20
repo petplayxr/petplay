@@ -560,8 +560,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@quentinadam/zip@0.1",
-      "npm:@number0/iroh@0.25",
-      "npm:udx-native@^1.12.1"
+      "npm:@number0/iroh@0.25"
     ]
   }
 }

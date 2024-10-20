@@ -37,7 +37,7 @@ const functions: ActorFunctions = {
 async function main(_payload: Payload["MAIN"]) {
     CustomLogger.log("default", "main actor started");
 
-    const ivr = await Postman.create("InitOpenVRactor.ts")
+    const ivr = await Postman.create("InitOpenVR.ts")
 
     const ptrn = await Postman.PostMessage({
         address: { fm: state.id, to: ivr },

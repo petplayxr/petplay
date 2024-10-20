@@ -15,6 +15,7 @@ type State = {
     id: string;
     db: Record<string, unknown>;
     vrSystemPTR: Deno.PointerValue | null;
+    overlayPTR: Deno.PointerValue | null;
     [key: string]: unknown;
 };
 
@@ -25,6 +26,7 @@ const state: State & BaseState = {
     socket: null,
     sync: false,
     vrSystemPTR: null,
+    overlayPTR: null,
     addressBook: new Set(),
 };
 
@@ -63,6 +65,26 @@ const functions: ActorFunctions = {
         }, false);
 
         CustomLogger.log("actor", `Sent OpenVR pointer: ${systemPtrNumeric}`);
+    },
+    GETOVERLAYPTR: (_payload, address) => {
+        const addr = address as MessageAddressReal;
+
+        if (!state.overlayPTR) {
+            CustomLogger.error("actorerr", `OpenVR system not initialized in actor ${state.id}`);
+            return;
+        }
+
+        const overlay = state.overlayPTR
+
+        const overlayPtrNumeric = Deno.UnsafePointer.value(overlay);
+
+        Postman.PostMessage({
+            address: { fm: state.id, to: addr.fm },
+            type: "CB:GETOPENVRPTR",
+            payload: overlayPtrNumeric,
+        }, false);
+
+        CustomLogger.log("actor", `Sent OpenVR pointer: ${overlayPtrNumeric}`);
     }
 };
 
@@ -77,6 +99,8 @@ function initializeOpenVR() {
     }
 
     const systemPtr = OpenVR.VR_GetGenericInterface(stringToPointer(OpenVR.IVRSystem_Version), initErrorPtr);
+    const overlayPtr = OpenVR.VR_GetGenericInterface(stringToPointer(OpenVR.IVROverlay_Version), initErrorPtr);
+    
     const interfaceError = new Deno.UnsafePointerView(initErrorPtr).getInt32();
 
     if (interfaceError !== OpenVR.InitError.VRInitError_None) {
@@ -84,7 +108,15 @@ function initializeOpenVR() {
         throw new Error("Failed to get IVRSystem interface");
     }
 
+    const initerrorptr = Deno.UnsafePointer.of<OpenVR.InitError>(new Int32Array(1))!
+    const TypeSafeINITERRPTR: OpenVR.InitErrorPTRType = initerrorptr
+
+
+    const errorX = Deno.UnsafePointer.of(new Int32Array(1))!;
+
+
     state.vrSystemPTR = systemPtr
+    state.overlayPTR = overlayPtr
 
     
 

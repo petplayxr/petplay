@@ -11,13 +11,14 @@ import { CustomLogger } from "../classes/customlogger.ts";
 export class ActorWorker extends Worker {
     static signal: Signal<ToAddress>;
     constructor(scriptURL: string | URL, options?: WorkerOptions) {
+        console.log("constructing")
         super(scriptURL, options);
         CustomLogger.log("actorsys", "ActorWorker constructor called");
     }
 
-    postMessage(message: Message, transfer: Transferable[]): void;
-    postMessage(message: Message, options?: StructuredSerializeOptions): void;
-    postMessage(
+    override postMessage(message: Message, transfer: Transferable[]): void;
+    override postMessage(message: Message, options?: StructuredSerializeOptions): void;
+    override postMessage(
         message: Message,
         transferOrOptions?: Transferable[] | StructuredSerializeOptions,
     ): void {

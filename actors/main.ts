@@ -43,36 +43,50 @@ async function main(_payload: Payload["MAIN"]) {
     type: "GETOPENVRPTR",
     payload: null
   }, true)
+  const ivroverlay = await Postman.PostMessage({
+    address: { fm: state.id, to: ivr },
+    type: "GETOVERLAYPTR",
+    payload: null
+  }, true)
 
   //
   const hmd = await Postman.create("hmdactor.ts");
+  const inputactor = await Postman.create("inputactor.ts");
+  const overlayactor = await Postman.create("overlayactor.ts");
+  const overlayactorVRC = await Postman.create("overlayactorVRC.ts");
+  const overlayactorVRCg = await Postman.create("overlayactorVRCground.ts");
+
+  await wait(1000)
+
   Postman.PostMessage({
     address: { fm: state.id, to: hmd },
     type: "INITOPENVR",
     payload: ivrsystem
   })
+  Postman.PostMessage({
+    address: { fm: state.id, to: [overlayactor, overlayactorVRC, overlayactorVRCg] },
+    type: "INITOPENVR",
+    payload: ivroverlay
+  })
 
-  const overlayactor = await Postman.create("overlayactor.ts");
-  const overlayactor2 = await Postman.create("overlayactorVRC.ts");
-  const overlayactorVRC = await Postman.create("overlayactorVRCground.ts");
+
   const vrc = await Postman.create("vrccoordinate.ts");
 
-
-  Postman.PostMessage({
-    address: { fm: state.id, to: overlayactor2 },
-    type: "STARTOVERLAY",
-    payload: {
-      name: "overlayXXxx",
-      texture: "./resources/P2.png",
-      sync: true,
-    },
-  });
 
   Postman.PostMessage({
     address: { fm: state.id, to: overlayactorVRC },
     type: "ASSIGNVRC",
     payload: vrc,
   });
+
+  Postman.PostMessage({
+    address: { fm: state.id, to: overlayactorVRC },
+    type: "ASSIGNHMD",
+    payload: hmd,
+  });
+
+
+  await wait(2000)
 
   Postman.PostMessage({
     address: { fm: state.id, to: overlayactorVRC },
@@ -87,11 +101,6 @@ async function main(_payload: Payload["MAIN"]) {
 
 
 
-  await Postman.PostMessage({
-    address: { fm: state.id, to: overlayactor },
-    type: "SET_TOPIC",
-    payload: "muffin",
-  }, true);
 
   Postman.PostMessage({
     address: { fm: state.id, to: overlayactor },
@@ -106,7 +115,9 @@ async function main(_payload: Payload["MAIN"]) {
 
 
   await wait(1000);
-  const inputactor = await Postman.create("inputactor.ts");
+
+
+
 
   await wait(5000);
 

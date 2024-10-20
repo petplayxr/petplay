@@ -167,14 +167,17 @@ export class Postman {
 
     await Promise.all(addresses.map(async (address) => {
       message.address.to = address!;
-      console.log(Postman.addressBook)
+      console.log("addressbook of",this.state.name, Postman.addressBook)
       if (Postman.hyperswarmInterface && Postman.addressBook.has(message.address.to)) {
+        console.log("send to node", message)
         Postman.hyperswarmInterface.sendToNodeProcess({
           type: "send_message",
           targetPeerId: message.address.to,
           payload: message,
         });
-      } /* else if (Postman.hyperswarmInterface) {
+      }
+      //#region stuff
+      /* else if (Postman.hyperswarmInterface) {
         //check portal
         CustomLogger.log("syncloop", "portal check? ");
 
@@ -201,7 +204,9 @@ export class Postman {
           this.worker.postMessage(message);
         }
       } */
+      //#endregion
       else {
+        console.log("send", message)
         this.worker.postMessage(message);
       }
     }));
@@ -237,7 +242,7 @@ export class Postman {
       throw new Error("No port available");
     }
     Postman.hyperswarmInterface = new HyperswarmInterface(Postman.state.id, port);
-    await Postman.hyperswarmInterface.start();
+    //await Postman.hyperswarmInterface.start();
 
     Postman.hyperswarmInterface.onMessage((data: any) => {
 

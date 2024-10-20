@@ -93,7 +93,7 @@ const functions: ActorFunctions = {
         const ptrn = payload;
         const systemPtr = Deno.UnsafePointer.create(ptrn);  // Recreate the pointer
         state.vrSystem = new OpenVR.IVRSystem(systemPtr);   // Create the OpenVR instance
-
+        state.overlayClass = new OpenVR.IVROverlay(systemPtr);
         CustomLogger.log("actor", `OpenVR system initialized in actor ${state.id} with pointer ${ptrn}`);
     },
 };

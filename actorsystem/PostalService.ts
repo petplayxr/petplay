@@ -20,12 +20,14 @@ export class PostalService {
   async add(address: string): Promise<ToAddress> {
     PostalService.signal = new Signal<ToAddress>();
 
+    console.log("creating", address)
     const worker: ActorWorker = new ActorWorker(
       new URL(`../actors/${address}`, import.meta.url).href,
       {
         type: "module",
       },
     );
+    
 
     //attach message handler
     worker.onmessage = (event: MessageEvent<Message>) => {
