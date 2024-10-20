@@ -2,6 +2,7 @@ import {
     ActorFunctions,
     BaseState,
     worker,
+    ToAddress,
     MessageAddressReal,
 } from "../actorsystem/types.ts";
 import { OnMessage, Postman } from "../classes/PostMan.ts";
@@ -12,25 +13,51 @@ import { CustomLogger } from "../classes/customlogger.ts";
 
 type State = {
     id: string;
-    vrc: string;
-    hmd: string;
+    db: Record<string, unknown>;
     overlayClass: OpenVR.IVROverlay | null;
     overlayHandle: OpenVR.OverlayHandle;
     overlayerror: OpenVR.OverlayError;
-    sync: boolean;
+    OverlayTransform: OpenVR.HmdMatrix34 | null;
+    vrSystem: OpenVR.IVRSystem | null;
+    vrcOriginActor: string | null;
+    vrcOrigin: OpenVR.HmdMatrix34 | null;
+    smoothedVrcOrigin: OpenVR.HmdMatrix34 | null;
+    relativePosition: OpenVR.HmdMatrix34;
+    isRunning: boolean;
+    [key: string]: unknown;
 };
 
 const state: State & BaseState = {
     id: "",
+    db: {},
     name: "overlay1",
-    vrc: "",
-    hmd: "",
-    overlayClass: null,
-    overlayHandle: 0n,
-    overlayerror: OpenVR.OverlayError.VROverlayError_None,
+    socket: null,
     sync: false,
+    overlayClass: null,
+    OverlayTransform: null,
+    numbah: 0,
     addressBook: new Set(),
+    overlayHandle: 0n,
+    TrackingUniverseOriginPTR: null,
+    overlayerror: OpenVR.OverlayError.VROverlayError_None,
+    vrSystem: null,
+    vrcOriginActor: null,
+    vrcOrigin: null,
+    smoothedVrcOrigin: null,
+    relativePosition: {
+        m: [
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0]
+        ]
+    },
+    isRunning: false,
 };
+
+const smoothingWindowSize = 10;
+const smoothingWindow: OpenVR.HmdMatrix34[] = [];
+const vrcOriginSmoothingWindow: OpenVR.HmdMatrix34[] = [];
+
 
 const functions: ActorFunctions = {
     CUSTOMINIT: (_payload) => {
@@ -47,17 +74,8 @@ const functions: ActorFunctions = {
             payload: state.id,
         }, false);
     },
-    ASSIGNVRC: (payload) => {
-        state.vrc = payload;
-    },
-    ASSIGNHMD: (payload) => {
-        state.hmd = payload;
-    },
     STARTOVERLAY: (payload, _address) => {
         mainX(payload.name, payload.texture, payload.sync);
-    },
-    ADDADDRESS: (payload, _address) => {
-        state.addressBook.add(payload);
     },
     GETOVERLAYLOCATION: (_payload, address) => {
         const addr = address as MessageAddressReal;
@@ -68,20 +86,50 @@ const functions: ActorFunctions = {
             payload: m34,
         });
     },
-    SETOVERLAYLOCATION: (payload, _address) => {
+    SETOVERLAYLOCATION: (payload, address) => {
         const transform = payload as OpenVR.HmdMatrix34;
-        if (state.sync == false) {
-            CustomLogger.log("syncloop", "set transform ");
+        if (!isValidMatrix(transform)) {
+            //CustomLogger.warn("SETOVERLAYLOCATION", "Received invalid transform");
+            return;
         }
-        setOverlayTransformAbsolute(transform);
+
+        if (state.smoothedVrcOrigin && isValidMatrix(state.smoothedVrcOrigin)) {
+            // Update relative position
+            state.relativePosition = multiplyMatrix(invertMatrix(state.smoothedVrcOrigin), transform);
+        } else {
+            // If no valid VRC origin, set absolute position
+            addToSmoothingWindow(smoothingWindow, transform);
+            const smoothedTransform = getSmoothedTransform(smoothingWindow);
+            if (smoothedTransform) {
+                setOverlayTransformAbsolute(smoothedTransform);
+            }
+        }
     },
     INITOPENVR: (payload) => {
         const ptrn = payload;
         const systemPtr = Deno.UnsafePointer.create(ptrn);
+        state.vrSystem = new OpenVR.IVRSystem(systemPtr);
         state.overlayClass = new OpenVR.IVROverlay(systemPtr);
         CustomLogger.log("actor", `OpenVR system initialized in actor ${state.id} with pointer ${ptrn}`);
     },
+    ASSIGNVRCORIGIN: (payload, _address) => {
+        state.vrcOriginActor = payload as string;
+        CustomLogger.log("actor", `VRC Origin Actor assigned: ${state.vrcOriginActor}`);
+    },
 };
+
+function isValidMatrix(m: OpenVR.HmdMatrix34 | null): boolean {
+    if (!m) return false;
+    for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 4; j++) {
+            if (typeof m.m[i][j] !== 'number' || isNaN(m.m[i][j])) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 
 function setOverlayTransformAbsolute(transform: OpenVR.HmdMatrix34) {
     const overlay = state.overlayClass!;
@@ -96,7 +144,6 @@ function GetOverlayTransformAbsolute(): OpenVR.HmdMatrix34 {
     let error = state.overlayerror;
     const overlay = state.overlayClass!;
     const overlayHandle = state.overlayHandle;
-
     const TrackingUniverseOriginPTR = P.Int32P<OpenVR.TrackingUniverseOrigin>();
     const hmd34size = OpenVR.HmdMatrix34Struct.byteSize;
     const hmd34buf = new ArrayBuffer(hmd34size);
@@ -112,31 +159,108 @@ function GetOverlayTransformAbsolute(): OpenVR.HmdMatrix34 {
     return m34;
 }
 
-const PositionX: string = "/avatar/parameters/CustomObjectSync/PositionX";
-const PositionY: string = "/avatar/parameters/CustomObjectSync/PositionY";
-const PositionZ: string = "/avatar/parameters/CustomObjectSync/PositionZ";
-const RotationY: string = "/avatar/parameters/CustomObjectSync/RotationY";
+function multiplyMatrix(a: OpenVR.HmdMatrix34, b: OpenVR.HmdMatrix34): OpenVR.HmdMatrix34 {
+    const result: OpenVR.HmdMatrix34 = {
+        m: [
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+        ]
+    };
 
-const lastKnownPosition: LastKnownPosition = { x: 0, y: 0, z: 0 };
-const lastKnownRotation: LastKnownRotation = { y: 0 };
+    for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 4; j++) {
+            result.m[i][j] = 0;
+            for (let k = 0; k < 3; k++) {
+                result.m[i][j] += a.m[i][k] * b.m[k][j];
+            }
+            if (j === 3) {
+                result.m[i][j] += a.m[i][3];
+            }
+        }
+    }
 
-interface LastKnownPosition {
-    x: number;
-    y: number;
-    z: number;
+    return result;
 }
 
-interface LastKnownRotation {
-    y: number;
+function invertMatrix(m: OpenVR.HmdMatrix34): OpenVR.HmdMatrix34 {
+    const result: OpenVR.HmdMatrix34 = {
+        m: [
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0]
+        ]
+    };
+
+    // Invert 3x3 rotation matrix
+    for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+            result.m[i][j] = m.m[j][i];
+        }
+    }
+
+    // Invert translation
+    for (let i = 0; i < 3; i++) {
+        result.m[i][3] = -(
+            result.m[i][0] * m.m[0][3] +
+            result.m[i][1] * m.m[1][3] +
+            result.m[i][2] * m.m[2][3]
+        );
+    }
+
+    return result;
 }
 
-async function mainX(overlaymame: string, overlaytexture: string, sync: boolean) {
+function addToSmoothingWindow(window: OpenVR.HmdMatrix34[], transform: OpenVR.HmdMatrix34) {
+    if (window.length >= smoothingWindowSize) {
+        window.shift();
+    }
+    window.push(transform);
+}
+
+function getSmoothedTransform(window: (OpenVR.HmdMatrix34 | null)[]): OpenVR.HmdMatrix34 | null {
+    const validTransforms = window.filter(isValidMatrix) as OpenVR.HmdMatrix34[];
+
+    if (validTransforms.length === 0) {
+        //CustomLogger.warn("smoothing", "No valid transforms in smoothing window");
+        return null;
+    }
+
+    const smoothedTransform: OpenVR.HmdMatrix34 = {
+        m: [
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+        ]
+    };
+
+    for (const transform of validTransforms) {
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 4; j++) {
+                smoothedTransform.m[i][j] += transform.m[i][j];
+            }
+        }
+    }
+
+    const windowSize = validTransforms.length;
+    for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 4; j++) {
+            smoothedTransform.m[i][j] /= windowSize;
+        }
+    }
+
+    return smoothedTransform;
+}
+
+
+
+
+async function mainX(overlayname: string, overlaytexture: string, sync: boolean) {
     state.sync = sync;
-    let error;
-    const overlay = state.overlayClass as OpenVR.IVROverlay;
 
+    const overlay = state.overlayClass as OpenVR.IVROverlay;
     const overlayHandlePTR = P.BigUint64P<OpenVR.OverlayHandle>();
-    error = overlay.CreateOverlay(overlaymame, overlaymame, overlayHandlePTR);
+    const error = overlay.CreateOverlay(overlayname, overlayname, overlayHandlePTR);
     const overlayHandle = new Deno.UnsafePointerView(overlayHandlePTR).getBigUint64();
     state.overlayHandle = overlayHandle;
 
@@ -144,12 +268,8 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
 
     const imgpath = Deno.realPathSync(overlaytexture);
     overlay.SetOverlayFromFile(overlayHandle, imgpath);
-    overlay.SetOverlayWidthInMeters(overlayHandle, 1);
+    overlay.SetOverlayWidthInMeters(overlayHandle, 0.2);
     overlay.ShowOverlay(overlayHandle);
-
-    const initialTransformSize = OpenVR.HmdMatrix34Struct.byteSize;
-    const initialTransformBuf = new ArrayBuffer(initialTransformSize);
-    const initialTransformView = new DataView(initialTransformBuf);
 
     const initialTransform: OpenVR.HmdMatrix34 = {
         m: [
@@ -158,81 +278,58 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
             [0.0, 0.0, 1.0, -2.0]
         ]
     };
-    OpenVR.HmdMatrix34Struct.write(initialTransform, initialTransformView);
-    state.trackingUniverseOriginPTR = Deno.UnsafePointer.of<OpenVR.TrackingUniverseOrigin>(new Int32Array(1))!;
     setOverlayTransformAbsolute(initialTransform);
 
     CustomLogger.log("default", "Overlay created and shown.");
 
+    state.isRunning = true;
+    updateLoop();
+}
 
+async function updateLoop() {
+    while (state.isRunning) {
+        try {
+            if (state.vrcOriginActor) {
+                const newVrcOrigin = await Postman.PostMessage({
+                    address: { fm: state.id, to: state.vrcOriginActor },
+                    type: "GETVRCORIGIN",
+                    payload: null,
+                }, true) as OpenVR.HmdMatrix34;
 
-    function transformCoordinate(value: number): number {
-        return (value - 0.5) * 340;
-    }
+                if (isValidMatrix(newVrcOrigin)) {
+                    addToSmoothingWindow(vrcOriginSmoothingWindow, newVrcOrigin);
+                    const smoothedNewVrcOrigin = getSmoothedTransform(vrcOriginSmoothingWindow);
 
-    function transformRotation(value: number): number {
-        return value * 2 * Math.PI;
-    }
-
-    while (true) {
-        if (state.vrc != "") {
-            interface coord {
-                [key: string]: number;
+                    if (smoothedNewVrcOrigin && (!state.smoothedVrcOrigin || !matrixEquals(state.smoothedVrcOrigin, smoothedNewVrcOrigin))) {
+                        state.smoothedVrcOrigin = smoothedNewVrcOrigin;
+                        const newAbsolutePosition = multiplyMatrix(state.smoothedVrcOrigin, state.relativePosition);
+                        addToSmoothingWindow(smoothingWindow, newAbsolutePosition);
+                        const smoothedAbsolutePosition = getSmoothedTransform(smoothingWindow);
+                        if (smoothedAbsolutePosition) {
+                            setOverlayTransformAbsolute(smoothedAbsolutePosition);
+                        }
+                    }
+                } else {
+                    //CustomLogger.warn("updateLoop", "Received invalid VRC origin");
+                }
             }
-
-            const hmdPose = await Postman.PostMessage({
-                address: { fm: state.id, to: state.hmd },
-                type: "GETHMDPOSITION",
-                payload: null,
-            }, true) as OpenVR.TrackedDevicePose;
-
-            const hmdMatrix = hmdPose.mDeviceToAbsoluteTracking.m;
-            const hmdYaw = Math.atan2(hmdMatrix[0][2], hmdMatrix[0][0]);
-
-            const coordinate = await Postman.PostMessage({
-                address: { fm: state.id, to: state.vrc },
-                type: "GETCOORDINATE",
-                payload: null,
-            }, true) as coord;
-
-            if (coordinate[PositionX] !== undefined) lastKnownPosition.x = coordinate[PositionX];
-            if (coordinate[PositionY] !== undefined) lastKnownPosition.y = coordinate[PositionY];
-            if (coordinate[PositionZ] !== undefined) lastKnownPosition.z = coordinate[PositionZ];
-            if (coordinate[RotationY] !== undefined) lastKnownRotation.y = coordinate[RotationY];
-
-            const transformedX = transformCoordinate(lastKnownPosition.x);
-            const transformedY = transformCoordinate(lastKnownPosition.y);
-            const transformedZ = transformCoordinate(lastKnownPosition.z);
-
-            const vrChatYaw = transformRotation(lastKnownRotation.y);
-            const correctedYaw = hmdYaw + vrChatYaw;
-
-            const cosCorrectedYaw = Math.cos(correctedYaw);
-            const sinCorrectedYaw = Math.sin(correctedYaw);
-
-            const rotatedX = transformedX * cosCorrectedYaw - transformedZ * sinCorrectedYaw;
-            const rotatedZ = transformedX * sinCorrectedYaw + transformedZ * cosCorrectedYaw;
-            
-            const angle = -Math.PI / 2; // -90 degrees, pointing straight down
-
-            // Sin and cos of the angle
-            const s = Math.sin(angle);
-            const c = Math.cos(angle);
-
-            const matrix: OpenVR.HmdMatrix34 = {
-                m: [
-                    [cosCorrectedYaw, sinCorrectedYaw * s, sinCorrectedYaw * c, rotatedX],
-                    [0, c, -s, -transformedY + 2.9],
-                    [-sinCorrectedYaw, cosCorrectedYaw * s, cosCorrectedYaw * c, -rotatedZ]
-                ]
-            };
-
-            CustomLogger.log("default", "Overlay Transformation Matrix: ", matrix);
-            setOverlayTransformAbsolute(matrix);
+        } catch (error) {
+            //CustomLogger.error("updateLoop", `Error in update loop: ${error.message}`);
         }
 
-        await wait(1);
+        await wait(1); // Update at 20Hz, adjust as needed
     }
+}
+
+function matrixEquals(a: OpenVR.HmdMatrix34, b: OpenVR.HmdMatrix34): boolean {
+    for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 4; j++) {
+            if (Math.abs(a.m[i][j] - b.m[i][j]) > 0.0001) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 new Postman(worker, functions, state);

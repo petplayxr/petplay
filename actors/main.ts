@@ -49,12 +49,18 @@ async function main(_payload: Payload["MAIN"]) {
     payload: null
   }, true)
 
-  //
+
+  const overlayactor = await Postman.create("overlayactor.ts");
+
+
+
   const hmd = await Postman.create("hmdactor.ts");
   const inputactor = await Postman.create("inputactor.ts");
-  const overlayactor = await Postman.create("overlayactor.ts");
+
   const overlayactorVRC = await Postman.create("overlayactorVRC.ts");
-  const overlayactorVRCg = await Postman.create("overlayactorVRCground.ts");
+
+  const vrcorigin = await Postman.create("overlayactorVRCorigin.ts");
+
 
   await wait(1000)
 
@@ -64,7 +70,7 @@ async function main(_payload: Payload["MAIN"]) {
     payload: ivrsystem
   })
   Postman.PostMessage({
-    address: { fm: state.id, to: [overlayactor, overlayactorVRC, overlayactorVRCg] },
+    address: { fm: state.id, to: [ overlayactorVRC, vrcorigin ] },
     type: "INITOPENVR",
     payload: ivroverlay
   })
@@ -74,13 +80,13 @@ async function main(_payload: Payload["MAIN"]) {
 
 
   Postman.PostMessage({
-    address: { fm: state.id, to: overlayactorVRC },
+    address: { fm: state.id, to: vrcorigin },
     type: "ASSIGNVRC",
     payload: vrc,
   });
 
   Postman.PostMessage({
-    address: { fm: state.id, to: overlayactorVRC },
+    address: { fm: state.id, to: vrcorigin },
     type: "ASSIGNHMD",
     payload: hmd,
   });
@@ -89,7 +95,7 @@ async function main(_payload: Payload["MAIN"]) {
   await wait(2000)
 
   Postman.PostMessage({
-    address: { fm: state.id, to: overlayactorVRC },
+    address: { fm: state.id, to: vrcorigin },
     type: "STARTOVERLAY",
     payload: {
       name: "overlayXX",
@@ -98,12 +104,18 @@ async function main(_payload: Payload["MAIN"]) {
     },
   });
 
+  Postman.PostMessage({
+    address: { fm: state.id, to: overlayactorVRC },
+    type: "ASSIGNVRCORIGIN",
+    payload: vrcorigin,
+  });
+
 
 
 
 
   Postman.PostMessage({
-    address: { fm: state.id, to: overlayactor },
+    address: { fm: state.id, to: overlayactorVRC },
     type: "STARTOVERLAY",
     payload: {
       name: "overlay1",
@@ -114,14 +126,9 @@ async function main(_payload: Payload["MAIN"]) {
 
 
 
-  await wait(1000);
-
-
-
-
   await wait(5000);
 
-  inputloop(inputactor, overlayactor);
+  inputloop(inputactor, overlayactorVRC);
 }
 
 async function inputloop(inputactor: ToAddress, overlayactor: ToAddress) {
