@@ -19,6 +19,7 @@ type State = {
     overlayerror: OpenVR.OverlayError;
     origin: OpenVR.HmdMatrix34 | null
     sync: boolean;
+    originChangeCount: number;
 };
 
 const state: State & BaseState = {
@@ -32,6 +33,7 @@ const state: State & BaseState = {
     overlayerror: OpenVR.OverlayError.VROverlayError_None,
     sync: false,
     addressBook: new Set(),
+    originChangeCount: 0,
 };
 
 const functions: ActorFunctions = {
@@ -143,11 +145,10 @@ interface LastKnownRotation {
 
 async function mainX(overlaymame: string, overlaytexture: string, sync: boolean) {
     state.sync = sync;
-    let error;
     const overlay = state.overlayClass as OpenVR.IVROverlay;
 
     const overlayHandlePTR = P.BigUint64P<OpenVR.OverlayHandle>();
-    error = overlay.CreateOverlay(overlaymame, overlaymame, overlayHandlePTR);
+    const error = overlay.CreateOverlay(overlaymame, overlaymame, overlayHandlePTR);
     const overlayHandle = new Deno.UnsafePointerView(overlayHandlePTR).getBigUint64();
     state.overlayHandle = overlayHandle;
 
@@ -155,7 +156,7 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
 
     const imgpath = Deno.realPathSync(overlaytexture);
     overlay.SetOverlayFromFile(overlayHandle, imgpath);
-    overlay.SetOverlayWidthInMeters(overlayHandle, 0.01);
+    overlay.SetOverlayWidthInMeters(overlayHandle, 0.5);
     overlay.ShowOverlay(overlayHandle);
 
     const initialTransformSize = OpenVR.HmdMatrix34Struct.byteSize;
@@ -183,6 +184,19 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
 
     function transformRotation(value: number): number {
         return value * 2 * Math.PI;
+    }
+
+    let lastOrigin: OpenVR.HmdMatrix34 | null = null;
+    let lastLogTime = Date.now();
+
+    function isOriginChanged(newOrigin: OpenVR.HmdMatrix34): boolean {
+        if (!lastOrigin) return true;
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 4; j++) {
+                if (newOrigin.m[i][j] !== lastOrigin.m[i][j]) return true;
+            }
+        }
+        return false;
     }
 
     while (true) {
@@ -233,7 +247,11 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
                     [-sinCorrectedYaw, 0, cosCorrectedYaw, -rotatedZ]
                 ]
             };
-            state.origin = pureMatrix;
+            if (isOriginChanged(pureMatrix)) {
+                state.origin = pureMatrix;
+                state.originChangeCount++;
+                lastOrigin = pureMatrix;
+            }
 
 
             //#region visual
@@ -256,7 +274,14 @@ async function mainX(overlaymame: string, overlaytexture: string, sync: boolean)
             //#endregion
 
         }
-        await wait(1);
+        const currentTime = Date.now();
+        if (currentTime - lastLogTime >= 1000) {
+            console.log( `Origin changed ${state.originChangeCount} times in the last second`);
+            state.originChangeCount = 0;
+            lastLogTime = currentTime;
+        }
+
+        await wait(11);
     }
 }
 

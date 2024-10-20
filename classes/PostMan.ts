@@ -167,7 +167,7 @@ export class Postman {
 
     await Promise.all(addresses.map(async (address) => {
       message.address.to = address!;
-      console.log("addressbook of",this.state.name, Postman.addressBook)
+      //console.log("addressbook of",this.state.name, Postman.addressBook)
       if (Postman.hyperswarmInterface && Postman.addressBook.has(message.address.to)) {
         console.log("send to node", message)
         Postman.hyperswarmInterface.sendToNodeProcess({
@@ -206,7 +206,7 @@ export class Postman {
       } */
       //#endregion
       else {
-        console.log("send", message)
+        //console.log("send", message)
         this.worker.postMessage(message);
       }
     }));
