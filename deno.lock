@@ -1,12 +1,15 @@
 {
   "version": "4",
   "specifiers": {
+    "jsr:@milly/namedpipe@*": "1.1.0",
     "jsr:@quentinadam/assert@~0.1.7": "0.1.7",
     "jsr:@quentinadam/uint8array-extension@~0.1.4": "0.1.4",
     "jsr:@quentinadam/zip@0.1": "0.1.1",
     "jsr:@std/bytes@^1.0.2": "1.0.2",
     "jsr:@std/io@*": "0.224.9",
     "jsr:@std/net@*": "1.0.4",
+    "jsr:@std/streams@*": "1.0.6",
+    "npm:@ffmpeg/ffmpeg@0.11.6": "0.11.6",
     "npm:@number0/iroh@0.25": "0.25.0",
     "npm:@types/node@*": "22.5.4",
     "npm:hyperswarm@*": "4.8.2",
@@ -14,6 +17,9 @@
     "npm:udx-native@^1.12.1": "1.12.1"
   },
   "jsr": {
+    "@milly/namedpipe@1.1.0": {
+      "integrity": "b0123e3a0b88e67d6cb3e2c11345541f97fc0ff7aeb5abbcb2aa3b1785daf09a"
+    },
     "@quentinadam/assert@0.1.7": {
       "integrity": "0246fb7fd3aa7b286535db40feefdafc588272d3f287b4eb995c96263ab6dfca"
     },
@@ -41,9 +47,24 @@
     },
     "@std/net@1.0.4": {
       "integrity": "2f403b455ebbccf83d8a027d29c5a9e3a2452fea39bb2da7f2c04af09c8bc852"
+    },
+    "@std/streams@1.0.6": {
+      "integrity": "022ed94e380d06b4d91c49eb70241b7289ab78b8c2b4c4bbb7eb265e4997c25c",
+      "dependencies": [
+        "jsr:@std/bytes"
+      ]
     }
   },
   "npm": {
+    "@ffmpeg/ffmpeg@0.11.6": {
+      "integrity": "sha512-uN8J8KDjADEavPhNva6tYO9Fj0lWs9z82swF3YXnTxWMBoFLGq3LZ6FLlIldRKEzhOBKnkVfA8UnFJuvGvNxcA==",
+      "dependencies": [
+        "is-url",
+        "node-fetch",
+        "regenerator-runtime",
+        "resolve-url"
+      ]
+    },
     "@hyperswarm/secret-stream@6.6.3": {
       "integrity": "sha512-F/EF5KLUqjkTNFof1K5dz57CwrwjSzG0XxZe2X9t/2/mG5iQ28yJIwNcVabkWS1Wk2ZB719piVGKk6YbwkJ0aQ==",
       "dependencies": [
@@ -247,6 +268,9 @@
     "hypertrace@1.4.2": {
       "integrity": "sha512-sa6iq1FaJ03Db3eUl5ZodyOL3fheyrum9xzeHasXOQ/AprTT6vS1WjpbXfYkHhmzVmyn0jBW/VsCb1QaBkGyow=="
     },
+    "is-url@1.2.4": {
+      "integrity": "sha512-ITvGim8FhRiYe4IQ5uHSkj7pVaPDrCTkNd3yq3cV7iZAcJdHTUMPMEHcqSOy9xZ9qFenQCvi+2wjH9a1nXqHww=="
+    },
     "kademlia-routing-table@1.0.3": {
       "integrity": "sha512-ag1nLPaCSxbLnG6zeTBoGkdm+JSUi2JHMiNynHBoRG8se2w9yfyzepF3oX1B52HOEldtbuxTde5NxbNUtnwGqA==",
       "dependencies": [
@@ -261,6 +285,12 @@
     },
     "nat-sampler@1.0.1": {
       "integrity": "sha512-yQvyNN7xbqR8crTKk3U8gRgpcV1Az+vfCEijiHu9oHHsnIl8n3x+yXNHl42M6L3czGynAVoOT9TqBfS87gDdcw=="
+    },
+    "node-fetch@2.7.0": {
+      "integrity": "sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==",
+      "dependencies": [
+        "whatwg-url"
+      ]
     },
     "node-gyp-build@4.8.2": {
       "integrity": "sha512-IRUxE4BVsHWXkV/SFOut4qTlagw2aM8T5/vnTsmrHJvVoKueJHRc/JaFND7QDDc61kLYUJ6qlZM3sqTSyx2dTw=="
@@ -300,6 +330,12 @@
       "dependencies": [
         "b4a"
       ]
+    },
+    "regenerator-runtime@0.13.11": {
+      "integrity": "sha512-kY1AZVr2Ra+t+piVaJ4gxaFaReZVH40AKNo7UCX6W+dEwBo/2oZJzqfuN1qLq1oL45o56cPaTXELwrTh8Fpggg=="
+    },
+    "resolve-url@0.2.1": {
+      "integrity": "sha512-ZuF55hVUQaaczgOIwqWzkEcEidmlD/xl44x1UZnhOXcYuFN2S6+rcxpG+C1N3So0wvNI3DmJICUFfu2SxhBmvg=="
     },
     "safety-catch@1.0.2": {
       "integrity": "sha512-C1UYVZ4dtbBxEtvOcpjBaaD27nP8MlvyAQEp2fOTOEe6pfUpk1cDUxij6BR1jZup6rSyUTaBBplK7LanskrULA=="
@@ -353,6 +389,9 @@
     "timeout-refresh@2.0.1": {
       "integrity": "sha512-SVqEcMZBsZF9mA78rjzCrYrUs37LMJk3ShZ851ygZYW1cMeIjs9mL57KO6Iv5mmjSQnOe/29/VAfGXo+oRCiVw=="
     },
+    "tr46@0.0.3": {
+      "integrity": "sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw=="
+    },
     "udx-native@1.12.1": {
       "integrity": "sha512-E/2gwAxRTYA+TtU/z8dyognBMjEDVKB8dwWJQeVouHq6nGo3n2aiSxxxku+CSoJjnNUM60vw9b/qZvu+DHkA8g==",
       "dependencies": [
@@ -373,6 +412,16 @@
       "integrity": "sha512-YATkfKAFj47kTzmiQrWXMyRvaVrHsW6MEALa4bm+FhiA2YG4oira+Z3DXN6LrYOYn2Y8eO94Lwl9DOHjs1FpoQ==",
       "dependencies": [
         "b4a"
+      ]
+    },
+    "webidl-conversions@3.0.1": {
+      "integrity": "sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ=="
+    },
+    "whatwg-url@5.0.0": {
+      "integrity": "sha512-saE57nupxk6v3HY35+jzBwYa0rKSy0XR8JSxZPwgLr7ys0IBzhGviA1/TUGJLmSVqs8pb9AnvICXEuOHLprYTw==",
+      "dependencies": [
+        "tr46",
+        "webidl-conversions"
       ]
     },
     "xache@1.2.1": {
