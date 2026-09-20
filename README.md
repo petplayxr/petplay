@@ -68,6 +68,37 @@ desktop-control window, WebXR scene, wrist menu, VRC camera OSC receiver, and ag
 capture/display presentation is currently disabled in this mode because it is still backed by an
 OpenVR overlay.
 
+### Dev install: follow SteamVR (Linux)
+
+`deno task install:dev` installs the checkout as a systemd **user** service
+(`~/.config/systemd/user/petplay-dev.service`) running `utils/steamvr-watch.ts`: PetPlay starts when
+SteamVR starts and stops when SteamVR goes away, with no terminal attached. `deno task dev:steamvr`
+runs the same watcher in the foreground.
+
+```bash
+deno task install:dev                 # server follows SteamVR
+deno task install:dev -- --desktop    # ... and brings up the desktop control surface
+deno task dev:steamvr -- --desktop    # the same watcher, foreground, this shell only
+deno task dev:status                  # unit path, state, and the command it runs
+deno task uninstall:dev               # stop, disable and delete it
+```
+
+**Presence is a process watch, not an OpenVR probe.** The watcher looks for the runtime's own process
+(`vrserver`; `--steamvr-process=<name>[,<name>]` overrides it), because `VR_IsRuntimeInstalled` stays
+true for an installed-but-not-running SteamVR, and a probe would keep a server alive forever polling a
+runtime that is not there. Arguments the watcher does not recognise go to the server, so `--novr`,
+`--desktop`, `--keyboard-locale=fi` and `--agent-repl-port=<n>` all work as they do with
+`deno task server`.
+
+A server already answering on the REPL port is left alone: the watcher adopts nothing and stops only
+what it started, so a hand-started `deno task server` is never killed by SteamVR quitting. Server
+flags are baked into the unit at install time, so changing them means re-installing; environment
+knobs (`PETPLAY_AGENT_REPL_PORT`, `PETPLAY_KEYBOARD_LOCALE`, …) belong in the checkout's `.env`,
+which both the watcher and the server load. The unit is ordered after `graphical-session.target` —
+SteamVR and the desktop surfaces need the session's `WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` —
+`journalctl --user -u petplay-dev.service -f` has the launcher, and the server's own log stays in
+`logs/` as usual.
+
 On KDE Wayland, select **Full Workspace** in the initial ScreenCast portal dialog. PetPlay requests
 persistent capture access and stores the rotating, single-use restore token under
 `$XDG_CONFIG_HOME/petplay` (normally `~/.config/petplay`), so later launches restore the workspace

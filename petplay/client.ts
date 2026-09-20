@@ -22,24 +22,24 @@
  * the IR-consumer shape.
  */
 import {
-  DEFAULT_AGENT_REPL_PORT,
+  fetchAgentReplJson,
   getAgentReplBaseUrl,
   getAgentReplPort,
   wait,
 } from "../classes/utils.ts";
+import {
+  findServerProcess,
+  SERVER_READY_TIMEOUT_MS,
+  SERVER_STOP_TIMEOUT_MS,
+  serverHealth,
+  startServer,
+  stopServerProcess,
+  type ServerHealth,
+} from "./serverProcess.ts";
 
 const LOG_PREFIX = "[client]";
-const SERVER_READY_TIMEOUT_MS = 90_000;
 /** A one-shot preview capture waits for a child process to boot a window and draw one frame. */
 const PREVIEW_CAPTURE_TIMEOUT_MS = 30_000;
-/** How long a reboot waits for SIGTERM to be honoured before escalating. */
-const SERVER_STOP_TIMEOUT_MS = 20_000;
-
-type ServerHealth = {
-  ok?: boolean;
-  port?: number;
-  actors?: Record<string, string>;
-};
 
 type SupervisorStatus = {
   running?: boolean;
@@ -120,31 +120,13 @@ function hasFlag(flag: string): boolean {
   return Deno.args.includes(flag);
 }
 
-async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${getAgentReplBaseUrl()}${path}`, init);
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`${path} failed (${response.status}): ${text.slice(0, 300)}`);
-  }
-  return (text.length > 0 ? JSON.parse(text) : {}) as T;
-}
-
-async function serverHealth(): Promise<ServerHealth | null> {
-  try {
-    const health = await fetchJson<ServerHealth>("/health");
-    return health.ok === true ? health : null;
-  } catch {
-    return null;
-  }
-}
-
 async function sendMessage<T>(
   target: string,
   type: string,
   payload: unknown = null,
   timeoutMs = 30_000,
 ): Promise<T> {
-  const body = await fetchJson<ReplReply<T>>("/message", {
+  const body = await fetchAgentReplJson<ReplReply<T>>("/message", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ target, type, payload, reply: true, timeoutMs }),
@@ -177,7 +159,7 @@ async function readWebXr(health: ServerHealth): Promise<WebXrStatus | null> {
   const target = health.actors?.webxr;
   if (target == null) return null;
   try {
-    return await fetchJson<{ health?: { details?: WebXrStatus } }>(
+    return await fetchAgentReplJson<{ health?: { details?: WebXrStatus } }>(
       `/health/actor?actor=${encodeURIComponent(target)}`,
     ).then((body) => body.health?.details ?? null);
   } catch {
@@ -510,10 +492,13 @@ async function cmdReboot(): Promise<number> {
       `${LOG_PREFIX} stopping pid=${serverProcess.pid}` +
         `${serverProcess.viaLauncher ? " (launcher; forwards one signal, then waits for teardown)" : ""}`,
     );
-    await stopServerProcess(serverProcess.pid);
+    await stopServerProcess(
+      serverProcess.pid,
+      (message) => console.warn(`${LOG_PREFIX} ${message}`),
+    );
   }
 
-  await startServer(serverProcess?.args ?? []);
+  await startServerAndReport(serverProcess?.args ?? []);
   if (controlWasRunning) {
     await startDesktopSurface("STARTDESKTOPCONTROL");
   } else if (desktopWasRunning) {
@@ -527,102 +512,6 @@ function formatValue(value: unknown): string {
   if (value instanceof Error) return value.message;
   if (value === undefined) return "(no reply)";
   return JSON.stringify(value)?.slice(0, 160) ?? String(value);
-}
-
-/** A running server, found through `/proc` because the REPL health carries no pid. */
-type ServerProcess = { pid: number; args: string[]; viaLauncher: boolean };
-
-/**
- * Finds the server for `port`. Prefers the `utils/dev-runner.ts` launcher, which
- * turns one SIGTERM into a cooperative shutdown of the server it spawned; falls
- * back to a directly launched server. `args` are the launcher's own extra
- * arguments, so a reboot keeps `--novr`, debug flags, locale overrides and the
- * like.
- */
-function findServerProcess(port: number): ServerProcess | null {
-  if (Deno.build.os !== "linux") {
-    return null;
-  }
-  // A server is ours if it was told this port, or if neither side names one and
-  // both therefore run on the default.
-  const portOf = (args: string[]): number | null => {
-    const flag = args.find((arg) => arg.startsWith("--agent-repl-port="));
-    const parsed = flag == null ? NaN : Number(flag.split("=", 2)[1]);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
-  let launcher: ServerProcess | null = null;
-  let direct: ServerProcess | null = null;
-  for (const entry of Deno.readDirSync("/proc")) {
-    if (!/^\d+$/.test(entry.name)) {
-      continue;
-    }
-    const pid = Number(entry.name);
-    if (pid === Deno.pid) {
-      continue;
-    }
-    let raw: Uint8Array;
-    try {
-      raw = Deno.readFileSync(`/proc/${pid}/cmdline`);
-    } catch {
-      continue;
-    }
-    const args = new TextDecoder().decode(raw).split("\0").filter((arg) => arg.length > 0);
-    const explicitPort = portOf(args);
-    if (explicitPort !== port && !(explicitPort == null && port === DEFAULT_AGENT_REPL_PORT)) {
-      continue;
-    }
-    const scriptIndex = args.findIndex((arg) =>
-      arg.endsWith("utils/dev-runner.ts") || arg.endsWith("petplay/petplay.ts")
-    );
-    if (scriptIndex < 0) {
-      continue;
-    }
-    const viaLauncher = args[scriptIndex]!.endsWith("dev-runner.ts");
-    // Everything after the script is forwarded to PetPlay; the REPL flags are
-    // re-added by the launcher, so they are dropped to avoid duplicating them.
-    const extra = args.slice(scriptIndex + 1).filter((arg) =>
-      arg !== "--agent-repl" && !arg.startsWith("--agent-repl-port")
-    );
-    const found: ServerProcess = { pid, args: extra, viaLauncher };
-    if (viaLauncher) {
-      launcher ??= found;
-    } else {
-      direct ??= found;
-    }
-  }
-  return launcher ?? direct;
-}
-
-/** SIGTERM, then SIGKILL if the REPL has not gone away, and wait for both. */
-async function stopServerProcess(pid: number): Promise<void> {
-  try {
-    Deno.kill(pid, "SIGTERM");
-  } catch (error) {
-    console.warn(`${LOG_PREFIX} SIGTERM ${pid}: ${formatValue(error)}`);
-    return;
-  }
-  if (await waitForServerDown(SERVER_STOP_TIMEOUT_MS)) {
-    return;
-  }
-  console.warn(`${LOG_PREFIX} pid=${pid} did not exit within ${SERVER_STOP_TIMEOUT_MS}ms; SIGKILL`);
-  try {
-    Deno.kill(pid, "SIGKILL");
-  } catch (error) {
-    console.warn(`${LOG_PREFIX} SIGKILL ${pid}: ${formatValue(error)}`);
-  }
-  await waitForServerDown(5_000);
-}
-
-/** Waits until the REPL stops answering, i.e. the server is gone. */
-async function waitForServerDown(timeoutMs: number): Promise<boolean> {
-  const deadline = performance.now() + timeoutMs;
-  while (performance.now() < deadline) {
-    if (await serverHealth() == null) {
-      return true;
-    }
-    await wait(250);
-  }
-  return false;
 }
 
 /** Brings a desktop surface back on the freshly booted server. */
@@ -640,42 +529,22 @@ async function startDesktopSurface(verb: "STARTDESKTOPVIEW" | "STARTDESKTOPCONTR
   );
 }
 
-/** Starts a detached server (`deno task server` equivalent) and waits for its REPL. */
-async function startServer(extraArgs: string[] = []): Promise<void> {
+/** `startServer` plus the client's own reporting; a reboot and `dev` share it. */
+async function startServerAndReport(extraArgs: string[] = []): Promise<void> {
   const port = getAgentReplPort();
-  // Through `utils/dev-runner.ts`: it mirrors the server's output to `logs/`
-  // (which is what survives a native FFI crash) and gives it its own process
-  // group, so the client can exit without taking the server down.
-  const child = new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "utils/dev-runner.ts",
-      "--agent-repl",
-      `--agent-repl-port=${port}`,
-      ...extraArgs,
-    ],
-    cwd: Deno.cwd(),
-    stdin: "null",
-    stdout: "null",
-    stderr: "null",
-  }).spawn();
-  child.unref();
+  const { pid, ready } = await startServer(extraArgs);
   console.log(
-    `${LOG_PREFIX} started server pid=${child.pid} port=${port} (log in ./logs)` +
+    `${LOG_PREFIX} started server pid=${pid} port=${port} (log in ./logs)` +
       (extraArgs.length > 0 ? ` args=[${extraArgs.join(" ")}]` : ""),
   );
-  const deadline = performance.now() + SERVER_READY_TIMEOUT_MS;
-  while (performance.now() < deadline) {
-    if (await serverHealth() != null) return;
-    await wait(500);
+  if (!ready) {
+    console.warn(`${LOG_PREFIX} server did not become ready within ${SERVER_READY_TIMEOUT_MS}ms`);
   }
-  console.warn(`${LOG_PREFIX} server did not become ready within ${SERVER_READY_TIMEOUT_MS}ms`);
 }
 
 async function cmdDev(): Promise<number> {
   if (await serverHealth() == null) {
-    await startServer();
+    await startServerAndReport();
   }
   const status = await cmdDesktop();
   if (status !== 0) {

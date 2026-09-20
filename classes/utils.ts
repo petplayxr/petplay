@@ -26,6 +26,21 @@ export function getAgentReplBaseUrl(): string {
   return `http://127.0.0.1:${getAgentReplPort()}`;
 }
 
+/**
+ * JSON from the agent REPL surface (`/health`, `/message`, `/eval`, …). A
+ * non-OK response throws with the server's own error text, so callers can tell
+ * "the server refused" from "the server is not there" (which throws from
+ * `fetch` itself).
+ */
+export async function fetchAgentReplJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${getAgentReplBaseUrl()}${path}`, init);
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`${path} failed (${response.status}): ${text.slice(0, 300)}`);
+  }
+  return (text.length > 0 ? JSON.parse(text) : {}) as T;
+}
+
 type ActorAddress = string;
 
 interface ActorNode {

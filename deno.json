@@ -89,6 +89,10 @@
         //"iwerbuild"
       ]
     },
+    "install:dev": "deno run -A utils/dev-install.ts install",
+    "uninstall:dev": "deno run -A utils/dev-install.ts uninstall",
+    "dev:status": "deno run -A utils/dev-install.ts status",
+    "dev:steamvr": "deno run -A --env-file utils/steamvr-watch.ts",
     "dev:desktop": {
       "command": "deno run -A --unstable-webgpu --env-file --no-check petplay/petplay.ts dev --novr --desktop",
       "dependencies": [
