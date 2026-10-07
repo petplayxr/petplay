@@ -353,6 +353,9 @@ function openVrManifestBinaryPathField(): string {
     case "darwin":
       return "binary_path_osx";
     default:
-      return "binary_path_linux";
+      // Frame's runtime selects this architecture-specific field. A manifest
+      // with only the x86 Linux field can register without making its app key
+      // available to IdentifyApplication on ARM64.
+      return Deno.build.arch === "aarch64" ? "binary_path_linux_arm" : "binary_path_linux";
   }
 }

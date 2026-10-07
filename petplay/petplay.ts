@@ -1,5 +1,8 @@
 import { dispatchChildModule } from "../classes/childModule.ts";
 import { startPetplayServer } from "./petplayServer.ts";
+import { installNativeCrashTrace } from "../classes/nativeCrashTrace.ts";
+
+installNativeCrashTrace();
 
 /**
  * PetPlay's process entry: either this process *is* a dispatched child module, or it is the server.
