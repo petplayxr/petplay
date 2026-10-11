@@ -58,6 +58,7 @@ import {
 } from "../classes/vrcCameraDebugState.ts";
 import { captureDenoCpuProfile } from "../classes/denoCpuProfile.ts";
 import { getSettings, isSettingKey, loadSettings, setSetting } from "../classes/settings.ts";
+import { pushToast, type ToastInput } from "../classes/environment/toastStore.ts";
 
 const WEBXR_SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -343,6 +344,10 @@ new PostMan(
     },
     EVALJS: (payload: { code: string }) => evaluateWebXrJs(payload.code),
     GETSETTINGS: (_payload: unknown) => getSettings(),
+    /** Show a toast in the headset (other actors' status, e.g. capture lost). */
+    TOAST: (payload: ToastInput) => {
+      pushToast(payload);
+    },
     SETSETTING: (payload: { key: string; value: unknown }) => {
       if (!isSettingKey(payload.key)) throw new Error(`unknown setting "${payload.key}"`);
       setSetting(payload.key, payload.value as never);
@@ -588,6 +593,15 @@ new PostMan(
 
           const onInProcessControllerFrame = undefined;
 
+          if (payload?.displayOverlayHostActor) {
+            // Capture loss and recovery reach the headset as toasts.
+            PostMan.PostMessage({
+              target: payload.displayOverlayHostActor,
+              type: "SUBSCRIBESTATUS",
+              payload: state.id,
+            });
+          }
+
           await state.host!.start({
             width: payload?.width,
             height: payload?.height,
@@ -723,7 +737,9 @@ new PostMan(
       }
       LogChannel.log(
         "webxrv2",
-        `[webxr] view registered: ${actorId} (${payload?.label ?? "view"}, cameraControl=${payload?.cameraControl === true})`,
+        `[webxr] view registered: ${actorId} (${payload?.label ?? "view"}, cameraControl=${
+          payload?.cameraControl === true
+        })`,
       );
       return getWebXrViewsStatus();
     },
@@ -940,8 +956,7 @@ function startPresentationWatch(): void {
           if (presentationWatch.restarts < MAX_PRESENTATION_RESTARTS) {
             await restartRenderingStack("overlay pump stopped");
           } else {
-            presentationWatch.lastRepairReason =
-              "overlay pump stopped; restart budget exhausted";
+            presentationWatch.lastRepairReason = "overlay pump stopped; restart budget exhausted";
             presentationWatch.lastRepairAt = now;
           }
           continue;
@@ -966,8 +981,7 @@ function startPresentationWatch(): void {
               `no presented frames for ${now - presentationWatch.lastAdvanceAt} ms`,
             );
           } else {
-            presentationWatch.lastRepairReason =
-              "presentation stalled; restart budget exhausted";
+            presentationWatch.lastRepairReason = "presentation stalled; restart budget exhausted";
             presentationWatch.lastRepairAt = now;
           }
           continue;
@@ -1543,11 +1557,9 @@ async function initializeOverlay(payload: StartWebXRPayload | null) {
   }
   // Keys are claimed per host process and ghost overlays from dead instances are
   // swept at creation: two running sessions must never fight over one overlay.
-  const overlayKeys = payload.overlayKey == null
-    ? null
-    : claimWebXrOverlayKeys(
-      WEBXR_OVERLAY_KEY_BASES.map((suffix) => `${payload.overlayKey}.${suffix}`),
-    );
+  const overlayKeys = payload.overlayKey == null ? null : claimWebXrOverlayKeys(
+    WEBXR_OVERLAY_KEY_BASES.map((suffix) => `${payload.overlayKey}.${suffix}`),
+  );
   // Order matches WEBXR_OVERLAY_KEY_BASES.
   const webGpuOverlayKey = overlayKeys?.keys[0];
   const raylibOverlayKey = overlayKeys?.keys[1];

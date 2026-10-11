@@ -81,6 +81,9 @@ import {
 import { isDesktopMousePointerType } from "./spatialPointer.ts";
 import type { DirectOpenVrInputSource } from "../directOpenVrInputSource.ts";
 import { penHandler } from "./penEvents.ts";
+import { ToastOverlay } from "./toastOverlay.tsx";
+import { pushToast } from "./toastStore.ts";
+import { startXsoNotificationReceiver } from "./xsoNotificationReceiver.ts";
 import {
   type SpatialContextAction,
   SpatialContextToolbar,
@@ -589,10 +592,12 @@ function WindowLayer({
         if (!layoutBootstrap.persistenceEnabled) return;
         saveSpatialLayoutSync(graphRef.current, getLayoutSlotPath(slot));
         setLayoutSlots(listLayoutSlots());
+        pushToast({ title: `Saved layout ${slot}`, timeoutMs: 2000 });
       },
       loadSlot: (slot) => {
         const loaded = loadSpatialLayoutSync(getLayoutSlotPath(slot));
         if (loaded == null) return;
+        pushToast({ title: `Loaded layout ${slot}`, timeoutMs: 2000 });
         setGraph(
           workspaceOutputs.length > 0
             ? reconcileWorkspaceOutputs(loaded, workspaceOutputs)
@@ -1618,6 +1623,11 @@ export function WebXRScene(
     [displayOverlayHostActor],
   );
 
+  React.useEffect(() => {
+    const receiver = startXsoNotificationReceiver();
+    return receiver.close;
+  }, []);
+
   return (
     <>
       <color attach="background" args={[0x091018]} />
@@ -1635,6 +1645,7 @@ export function WebXRScene(
         onKey={keyboardSink}
         directOpenVrInputSource={directOpenVrInputSource}
       />
+      <ToastOverlay />
     </>
   );
 }

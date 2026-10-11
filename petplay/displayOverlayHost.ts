@@ -63,8 +63,26 @@ let captureRestartDelayMs = CAPTURE_RESTART_MIN_MS;
 let captureStartedAt = 0;
 let captureRestartTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** Actor that shows our status to the user (the webxr actor's toasts), set by SUBSCRIBESTATUS. */
+let statusListener: string | null = null;
+/** A restart is in flight, so the next successful capture start is a recovery worth announcing. */
+let captureRecovering = false;
+
+function postStatusToast(toast: { title: string; content?: string; tone?: string }): void {
+  if (statusListener == null) return;
+  try {
+    PostMan.PostMessage({ target: statusListener, type: "TOAST", payload: toast });
+  } catch {
+    // The listener may be shutting down.
+  }
+}
+
 function scheduleCaptureRestart(reason: string): void {
   if (state.shuttingDown || captureRestartTimer != null) return;
+  if (!captureRecovering) {
+    postStatusToast({ title: "Desktop capture lost", content: "Reconnecting…", tone: "warning" });
+  }
+  captureRecovering = true;
   if (performance.now() - captureStartedAt > CAPTURE_STABLE_MS) {
     captureRestartDelayMs = CAPTURE_RESTART_MIN_MS;
   }
@@ -202,6 +220,9 @@ new PostMan(
         }
       }
       return true;
+    },
+    SUBSCRIBESTATUS: (payload: string) => {
+      statusListener = payload;
     },
     STARTDESKTOP: (payload: StartDesktopPayload) => {
       if (!state.overlayClass) {
@@ -516,6 +537,10 @@ async function ensureWarmScreenCapturer(): Promise<ScreenCapturer> {
     const capturer = await initScreenCapturer(state.captureFps);
     state.screenCapturer = capturer;
     captureStartedAt = performance.now();
+    if (captureRecovering) {
+      captureRecovering = false;
+      postStatusToast({ title: "Desktop capture reconnected" });
+    }
     LogChannel.log("actor", "[displayOverlayHost] screen capture warmed at actor startup");
     return capturer;
   })();
