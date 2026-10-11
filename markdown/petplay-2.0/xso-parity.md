@@ -18,7 +18,8 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
   a grab, an unlocked one does)
 - [ ] Mouse-block and auto-hide per window
 - [~] **Named layouts: save/load**: three slots on the wrist (Settings → Saved layouts), files in
-  `layouts/slot-N.json` beside the live layout; playtested in `--novr`. Not named yet
+  `layouts/slot-N.json` beside the live layout, each showing its display count and when it was
+  saved; playtested in `--novr`. Not named yet
 - [ ] **Window list with live previews and monitor picker**
 - [ ] Individual app-window capture (not just monitors/workspace crops)
 - [ ] Toolbar follows its window edge; spawn-in animation

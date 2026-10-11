@@ -94,10 +94,12 @@ Deno.test("layout slots live beside the live layout and list only loadable files
     assert(threw, "slot 0 is rejected");
     saveSpatialLayoutSync(createInitialSpatialGraph(), getLayoutSlotPath(2, live));
     Deno.writeTextFileSync(getLayoutSlotPath(3, live), "not json");
-    assert(
-      JSON.stringify(listLayoutSlots(live)) === "[false,true,false]",
-      `slots ${JSON.stringify(listLayoutSlots(live))}`,
-    );
+    const slots = listLayoutSlots(live);
+    assert(slots[0] === null && slots[2] === null, `slots ${JSON.stringify(slots)}`);
+    const expectedDisplays = Object.values(createInitialSpatialGraph().nodes)
+      .filter((node) => node.kind === "display").length;
+    assert(slots[1]?.displays === expectedDisplays, `slot 2 ${JSON.stringify(slots[1])}`);
+    assert(Math.abs((slots[1]?.savedAt ?? 0) - Date.now()) < 60_000, "slot 2 saved just now");
   } finally {
     Deno.removeSync(dir, { recursive: true });
   }

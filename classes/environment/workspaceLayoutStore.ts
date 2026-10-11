@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import type { LayoutSlotSummary } from "./spatialLayoutPersistence.ts";
 
 export type WorkspaceLayoutOutput = {
   id: string;
@@ -17,8 +18,8 @@ export type WorkspaceLayoutDisplay = {
 export type WorkspaceLayoutSnapshot = {
   outputs: WorkspaceLayoutOutput[];
   displays: WorkspaceLayoutDisplay[];
-  /** Saved layout slots that hold a layout, index 0 = slot 1. */
-  layoutSlots?: boolean[];
+  /** Saved layout slots, `null` when empty; index 0 = slot 1. */
+  layoutSlots?: (LayoutSlotSummary | null)[];
 };
 
 type WorkspaceLayoutActions = {

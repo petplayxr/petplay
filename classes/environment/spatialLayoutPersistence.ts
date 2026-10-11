@@ -183,10 +183,22 @@ export function getLayoutSlotPath(slot: number, livePath = getSpatialLayoutPath(
   return join(dirname(livePath), "layouts", `slot-${slot}.json`);
 }
 
-/** Which slots hold a loadable layout, index 0 = slot 1. */
-export function listLayoutSlots(livePath = getSpatialLayoutPath()): boolean[] {
-  return Array.from(
-    { length: LAYOUT_SLOT_COUNT },
-    (_, index) => loadSpatialLayoutSync(getLayoutSlotPath(index + 1, livePath)) != null,
-  );
+/** What the wrist shows for a saved slot, so slots can be told apart without names. */
+export type LayoutSlotSummary = { displays: number; savedAt: number | null };
+
+/** A summary per slot that holds a loadable layout, `null` for the rest; index 0 = slot 1. */
+export function listLayoutSlots(livePath = getSpatialLayoutPath()): (LayoutSlotSummary | null)[] {
+  return Array.from({ length: LAYOUT_SLOT_COUNT }, (_, index) => {
+    const path = getLayoutSlotPath(index + 1, livePath);
+    const graph = loadSpatialLayoutSync(path);
+    if (graph == null) return null;
+    let savedAt: number | null = null;
+    try {
+      savedAt = Deno.statSync(path).mtime?.getTime() ?? null;
+    } catch {
+      // Loaded a moment ago; a missing mtime only loses the time from the label.
+    }
+    const displays = Object.values(graph.nodes).filter((node) => node.kind === "display").length;
+    return { displays, savedAt };
+  });
 }

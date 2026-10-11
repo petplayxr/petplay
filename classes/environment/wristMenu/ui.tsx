@@ -7,6 +7,7 @@ import { WristOverlay } from "../ui/wristOverlay.tsx";
 import { useBatteryReadings } from "../batteryStore.ts";
 import type { WristMenuButtonId } from "./types.ts";
 import type { WorkspaceLayoutSnapshot } from "../workspaceLayoutStore.ts";
+import type { LayoutSlotSummary } from "../spatialLayoutPersistence.ts";
 import { setSetting, type SettingKey, useSetting } from "../../settings.ts";
 
 export type { WristMenuButtonId } from "./types.ts";
@@ -134,9 +135,26 @@ function MonitorAssignments({
  * Saved layout slots: SAVE writes the current arrangement, LOAD brings it back. LOAD is disabled
  * on an empty slot rather than hidden, so the rows keep their places.
  */
+/**
+ * "3 displays · 08:14 PM", or the date ("3 displays · 09/10") when it wasn't saved today. Same
+ * formats as the wrist clock and date.
+ */
+export function layoutSlotLabel(summary: LayoutSlotSummary, now = new Date()): string {
+  const displays = `${summary.displays} display${summary.displays === 1 ? "" : "s"}`;
+  if (summary.savedAt == null) return displays;
+  const saved = new Date(summary.savedAt);
+  const when = saved.toDateString() === now.toDateString()
+    ? new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })
+      .format(saved)
+    : `${String(saved.getDate()).padStart(2, "0")}/${
+      String(saved.getMonth() + 1).padStart(2, "0")
+    }`;
+  return `${displays} · ${when}`;
+}
+
 function LayoutSlotsView(
   { slots, onSave, onLoad, onBack }: {
-    slots: boolean[];
+    slots: (LayoutSlotSummary | null)[];
     onSave?: (slot: number) => void;
     onLoad?: (slot: number) => void;
     onBack: () => void;
@@ -151,7 +169,8 @@ function LayoutSlotsView(
         <Pill slots={3} units={2} tone="accent" fontSize={14}>LAYOUTS</Pill>
       </Container>
       {[1, 2, 3].map((slot) => {
-        const saved = slots[slot - 1] ?? false;
+        const summary = slots[slot - 1] ?? null;
+        const saved = summary != null;
         return (
           <Container
             key={slot}
@@ -163,10 +182,15 @@ function LayoutSlotsView(
             backgroundColor={COLOR.tile}
             backgroundOpacity={1}
           >
-            <Text color={saved ? COLOR.ink : COLOR.inkDim} fontSize={14}>
-              Layout {slot}
-              {saved ? "" : " (empty)"}
-            </Text>
+            <Container flexDirection="column" gap={2}>
+              <Text color={saved ? COLOR.ink : COLOR.inkDim} fontSize={14}>
+                Layout {slot}
+                {saved ? "" : " (empty)"}
+              </Text>
+              {summary != null && (
+                <Text color={COLOR.inkDim} fontSize={12}>{layoutSlotLabel(summary)}</Text>
+              )}
+            </Container>
             <Container flexDirection="row" gap={INNER_GAP}>
               <Pill slots={1} units={2} fontSize={13} onClick={() => onSave?.(slot)}>SAVE</Pill>
               <Pill
