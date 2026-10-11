@@ -4,6 +4,8 @@ Join the discord! https://discord.gg/Ms24sS9kEa
 
 How the pieces fit together — process topology, every actor and its messages, the scene/render
 split, and the supervision state machine — is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The [Steam Frame investigation](docs/STEAM_FRAME.md) records the ARM64 image, QEMU results, and
+remaining hardware checks.
 
 ##### YouTube demo
 
@@ -36,6 +38,11 @@ Windows-only (it is rejected outright on Linux), and `dist/` keeps the output cl
 launcher boots straight into `dev`, so runtime flags still apply — `./dist/petplay --novr`,
 `./dist/petplay --novr --desktop`, and so on. It is compiled with `--env-file`, so run it from a
 directory with the `.env` it should use.
+
+For a Steam Frame ARM64 build, run `deno task build --target=aarch64-unknown-linux-gnu` to create
+`dist/petplay-aarch64`. This cross build leaves the developer machine's `.env` out; supply runtime
+settings on the headset. The native helper builds and remaining hardware checks are in
+[docs/STEAM_FRAME.md](docs/STEAM_FRAME.md).
 
 Child processes work the same as from a checkout: a compiled build has no Deno CLI to run a module
 with, so it re-execs its own binary and imports the child module out of its embedded snapshot
@@ -83,12 +90,14 @@ deno task dev:status                  # unit path, state, and the command it run
 deno task uninstall:dev               # stop, disable and delete it
 ```
 
-**Presence is a process watch, not an OpenVR probe.** The watcher looks for the runtime's own process
-(`vrserver`; `--steamvr-process=<name>[,<name>]` overrides it), because `VR_IsRuntimeInstalled` stays
-true for an installed-but-not-running SteamVR, and a probe would keep a server alive forever polling a
-runtime that is not there. Arguments the watcher does not recognise go to the server, so `--novr`,
-`--desktop`, `--keyboard-locale=fi` and `--agent-repl-port=<n>` all work as they do with
-`deno task server`.
+**Presence is a process watch, not an OpenVR probe.** The watcher looks for the runtime's own
+process (`vrserver`; `--steamvr-process=<name>[,<name>]` overrides it), because
+`VR_IsRuntimeInstalled` stays true for an installed-but-not-running SteamVR, and a probe would keep
+a server alive forever polling a runtime that is not there. Servers started by this watcher also use
+attach-only OpenVR initialization: after the observed `vrserver` exits, PetPlay cannot relaunch
+SteamVR and waits for a new manually started runtime process instead. Arguments the watcher does not
+recognise go to the server, so `--novr`, `--desktop`, `--keyboard-locale=fi` and
+`--agent-repl-port=<n>` all work as they do with `deno task server`.
 
 A server already answering on the REPL port is left alone: the watcher adopts nothing and stops only
 what it started, so a hand-started `deno task server` is never killed by SteamVR quitting. Server
@@ -161,7 +170,7 @@ a server elsewhere on loopback.
 `deno task reboot` is the restart path that does not need the terminal that started the server. It
 asks `main` for an ordered `DETACHOPENVR` while the old process is still alive, finds that process
 through `/proc` (the `utils/dev-runner.ts` launcher when there is one, so one SIGTERM becomes a
-cooperative shutdown), waits for the REPL to stop answering, starts a fresh server **with the same
+cooperative shutdown), waits for that process to actually exit, starts a fresh server **with the same
 launch arguments** (so `--novr`, `--webxr-raythree-debug=1`, locale overrides and the like survive),
 then brings back whichever desktop surface was running. `--no-detach` skips the VR detach. Actor-level
 `POST /reload` remains the cheaper option when only an actor's code changed.

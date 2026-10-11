@@ -7,7 +7,15 @@
  * Windows"*). Writing into `dist/` also keeps the output from colliding with the `petplay/`
  * source directory on the OSes where the binary has no extension.
  */
-const output = "dist/petplay";
+const targetArg = Deno.args.find((arg) => arg.startsWith("--target="));
+if (Deno.args.length > (targetArg ? 1 : 0)) {
+  throw new Error("usage: deno task build [--target=aarch64-unknown-linux-gnu]");
+}
+const target = targetArg?.slice("--target=".length);
+if (target != null && target !== "aarch64-unknown-linux-gnu") {
+  throw new Error(`unsupported build target: ${target}`);
+}
+const output = target ? "dist/petplay-aarch64" : "dist/petplay";
 
 await Deno.mkdir("dist", { recursive: true });
 
@@ -19,8 +27,10 @@ await Deno.mkdir("dist", { recursive: true });
 const args = [
   "compile",
   "-A",
-  "--env-file",
+  // A cross build must not embed the developer machine's .env into a deployable binary.
+  ...(target ? [] : ["--env-file"]),
   "--no-check",
+  ...(target ? ["--target", target] : []),
   "--include",
   "./petplay/",
   "--include",
@@ -37,7 +47,7 @@ const args = [
   output,
 ];
 
-if (Deno.build.os === "windows") {
+if (Deno.build.os === "windows" && !target) {
   args.push("--icon", "resources/petplay.ico");
 }
 

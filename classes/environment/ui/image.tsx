@@ -35,10 +35,13 @@ export type UiImageProps = {
    */
   focus?: [number, number];
   opacity?: number;
+  /** Absolute offset inside the parent, in the same px units as width/height. */
+  positionLeft?: number;
+  positionTop?: number;
 };
 
 export function UiImage(
-  { texture, width, height, radius = 0, fit = "cover", focus = [0.5, 0.5], opacity = 1 }:
+  { texture, width, height, radius = 0, fit = "cover", focus = [0.5, 0.5], opacity = 1, positionLeft = 0, positionTop = 0 }:
     UiImageProps,
 ) {
   const userData = useMemo(() => {
@@ -71,8 +74,8 @@ export function UiImage(
       height={height}
       flexShrink={0}
       positionType="absolute"
-      positionLeft={0}
-      positionTop={0}
+      positionLeft={positionLeft}
+      positionTop={positionTop}
     >
       <mesh userData={userData} raycast={() => null}>
         <planeGeometry args={[1, 1]} />

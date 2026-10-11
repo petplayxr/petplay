@@ -17,11 +17,13 @@ export function getOpenVrLibraryPath(base: string | URL = import.meta.url): stri
   if (Deno.build.os === "windows") {
     return fromFileUrl(new URL("../resources/openvr_api.dll", base));
   }
+  const steamVrArch = Deno.build.arch === "aarch64" ? "linuxarm64" : "linux64";
   return firstExisting([
     "/usr/lib/libopenvr_api.so",
+    `/opt/steamvr/bin/${steamVrArch}/libopenvr_api.so`,
     `${
       Deno.env.get("HOME") ?? ""
-    }/.local/share/Steam/steamapps/common/SteamVR/bin/linux64/libopenvr_api.so`,
+    }/.local/share/Steam/steamapps/common/SteamVR/bin/${steamVrArch}/libopenvr_api.so`,
   ]) ?? "libopenvr_api.so";
 }
 
@@ -32,7 +34,10 @@ export function getRaylibLibraryPath(base: string | URL = import.meta.url): stri
     return fromFileUrl(new URL("../resources/raylib.dll", base));
   }
   return firstExisting([
-    fromFileUrl(new URL("../resources/libraylib.so", base)),
+    // The bundled library is x86-64; loading it in an ARM64 Deno process fails.
+    ...(Deno.build.arch === "aarch64"
+      ? []
+      : [fromFileUrl(new URL("../resources/libraylib.so", base))]),
     "/usr/lib/libraylib.so",
     "/usr/local/lib/libraylib.so",
   ]) ?? "libraylib.so";

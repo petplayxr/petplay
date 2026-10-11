@@ -94,7 +94,13 @@ export function ensuredenodir() {
 
 export function destroyTemp() {
   console.log("CLEAN")
-  Deno.removeSync("./tmp/", { recursive: true })
+  try {
+    Deno.removeSync("./tmp/", { recursive: true });
+  } catch (error) {
+    // A shutdown that races or never created `./tmp` has nothing to remove;
+    // only a real failure should surface as a teardown error.
+    if (!(error instanceof Deno.errors.NotFound)) throw error;
+  }
 }
 
 const stream = Deno.stdin.readable.values();

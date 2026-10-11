@@ -15,6 +15,7 @@ import type {
   PointerEvent as PenPointerEvent,
   WheelEvent as PenWheelEvent,
 } from "@pmndrs/pointer-events";
+import { useGrabboxOutlineVisible } from "./grabboxOutlineMode.ts";
 
 // deno-lint-ignore no-explicit-any
 extend(THREE as any);
@@ -156,6 +157,8 @@ export const GrabBox = forwardRef<THREE.Group, GrabBoxProps>(function GrabBox(
   ref,
 ) {
   const boxRef = useRef<THREE.Group>(null);
+  const globalOutlineVisible = useGrabboxOutlineVisible();
+  const chromeVisible = visibleChrome && globalOutlineVisible;
   const handleStoreRef = useRef<HandleStore<unknown> | null>(null);
   useImperativeHandle(ref, () => boxRef.current!, []);
   const setHandleStore = useCallback((store: HandleStore<unknown> | null) => {
@@ -215,7 +218,7 @@ export const GrabBox = forwardRef<THREE.Group, GrabBoxProps>(function GrabBox(
       {wireframeMode === "edges"
         ? (
           <>
-            {visibleChrome
+            {chromeVisible
               ? <GrabBoxFrame width={width} height={height} depth={depth} color={color} />
               : null}
             {interactionHull
@@ -244,7 +247,7 @@ export const GrabBox = forwardRef<THREE.Group, GrabBoxProps>(function GrabBox(
               color={color}
               emissive={color}
               emissiveIntensity={0.2}
-              visible={visibleChrome}
+              visible={chromeVisible}
               side={THREE.DoubleSide}
             />
           </mesh>

@@ -44,16 +44,7 @@ const shadowSceneState: WebXRShadowSceneSnapshot = {
   background: [0, 0, 0, 0],
   floorColor: [18, 30, 42, 96],
   gridColor: [46, 61, 80, 72],
-  meshes: [
-    {
-      kind: "torus",
-      position: [0, 1.45, -1.8],
-      rotation: [0, 0, 0],
-      scale: [1, 1, 1],
-      color: [255, 139, 61, 255],
-      wireColor: [255, 196, 148, 255],
-    },
-  ],
+  meshes: [],
 };
 
 function cloneMesh(mesh: ShadowSceneMesh): ShadowSceneMesh {

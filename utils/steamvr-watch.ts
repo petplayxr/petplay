@@ -31,6 +31,11 @@
  */
 import { getAgentReplBaseUrl, getAgentReplPort, wait } from "../classes/utils.ts";
 import {
+  DEFAULT_STEAMVR_PROCESS_NAMES,
+  OPENVR_ATTACH_ONLY_ARG,
+  steamVrRunning,
+} from "../classes/steamVrProcess.ts";
+import {
   isServerProcess,
   serverHealth,
   startServer,
@@ -40,7 +45,6 @@ import {
 const LOG_PREFIX = "[steamvr-watch]";
 
 /** The runtime server; SteamVR is up while it runs and gone when it exits. */
-const DEFAULT_STEAMVR_PROCESSES = ["vrserver"] as const;
 const DEFAULT_POLL_MS = 2_000;
 
 type Options = {
@@ -55,7 +59,7 @@ type Options = {
 function parseArgs(args: readonly string[]): Options {
   const options: Options = {
     pollMs: DEFAULT_POLL_MS,
-    processes: [...DEFAULT_STEAMVR_PROCESSES],
+    processes: [...DEFAULT_STEAMVR_PROCESS_NAMES],
     serverArgs: [],
   };
   for (const arg of args) {
@@ -96,29 +100,6 @@ function help(): string {
     "running on the REPL port is left alone — this launcher only stops what it",
     "started. Linux only: the watch reads /proc.",
   ].join("\n");
-}
-
-/** Whether a process named one of `names` — its executable — is in the process table. */
-function steamVrRunning(names: readonly string[]): boolean {
-  const matches = (name: string): boolean =>
-    names.some((candidate) => candidate === name || candidate.slice(0, 15) === name);
-  for (const entry of Deno.readDirSync("/proc")) {
-    if (!/^\d+$/.test(entry.name)) continue;
-    // `/proc/<pid>/comm` is the cheap read, but it truncates to 15 characters, so
-    // a longer name only ever matches through the executable the process runs.
-    try {
-      if (matches(Deno.readTextFileSync(`/proc/${entry.name}/comm`).trim())) return true;
-    } catch {
-      continue; // Gone between the listing and the read.
-    }
-    try {
-      const exe = Deno.readLinkSync(`/proc/${entry.name}/exe`).replace(/ \(deleted\)$/, "");
-      if (matches(exe.split("/").pop() ?? "")) return true;
-    } catch {
-      // Another user's process, or gone: `comm` was all there was to ask.
-    }
-  }
-  return false;
 }
 
 /**
@@ -178,7 +159,12 @@ class SteamVrFollower {
       );
       return;
     }
-    const { pid, ready } = await startServer(this.#options.serverArgs);
+    // OpenVR initialization can launch SteamVR. The follower must only attach to
+    // the instance that caused this rising edge, never create its own replacement.
+    const serverArgs = this.#options.serverArgs.includes(OPENVR_ATTACH_ONLY_ARG)
+      ? this.#options.serverArgs
+      : [...this.#options.serverArgs, OPENVR_ATTACH_ONLY_ARG];
+    const { pid, ready } = await startServer(serverArgs);
     this.#serverPid = pid;
     if (!ready) {
       console.warn(`${LOG_PREFIX} server pid=${pid} did not answer within the start timeout`);

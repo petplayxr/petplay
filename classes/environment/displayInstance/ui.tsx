@@ -2,7 +2,10 @@ import type { PointerEvent as PenPointerEvent } from "@pmndrs/pointer-events";
 import React, { forwardRef, useCallback, useEffect, useMemo, useRef } from "react";
 // @deno-types="@types/three/webgpu"
 import * as THREE from "three/webgpu";
+import * as TSL from "three/tsl";
 import { extend, type ThreeToJSXElements } from "@react-three/fiber/webgpu";
+import { Container } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { UiImage } from "../ui/image.tsx";
 import { DEFAULT_GRABBOX_LINE_COLOR, GrabBox } from "../grabbox.tsx";
 import { createMainControllerGate } from "../mainController.ts";
 import type { DisplayMouseButton, DisplayMouseSink } from "./mouse.ts";
@@ -22,6 +25,11 @@ declare module "@react-three/fiber/webgpu" {
 
 const STABLE_CLICK_HOLD_MS = 180;
 
+/**
+ * Backplate logo: fraction of the display height the square logo occupies.
+ * Kept well inside the frame so the grab-box chrome never overlaps it.
+ */
+const BACKPLATE_LOGO_SIZE = 0.45;
 export type DisplayInstanceFrameProps = {
   /** Full height of the 16:9 frame. Width = height × `DISPLAY_ASPECT_WIDTH_OVER_HEIGHT`. */
   height?: number;
@@ -278,6 +286,39 @@ export const DisplayInstanceFrame = forwardRef<THREE.Group, DisplayInstanceFrame
             </mesh>
           )
           : null}
+        {/*
+         * Backplate: opaque black card on the display's rear face with the logo.
+         * The card is a plain front-facing scene mesh — the 3D pass depth-tests
+         * with backface culling on, so it occludes like real geometry and shows
+         * only from behind. The logo rides the uikit snapshot (the only route
+         * that draws in both the raylib overlay and the desktop preview) inside
+         * a transparent layout-only Container, and `drawUiImage` culls its
+         * backface so it never paints over the front either. Not pickable: the
+         * grab hull and screen proxy own pointer input.
+         */}
+        <group position={[0, 0, -depth / 2 - 0.001]} rotation={[0, Math.PI, 0]}>
+          <mesh {...({ pointerEvents: "none" } as Record<string, unknown>)}>
+            <planeGeometry args={[width, height]} />
+            <meshBasicNodeMaterial colorNode={TSL.color(0x000000)} side={THREE.FrontSide} />
+          </mesh>
+          <Container
+            width={width / 0.001}
+            height={height / 0.001}
+            pixelSize={0.001}
+            backgroundColor="transparent"
+            borderWidth={0}
+            {...({ pointerEvents: "none" } as Record<string, unknown>)}
+          >
+            <UiImage
+              texture="petplay"
+              width={height * BACKPLATE_LOGO_SIZE / 0.001}
+              height={height * BACKPLATE_LOGO_SIZE / 0.001}
+              fit="cover"
+              positionLeft={(width - height * BACKPLATE_LOGO_SIZE) / 2 / 0.001}
+              positionTop={(height - height * BACKPLATE_LOGO_SIZE) / 2 / 0.001}
+            />
+          </Container>
+        </group>
         {children}
       </GrabBox>
     );

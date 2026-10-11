@@ -15,6 +15,13 @@ const STAGEFORGE_SIGNALING_URL = "ws://petplay.ddns.net:8080";
 export async function startPetplayServer(
   options: { interactive: boolean },
 ): Promise<void> {
+  if (
+    Deno.build.os === "linux" && Deno.build.arch === "aarch64" &&
+    !Deno.env.get("DENO_GLFW_PATH")
+  ) {
+    // @gfx/dwm bundles an x86-64 GLFW library for Linux. Frame has native GLFW.
+    Deno.env.set("DENO_GLFW_PATH", "/usr/lib/libglfw.so.3");
+  }
   ensuredenodir();
   createTemp(import.meta.dirname!);
   console.log("Press Ctrl-C to close");

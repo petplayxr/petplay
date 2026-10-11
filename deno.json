@@ -45,7 +45,6 @@
     "probe:openvr-compositor-timing": "deno run -A --no-check tests/openvr_compositor_timing_probe/main.ts",
     "audio:probe": "deno run -A utils/raylib-audio-context-probe.ts",
     "repro:raylib-reload": "deno run -A --no-check tests/raylib_worker_reload_repro/main.ts",
-    "vitebuild": "cd submodules/frontend && deno task build",
     "cefbuild": "cd submodules/cefpuppy && deno run -A build.ts -ExampleName cefsimple -Profile release",
     "iwerbuild": "cd submodules/threewebxrwebgpudeno/submodules/iwer && npm run build",
     "check": "deno run -A utils/type-check.ts",

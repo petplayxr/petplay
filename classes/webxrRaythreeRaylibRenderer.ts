@@ -269,6 +269,7 @@ function computeCoverUv(
  */
 const UI_TEXTURE_PATHS: Record<string, URL> = {
   wallpaper: new URL("../resources/ui/wallpaper.png", import.meta.url),
+  petplay: new URL("../resources/PetPlay.png", import.meta.url),
 };
 // Typical msdfgen pxRange=4. Roboto atlas from three-msdf-text-utils was generated with this.
 const MSDF_PX_RANGE = 4;
@@ -1326,7 +1327,15 @@ export class WebXRRaythreeRaylibRenderer {
       projView,
       world,
     );
-    this.drawUiQuad(world);
+    // Image fills are single quads with known CCW winding: cull the backface
+    // so rear-mounted artwork (display backplate logo) never paints over the
+    // front. Panels and text stay double-sided as before.
+    setUiBackfaceCullingEnabled(true);
+    try {
+      this.drawUiQuad(world);
+    } finally {
+      setUiBackfaceCullingEnabled(false);
+    }
     return true;
   }
 

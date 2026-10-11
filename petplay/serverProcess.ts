@@ -44,18 +44,6 @@ export async function serverHealth(): Promise<ServerHealth | null> {
   }
 }
 
-/** Waits until the REPL stops answering, i.e. the server is gone. */
-export async function waitForServerDown(timeoutMs: number): Promise<boolean> {
-  const deadline = performance.now() + timeoutMs;
-  while (performance.now() < deadline) {
-    if (await serverHealth() == null) {
-      return true;
-    }
-    await wait(250);
-  }
-  return false;
-}
-
 /** `utils/dev-runner.ts` is a server launcher, `petplay/petplay.ts` the server itself. */
 const SERVER_SCRIPT_MARKERS = ["utils/dev-runner.ts", "petplay/petplay.ts"] as const;
 
@@ -80,6 +68,25 @@ export function isServerProcess(pid: number): boolean {
   const args = readCmdline(pid);
   return args != null &&
     args.some((arg) => SERVER_SCRIPT_MARKERS.some((marker) => arg.endsWith(marker)));
+}
+
+/**
+ * Waits until `pid` is gone, not just until its REPL stops answering. The REPL
+ * dies early in shutdown, while the process still runs its actor teardown,
+ * `EXIT_STABILIZE_MS`, and finally `destroyTemp()` — which would delete the
+ * `./tmp` a freshly started server has already created. Only the pid going away
+ * means its resources (OpenVR, tmp) are released. `true` on non-Linux, where
+ * `/proc` is unavailable and nothing can be observed.
+ */
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    if (!isServerProcess(pid)) {
+      return true;
+    }
+    await wait(100);
+  }
+  return !isServerProcess(pid);
 }
 
 /**
@@ -136,7 +143,7 @@ export function findServerProcess(port: number): ServerProcess | null {
   return launcher ?? direct;
 }
 
-/** SIGTERM, then SIGKILL if the REPL has not gone away, and wait for both. */
+/** SIGTERM, then SIGKILL if the process has not exited, and wait for it. */
 export async function stopServerProcess(
   pid: number,
   log: ServerLogger = () => {},
@@ -147,7 +154,7 @@ export async function stopServerProcess(
     log(`SIGTERM ${pid}: ${error instanceof Error ? error.message : String(error)}`);
     return;
   }
-  if (await waitForServerDown(SERVER_STOP_TIMEOUT_MS)) {
+  if (await waitForProcessExit(pid, SERVER_STOP_TIMEOUT_MS)) {
     return;
   }
   log(`pid=${pid} did not exit within ${SERVER_STOP_TIMEOUT_MS}ms; SIGKILL`);
@@ -156,7 +163,7 @@ export async function stopServerProcess(
   } catch (error) {
     log(`SIGKILL ${pid}: ${error instanceof Error ? error.message : String(error)}`);
   }
-  await waitForServerDown(5_000);
+  await waitForProcessExit(pid, 5_000);
 }
 
 export type ServerStartResult = { pid: number; ready: boolean };

@@ -9,9 +9,7 @@ import {
   type UseFrameNextOptions,
   useThree,
 } from "@react-three/fiber/webgpu";
-import { updateShadowSceneMesh } from "../webxrShadowScene.ts";
 import { readVrcCameraDebugSnapshot } from "../vrcCameraDebugState.ts";
-import { BoxLineGeometry } from "three/addons/geometries/BoxLineGeometry.js";
 import { DisplayInstance } from "./displayInstance/logic.tsx";
 import {
   DEFAULT_DISPLAY_DEPTH,
@@ -36,6 +34,10 @@ import {
   type HandleStore,
 } from "@pmndrs/handle";
 import { useWindowLayerVisible } from "./windowLayerMode.ts";
+import {
+  setGrabboxOutlineVisible,
+  useGrabboxOutlineVisible,
+} from "./grabboxOutlineMode.ts";
 import { useHingedOneHandScaleMaxGrabOffset } from "./spatialManipulationMode.ts";
 import { GrabBox } from "./grabbox.tsx";
 import {
@@ -199,22 +201,6 @@ function createLinuxKeyboardSink(actor: string): KeyboardSink {
   };
 }
 
-function RoomWireBox({ color }: { color: THREE.Color }) {
-  const geometry = React.useMemo(
-    () => new BoxLineGeometry(6, 6, 6, 10, 10, 10).translate(0, 3, 0),
-    [],
-  );
-
-  React.useEffect(() => {
-    return () => geometry.dispose();
-  }, [geometry]);
-
-  return (
-    <lineSegments geometry={geometry as unknown as THREE.BufferGeometry}>
-      <lineBasicMaterial color={color} />
-    </lineSegments>
-  );
-}
 
 function VrcCameraDebugVisuals() {
   const cameraGroupRef = useRef<THREE.Group>(null!);
@@ -815,6 +801,7 @@ function DisplaySpatialNodeView({
 }: SpatialNodeViewProps & { node: DisplaySpatialNode }) {
   const nodeRef = React.useRef<THREE.Group>(null);
   const [hovered, setHovered] = React.useState(false);
+  const grabOutlineVisible = useGrabboxOutlineVisible();
   const local = localTransformOverride ?? node.localTransform;
 
   const commitFreeTransform = React.useCallback(
@@ -963,6 +950,11 @@ function DisplaySpatialNodeView({
                     ? "Free spatial element"
                     : `Attached: ${assignedSide}`}
                 >
+                  <SpatialSettingsButton
+                    label="Grab outline"
+                    selected={grabOutlineVisible}
+                    onClick={() => setGrabboxOutlineVisible(!grabOutlineVisible)}
+                  />
                   <SpatialSettingsButton
                     label="Reset pose"
                     onClick={() =>
@@ -1521,7 +1513,6 @@ export function WebXRScene(
   }: WebXRSceneProps,
 ) {
   void _XROrigin;
-  const accentRef = useRef<THREE.Mesh>(null!);
   const displayMouseSink = React.useMemo(
     () =>
       Deno.build.os === "linux" && displayOverlayHostActor
@@ -1537,47 +1528,6 @@ export function WebXRScene(
     [displayOverlayHostActor],
   );
 
-  // R3F v10: keep mesh animation on the default `update` phase. Memoize options
-  // so the scheduler job is not re-registered every React render.
-  const accentFrameOpts = React.useMemo<UseFrameNextOptions>(
-    () => ({ id: "petplay-accent-torus" }),
-    [],
-  );
-  useFrame((_state, delta) => {
-    accentRef.current.rotation.y += delta * 0.25;
-  }, accentFrameOpts);
-
-  // Ghost overlay snapshot for Raylib: not needed at HMD rate; `finish` runs after uikit/keyboard
-  // update jobs, and 60Hz is plenty for a slow torus + shadow mesh mirror.
-  const shadowMirrorOpts = React.useMemo<UseFrameNextOptions>(
-    () => ({
-      id: "petplay-raylib-torus-shadow",
-      phase: "finish",
-      fps: 60,
-      drop: true,
-    }),
-    [],
-  );
-  // Static parts of the mirror description are hoisted: the job runs at 60Hz and
-  // `updateShadowSceneMesh` now copies these arrays element-wise instead of retaining them.
-  const shadowMirrorScratch = React.useMemo(
-    () => ({
-      kind: "torus" as const,
-      position: [0, 1.45, -1.8] as [number, number, number],
-      rotation: [0, 0, 0] as [number, number, number],
-      scale: [1, 1, 1] as [number, number, number],
-      color: [255, 139, 61, 255] as [number, number, number, number],
-      wireColor: [255, 196, 148, 255] as [number, number, number, number],
-    }),
-    [],
-  );
-  useFrame(() => {
-    shadowMirrorScratch.rotation[1] = accentRef.current.rotation.y;
-    updateShadowSceneMesh(0, shadowMirrorScratch);
-  }, shadowMirrorOpts);
-
-  const roomLineColor = React.useMemo(() => new THREE.Color(0xbcbcbc), []);
-
   return (
     <>
       <color attach="background" args={[0x091018]} />
@@ -1587,12 +1537,7 @@ export function WebXRScene(
       <pointLight intensity={8} position={[0, 1.9, -1.25]} color="#ffb347" />
       {/* <XROrigin /> */}
 
-      <mesh ref={accentRef} position={[0, 1.45, -1.8]}>
-        <torusGeometry args={[0.12, 0.012, 16, 48]} />
-        <meshBasicNodeMaterial colorNode={TSL.color(0xff8b3d)} />
-      </mesh>
       <VrcCameraDebugVisuals />
-      {/* <RoomWireBox color={roomLineColor} /> */}
 
       <WindowLayer
         displayOverlayHostActor={displayOverlayHostActor}

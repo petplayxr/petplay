@@ -2,6 +2,11 @@ import { actorState, PostMan } from "../submodules/stageforge/mod.ts";
 import { LogChannel } from "@mommysgoodpuppy/logchannel";
 import { type OpenVrPresence, OpenVrRuntime } from "../classes/openVrRuntime.ts";
 import { wait } from "../classes/utils.ts";
+import {
+  DEFAULT_STEAMVR_PROCESS_NAMES,
+  OPENVR_ATTACH_ONLY_ARG,
+  steamVrProcessIds,
+} from "../classes/steamVrProcess.ts";
 
 /**
  * SteamVR-facing actor — the process-local owner of the OpenVR client runtime.
@@ -32,6 +37,9 @@ const state = actorState({
 });
 
 const runtime = new OpenVrRuntime("PetPlay OpenVR");
+const attachOnly = Deno.args.includes(OPENVR_ATTACH_ONLY_ARG);
+/** The runtime instance we attached to; its disappearance permits a later manual instance. */
+let attachedVrserverPids: number[] = [];
 
 /** SteamVR shutdown events are the only signal that arrives *before* calls start failing. */
 const RUNTIME_WATCH_INTERVAL_MS = 500;
@@ -133,6 +141,24 @@ function getOpenVrStatus() {
 
 function attemptInitialize(): void {
   if (state.vrSystemPTR != null) return;
+  let candidateVrserverPids: number[] = [];
+  if (attachOnly) {
+    const runningPids = steamVrProcessIds(DEFAULT_STEAMVR_PROCESS_NAMES);
+    const oldInstanceStillRunning = attachedVrserverPids.some((pid) => runningPids.includes(pid));
+    const reason = oldInstanceStillRunning
+      ? "waiting for the previous SteamVR instance to exit (attach-only mode)"
+      : runningPids.length === 0
+      ? "SteamVR is not running (attach-only mode)"
+      : null;
+    if (reason != null) {
+      if (state.initError !== reason) {
+        LogChannel.log("actor", `OpenVR runtime unavailable: ${reason}`);
+      }
+      state.initError = reason;
+      return;
+    }
+    candidateVrserverPids = runningPids;
+  }
   state.initAttempts += 1;
   try {
     const pointers = runtime.initialize({
@@ -147,12 +173,15 @@ function attemptInitialize(): void {
     state.overlayPTR = pointers.overlay;
     state.inputPTR = pointers.input;
     state.renderModelsPTR = pointers.renderModels;
+    if (attachOnly) attachedVrserverPids = candidateVrserverPids;
     state.initError = null;
     state.runtimeQuit = false;
     state.presence = runtime.probePresence();
     LogChannel.log(
       "actor",
-      `OpenVR runtime ready (attempt ${state.initAttempts}, compositor=${state.compositorPTR != null})`,
+      `OpenVR runtime ready (attempt ${state.initAttempts}, compositor=${
+        state.compositorPTR != null
+      })`,
     );
   } catch (error) {
     state.initError = error instanceof Error ? error.message : String(error);

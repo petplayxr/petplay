@@ -373,6 +373,16 @@ let screenStreamerPath: string | null = null;
 
 function getScreenStreamerPath(): string {
   if (screenStreamerPath) return screenStreamerPath;
+  const override = Deno.env.get("PETPLAY_SCREEN_STREAMER");
+  if (override) {
+    screenStreamerPath = override;
+    return override;
+  }
+  if (Deno.build.os === "linux" && Deno.build.arch === "aarch64") {
+    throw new Error(
+      "The bundled screen-streamer is x86-64. Set PETPLAY_SCREEN_STREAMER to an ARM64 build.",
+    );
+  }
   const resourceName = Deno.build.os === "windows" ? "screen-streamer.exe" : "screen-streamer";
   const url = new URL(`../resources/${resourceName}`, import.meta.url);
   const bytes = Deno.readFileSync(url);
