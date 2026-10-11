@@ -23,6 +23,7 @@ import {
 } from "../workspaceLayoutStore.ts";
 import { GrabBox } from "../grabbox.tsx";
 import { isPointerBlockedByHost } from "./pointerFilter.ts";
+import { useSetting } from "../../settings.ts";
 
 // deno-lint-ignore no-explicit-any
 extend(THREE as any);
@@ -55,6 +56,23 @@ const CONTROLLER_UI_ROTATION: [number, number, number] = [
  */
 const CONTROLLER_UI_SCALE: [number, number, number] = [0.235, 0.235, 0.235];
 const WRIST_MENU_POINTER_EVENTS_ORDER = 100;
+
+/**
+ * The default mount, tuned on the right grip. Grip-space +X points into the right palm but out of
+ * the left one, so the left hand mirrors it across the YZ plane: negate x, and the Y and Z Euler
+ * angles.
+ */
+export function controllerWristTransform(
+  hand: "left" | "right" | undefined,
+  scale = 1,
+): Required<WristMenuTransform> {
+  const [x, y, z] = CONTROLLER_UI_POSITION;
+  const [rx, ry, rz] = CONTROLLER_UI_ROTATION;
+  const s = CONTROLLER_UI_SCALE[0] * scale;
+  return hand === "left"
+    ? { position: [-x, y, z], rotation: [rx, -ry, -rz], scale: [s, s, s] }
+    : { position: [x, y, z], rotation: [rx, ry, rz], scale: [s, s, s] };
+}
 
 export type WristMenuTransform = {
   position?: [number, number, number];
@@ -353,6 +371,11 @@ export function WristMenuControllerHud({ actorId }: { actorId?: string | null })
   const hostHandedness: "left" | "right" | undefined = h === "left" || h === "right"
     ? h
     : undefined;
+  const scale = useSetting("wristMenuScale");
+  const transform = React.useMemo(
+    () => controllerWristTransform(hostHandedness, scale),
+    [hostHandedness, scale],
+  );
   return (
     <>
       <PetplayDefaultXRController
@@ -364,6 +387,7 @@ export function WristMenuControllerHud({ actorId }: { actorId?: string | null })
       <XRSpace space="grip-space">
         <WristMenuPanel
           hostHandedness={hostHandedness}
+          transform={transform}
           attachedToController
           actorId={actorId}
         />

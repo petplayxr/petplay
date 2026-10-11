@@ -243,8 +243,15 @@ function SettingToggleRow(
 }
 
 /** Which controller wears the wrist menu: pressing the pill moves it to the other hand. */
+/** Size steps the wrist "Wrist menu" row cycles through. */
+const WRIST_SCALE_STEPS = [0.75, 1, 1.25, 1.5];
+
+/** Which hand wears the menu, and its size. The hand pill stays rightmost like the other rows. */
 function WristHandRow() {
   const hand = useSetting("wristMenuHand");
+  const scale = useSetting("wristMenuScale");
+  const step = WRIST_SCALE_STEPS.indexOf(scale);
+  const nextScale = WRIST_SCALE_STEPS[(step + 1) % WRIST_SCALE_STEPS.length];
   return (
     <Container
       flexDirection="row"
@@ -255,15 +262,25 @@ function WristHandRow() {
       backgroundColor={COLOR.tile}
       backgroundOpacity={1}
     >
-      <Text color={COLOR.ink} fontSize={14}>Wrist menu on</Text>
-      <Pill
-        slots={1}
-        units={2}
-        fontSize={13}
-        onClick={() => setSetting("wristMenuHand", hand === "right" ? "left" : "right")}
-      >
-        {hand === "right" ? "RIGHT" : "LEFT"}
-      </Pill>
+      <Text color={COLOR.ink} fontSize={14}>Wrist menu</Text>
+      <Container flexDirection="row" gap={INNER_GAP}>
+        <Pill
+          slots={1}
+          units={2}
+          fontSize={13}
+          onClick={() => setSetting("wristMenuScale", nextScale)}
+        >
+          {`${Math.round(scale * 100)}%`}
+        </Pill>
+        <Pill
+          slots={1}
+          units={2}
+          fontSize={13}
+          onClick={() => setSetting("wristMenuHand", hand === "right" ? "left" : "right")}
+        >
+          {hand === "right" ? "RIGHT" : "LEFT"}
+        </Pill>
+      </Container>
     </Container>
   );
 }
