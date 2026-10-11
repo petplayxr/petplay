@@ -253,6 +253,8 @@ const state = actorState({
   lastRafControllerPoseHash: null as number | null,
   overlayRunning: false,
   lastUploadedHostFrameCount: -1,
+  /** Host frame last extracted for views when no OpenVR overlay exists (`--novr`). */
+  lastViewOnlyHostFrameCount: -1,
   uploadedFrames: 0,
   waitLogCounter: 0,
   overlayFpsCounter: new FpsCounter(),
@@ -1364,6 +1366,7 @@ async function stopWebXR(): Promise<true> {
   state.raylibOverlayConfig = null;
   state.controllerActor = null;
   state.lastUploadedHostFrameCount = -1;
+  state.lastViewOnlyHostFrameCount = -1;
   state.uploadedFrames = 0;
   state.overlayFpsCounter.reset();
   state.lastOverlayFpsLogAt = 0;
@@ -1826,6 +1829,27 @@ function hasAnyOverlayMode(): boolean {
     includesWebGpuOverlay(state.overlayRenderMode);
 }
 
+/**
+ * Extracts the scene for registered views when there is no OpenVR overlay to
+ * rasterize it (`--novr`). The overlay is one consumer of the IR, not the thing
+ * that drives it, so views must not starve without a runtime. Paced by the host's
+ * XR rAF: one extraction per new host frame.
+ */
+function publishViewOnlyFrame(): boolean {
+  if (!state.host || state.views.size === 0) return false;
+  const frameCount = state.host.getStatus().frameCount;
+  if (frameCount <= state.lastViewOnlyHostFrameCount) return false;
+  const sourceFrame = state.host.captureShadowFrame();
+  const sceneContext = state.host.getRaythreeSceneContext();
+  if (!sourceFrame || !sceneContext) return false;
+  state.lastViewOnlyHostFrameCount = frameCount;
+  const extractStartedAt = performance.now();
+  const payload = state.raythreeSceneBridge.buildPayload(sceneContext, sourceFrame);
+  state.raythreeExtractMetric.record(performance.now() - extractStartedAt);
+  publishRaythreeFrameToViews(payload, getSceneBackgroundColor(sceneContext.scene));
+  return true;
+}
+
 async function uploadRaylibShadowFrame() {
   if (!state.host || !state.raylibOverlayRaylib) {
     return false;
@@ -2204,6 +2228,19 @@ async function uploadNativeRaylibDebugFrame() {
 async function pumpOverlayFrames() {
   const dropCrash = getCrashOnDroppedFrameMode();
   while (state.overlayRunning) {
+    if (
+      !state.raylibOverlayRaylib && !state.webGpuOverlayGl &&
+      !state.nativeRaylibDebug
+    ) {
+      // No OpenVR overlay (`--novr`, or detached): views are the only consumers.
+      try {
+        publishViewOnlyFrame();
+      } catch (error) {
+        LogChannel.log("webxrv2", `[webxr] view-only frame failed: ${error}`);
+      }
+      await wait(4);
+      continue;
+    }
     if (state.nativeRaylibDebug) {
       try {
         const frameStartedAt = performance.now();

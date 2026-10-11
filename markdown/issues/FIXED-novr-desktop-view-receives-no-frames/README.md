@@ -1,6 +1,6 @@
 # `--novr` desktop views receive no frames, so `client capture` times out
 
-Status: open
+Status: fixed 2026-10-11 (`publishViewOnlyFrame` in `petplay/webxr.ts`)
 Track: agentic-playtesting
 
 ## What happens
@@ -33,3 +33,10 @@ views. The overlay becomes one consumer of the IR rather than the thing that dri
 ## Evidence
 
 - `server.log`: the full server output of the repro run.
+
+## Fix
+
+`pumpOverlayFrames()` now checks whether an OpenVR overlay exists. When there isn't one
+(`--novr`, or SteamVR detached), it extracts the raythree IR once per new host frame and
+publishes it straight to the views (`publishViewOnlyFrame`). Verified with `client capture`
+in `--novr`: the PNG shows the scene.
