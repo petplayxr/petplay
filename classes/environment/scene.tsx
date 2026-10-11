@@ -50,6 +50,7 @@ import {
   type DisplaySpatialNode,
   getDisplayAttachmentRole,
   getSpatialChildren,
+  getSpatialRootId,
   hasAvailableDisplayAttachmentSlot,
   type HingeConstraint,
   IDENTITY_SPATIAL_TRANSFORM,
@@ -59,8 +60,10 @@ import {
   reconcileWorkspaceOutputs,
   releaseHinge,
   resetSpatialNodeTransform,
+  SCENE_ORIGIN_ID,
   setHingeAngle,
   setSpatialNodeLocked,
+  setSpatialRootOrigin,
   type SpatialGraph,
   type SpatialNode,
   type SpatialTransform,
@@ -84,6 +87,16 @@ import { penHandler } from "./penEvents.ts";
 import { ToastOverlay } from "./toastOverlay.tsx";
 import { pushToast } from "./toastStore.ts";
 import { startXsoNotificationReceiver } from "./xsoNotificationReceiver.ts";
+import {
+  getHeadObject,
+  getTrackedOriginWorldMatrix,
+  isTrackedOriginId,
+  SPATIAL_ORIGIN_IDS,
+  SPATIAL_ORIGIN_LABEL,
+  type SpatialOriginId,
+  TRACKED_ORIGIN_IDS,
+  type TrackedOriginId,
+} from "./trackedOrigins.ts";
 import {
   type SpatialContextAction,
   SpatialContextToolbar,
@@ -669,8 +682,26 @@ function WindowLayer({
 
   if (!visible) return null;
 
+  const roots = getSpatialChildren(graph, null);
+  const renderRoot = (node: SpatialNode) => (
+    <SpatialNodeView
+      key={node.id}
+      node={node}
+      graph={graph}
+      setGraph={setGraph}
+      workspaceOutputs={workspaceOutputs}
+      selectedNodeId={selectedNodeId}
+      onSelectNode={setSelectedNodeId}
+      handleStores={handleStores}
+      directOpenVrInputSource={directOpenVrInputSource}
+      displayOverlayHostActor={displayOverlayHostActor}
+      onMouse={onMouse}
+      onKey={onKey}
+    />
+  );
+
   return (
-    <group userData={{ spatialGraphRoot: true, originId: "scene-origin", static: true }}>
+    <group userData={{ spatialGraphRoot: true, originId: SCENE_ORIGIN_ID, static: true }}>
       <CommonOverlayChords
         inputSource={directOpenVrInputSource}
         graph={graph}
@@ -678,24 +709,124 @@ function WindowLayer({
         onMouse={onMouse}
       />
       <SpatialAudioProvider>
-        {getSpatialChildren(graph, null).map((node) => (
-          <SpatialNodeView
-            key={node.id}
-            node={node}
-            graph={graph}
-            setGraph={setGraph}
-            workspaceOutputs={workspaceOutputs}
-            selectedNodeId={selectedNodeId}
-            onSelectNode={setSelectedNodeId}
-            handleStores={handleStores}
-            directOpenVrInputSource={directOpenVrInputSource}
-            displayOverlayHostActor={displayOverlayHostActor}
-            onMouse={onMouse}
-            onKey={onKey}
-          />
-        ))}
+        {roots.filter((node) => !isTrackedOriginId(node.originId)).map(renderRoot)}
+        {TRACKED_ORIGIN_IDS.map((originId) => {
+          const attached = roots.filter((node) => node.originId === originId);
+          return attached.length === 0
+            ? null
+            : (
+              <TrackedOriginGroup key={originId} originId={originId}>
+                {attached.map(renderRoot)}
+              </TrackedOriginGroup>
+            );
+        })}
       </SpatialAudioProvider>
     </group>
+  );
+}
+
+/**
+ * Holds the windows attached to the head or a hand: each frame its matrix becomes that space's
+ * pose (in its parent's space), so the windows' local transforms are relative to it. Runs in the
+ * default phase, ahead of the display pose sync in `finish`. An untracked controller holds the
+ * last pose.
+ */
+function TrackedOriginGroup(
+  { originId, children }: { originId: TrackedOriginId; children: React.ReactNode },
+) {
+  const ref = React.useRef<THREE.Group>(null);
+  const camera = useThree((r3fState) => r3fState.camera);
+  const renderer = useThree((r3fState) => r3fState.gl);
+  const scratch = React.useMemo(
+    () => ({ world: new THREE.Matrix4(), parent: new THREE.Matrix4() }),
+    [],
+  );
+  useFrame(() => {
+    const group = ref.current;
+    if (group == null) return;
+    const head = getHeadObject(renderer, camera as unknown as THREE.Camera);
+    if (!getTrackedOriginWorldMatrix(originId, head, scratch.world)) return;
+    const parent = group.parent;
+    if (parent != null) {
+      parent.updateWorldMatrix(true, false);
+      group.matrix.copy(scratch.parent.copy(parent.matrixWorld).invert().multiply(scratch.world));
+    } else {
+      group.matrix.copy(scratch.world);
+    }
+    group.matrixWorldNeedsUpdate = true;
+  });
+  return (
+    <group ref={ref} matrixAutoUpdate={false} userData={{ spatialOrigin: originId }}>
+      {children}
+    </group>
+  );
+}
+
+/**
+ * "Anchored to" choices for a node's whole hierarchy: World, Head, Left hand, Right hand. The
+ * window stays where it is at the moment of the switch; from then on it moves with the new anchor.
+ */
+function AnchorSettingsSection(
+  { graph, node, setGraph }: {
+    graph: SpatialGraph;
+    node: SpatialNode;
+    setGraph: React.Dispatch<React.SetStateAction<SpatialGraph>>;
+  },
+) {
+  const scene = useThree((r3fState) => r3fState.scene);
+  const camera = useThree((r3fState) => r3fState.camera);
+  const renderer = useThree((r3fState) => r3fState.gl);
+  const rootId = getSpatialRootId(graph, node.id);
+  const current = graph.nodes[rootId]?.originId ?? SCENE_ORIGIN_ID;
+
+  const anchorTo = (originId: SpatialOriginId) => {
+    if (originId === current) return;
+    let rootObject: THREE.Object3D | null = null;
+    let sceneRoot: THREE.Object3D | null = null;
+    scene.traverse((object) => {
+      if (object.userData?.spatialElementId === rootId) rootObject = object as THREE.Object3D;
+      if (object.userData?.spatialGraphRoot === true) sceneRoot = object as THREE.Object3D;
+    });
+    const anchor = new THREE.Matrix4();
+    if (isTrackedOriginId(originId)) {
+      const head = getHeadObject(renderer, camera as unknown as THREE.Camera);
+      if (!getTrackedOriginWorldMatrix(originId, head, anchor)) {
+        pushToast({ title: `${SPATIAL_ORIGIN_LABEL[originId]} isn't tracked`, tone: "warning" });
+        return;
+      }
+    } else if (sceneRoot != null) {
+      (sceneRoot as THREE.Object3D).updateWorldMatrix(true, false);
+      anchor.copy((sceneRoot as THREE.Object3D).matrixWorld);
+    }
+    if (rootObject == null) return;
+    const root = rootObject as THREE.Object3D;
+    root.updateWorldMatrix(true, false);
+    const local = anchor.invert().multiply(root.matrixWorld);
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    local.decompose(position, quaternion, scale);
+    const rotation = new THREE.Euler().setFromQuaternion(quaternion, "XYZ");
+    setGraph((latest) =>
+      setSpatialRootOrigin(latest, rootId, originId, {
+        position: position.toArray() as [number, number, number],
+        rotation: [rotation.x, rotation.y, rotation.z],
+        scale: scale.toArray() as [number, number, number],
+      })
+    );
+  };
+
+  return (
+    <SpatialSettingsSection label={rootId === node.id ? "Anchored to" : "Group anchored to"}>
+      {SPATIAL_ORIGIN_IDS.map((originId) => (
+        <SpatialSettingsButton
+          key={originId}
+          label={SPATIAL_ORIGIN_LABEL[originId]}
+          selected={current === originId}
+          onClick={() => anchorTo(originId)}
+        />
+      ))}
+    </SpatialSettingsSection>
   );
 }
 
@@ -1022,6 +1153,7 @@ function DisplaySpatialNodeView({
                     />
                   ))}
                 </SpatialSettingsSection>
+                <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
                 <SpatialSettingsSection
                   label={assignedSide == null
                     ? "Free spatial element"
@@ -1177,6 +1309,7 @@ function KeyboardSpatialNodeView({
             title="Keyboard"
             position={[0, -node.snapSource.size[1] * 0.5 - 0.085, node.snapSource.size[2]]}
             actions={contextActions}
+            settings={<AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />}
           />
         )}
       </KeyboardPanel>

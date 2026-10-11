@@ -25,6 +25,7 @@ import { type ColorRepresentation, type Mesh, MeshBasicMaterial, Object3D } from
 import { HandPoker } from "./handPoker.tsx";
 import { useControllerLaserEnabled } from "./controllerLaserMode.ts";
 import { registerPointerHand } from "./haptics.ts";
+import { registerHandOrigin } from "./trackedOrigins.ts";
 
 function spreadable<T>(value: true | T | undefined): T | undefined {
   if (value === true || value === undefined) {
@@ -250,6 +251,19 @@ function PetplayGrabRayPointer(
   return <XRSpace ref={ref} space="target-ray-space" />;
 }
 
+/** Publishes this controller's grip space, so windows can be attached to the hand. */
+function HandOriginSpace() {
+  const state = useXRInputSourceStateContext();
+  const handedness = state.inputSource.handedness;
+  const ref = useRef<Object3D>(null);
+  useEffect(() => {
+    const object = ref.current;
+    if (object == null || (handedness !== "left" && handedness !== "right")) return;
+    return registerHandOrigin(`${handedness}-hand`, object);
+  }, [handedness]);
+  return <XRSpace ref={ref} space="grip-space" />;
+}
+
 /**
  * Hit-capped aim beam, select ray, teleport, and both grip-sphere and laser grab on squeeze.
  * Inner `CombinedPointer` picks one active grab (sphere when in range, else aim-ray grab).
@@ -281,6 +295,7 @@ export function PetplayDefaultXRController(props: DefaultXRControllerOptions) {
   return (
     <>
       {/* <HandPoker /> */}
+      <HandOriginSpace />
       {modelOptions !== false && (
         <Suspense>
           <XRControllerModel {...spreadable(modelOptions)} />

@@ -12,7 +12,10 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 
 - [~] **Overlay registry: spawn/despawn, per-window opacity, curve, size**
 - [~] **Grab / push-pull / scale gestures**, plus sensitivity settings
-- [ ] **Attach to hand / head / world**
+- [~] **Attach to hand / head / world**: "Anchored to" pills in a window's settings (World, Head,
+  Left hand, Right hand) move its whole hierarchy to that space without a jump, persisted per node;
+  recenter and snapping skip attached windows. Verified in `--novr` by moving the synthetic hands
+  and the emulated headset; the overlays following in a headset is not yet checked
 - [~] **Pin / lock window**: per-node `locked` (toolbar Lock action) freezes grabs, persisted;
   verified in `--novr` through the UI (toolbar click toggles it; a locked display doesn't move under
   a grab, an unlocked one does)

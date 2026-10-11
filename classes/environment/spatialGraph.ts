@@ -102,6 +102,9 @@ export type SpatialGraph = {
   nextControlOrdinal: number;
 };
 
+/** The world origin; the others are tracked spaces a window can be attached to; see `trackedOrigins.ts`. */
+export const SCENE_ORIGIN_ID = "scene-origin";
+
 export const IDENTITY_SPATIAL_TRANSFORM: SpatialTransform = {
   position: [0, 0, 0],
   rotation: [0, 0, 0],
@@ -198,7 +201,7 @@ export function createInitialSpatialGraph(): SpatialGraph {
     kind: "display",
     ordinal: 1,
     parentId: null,
-    originId: "scene-origin",
+    originId: SCENE_ORIGIN_ID,
     localTransform: transform([0, 0, 0]),
     onParentDelete: "preserve",
   };
@@ -221,7 +224,7 @@ export function ensureDefaultSpatialContent(current: SpatialGraph): SpatialGraph
       kind: "display",
       ordinal,
       parentId: null,
-      originId: "scene-origin",
+      originId: SCENE_ORIGIN_ID,
       localTransform: transform([0, 0, 0]),
       onParentDelete: "preserve",
     };
@@ -639,8 +642,9 @@ export function recenterSpatialRoots(
   headYaw: number,
   offset: [number, number, number],
 ): SpatialGraph {
+  // Windows attached to the head or a hand already sit where they belong.
   const roots = Object.values(current.nodes).filter((node) =>
-    node.parentId == null && !node.constraint
+    node.parentId == null && !node.constraint && node.originId === SCENE_ORIGIN_ID
   );
   const primary = roots
     .filter((node): node is DisplaySpatialNode => node.kind === "display")
@@ -682,6 +686,39 @@ export function recenterSpatialRoots(
         rotation: [rotation.x, rotation.y, rotation.z],
       },
     };
+  }
+  return graph;
+}
+
+/** The top of `nodeId`'s attachment hierarchy (itself when it has no parent). */
+export function getSpatialRootId(graph: SpatialGraph, nodeId: SpatialNodeId): SpatialNodeId {
+  let id = nodeId;
+  for (let parent = graph.nodes[id]?.parentId; parent != null; parent = graph.nodes[id]?.parentId) {
+    id = parent;
+  }
+  return id;
+}
+
+/**
+ * Re-anchor a whole hierarchy to another origin. `localTransform` is the root's pose in the new
+ * origin's space (the caller measures it, so the window stays where it is in the world);
+ * descendants keep their transforms relative to the root.
+ */
+export function setSpatialRootOrigin(
+  current: SpatialGraph,
+  nodeId: SpatialNodeId,
+  originId: string,
+  localTransform: SpatialTransform,
+): SpatialGraph {
+  const rootId = getSpatialRootId(current, nodeId);
+  const root = current.nodes[rootId];
+  if (!root) return current;
+  const graph = cloneGraph(current);
+  graph.nodes[rootId] = { ...root, originId, localTransform };
+  for (const node of Object.values(current.nodes)) {
+    if (node.id !== rootId && isSpatialDescendant(current, node.id, rootId)) {
+      graph.nodes[node.id] = { ...node, originId };
+    }
   }
   return graph;
 }
@@ -978,6 +1015,8 @@ export function snapNodeToOverlappingHitbox(
   const candidates = Object.values(current.hitboxes)
     .filter((hitbox) => hitbox.accepts.includes(node.kind))
     .filter((hitbox) => hitbox.ownerId !== node.id)
+    // Only within one origin: a hand-attached window passing a world one must not latch on.
+    .filter((hitbox) => current.nodes[hitbox.ownerId]?.originId === node.originId)
     .filter((hitbox) => !isAttachmentSlotOccupied(current, hitbox.id))
     .filter((hitbox) => !isSpatialDescendant(current, hitbox.ownerId, node.id))
     .filter((hitbox) =>

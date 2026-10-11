@@ -19,6 +19,7 @@ import {
   releaseHinge,
   resetSpatialNodeTransform,
   setSpatialNodeLocked,
+  setSpatialRootOrigin,
   type SpatialGraph,
   spawnDisplayForWorkspaceOutput,
   spawnHingedDisplay,
@@ -568,4 +569,49 @@ Deno.test("locking a node is a no-op when unchanged and survives a clone", () =>
     scale: [1, 1, 1],
   });
   assert(moved.nodes["display-1"].locked === true, "lock kept across later edits");
+});
+
+Deno.test("anchoring a child re-anchors its whole hierarchy; recenter and snapping skip it", () => {
+  let graph = spawnHingedDisplay(createInitialSpatialGraph(), "display-1", "right");
+  const pose = {
+    position: [0.1, -0.05, -0.4],
+    rotation: [0, 0, 0],
+    scale: [0.5, 0.5, 0.5],
+  } as const;
+  graph = setSpatialRootOrigin(graph, "display-2", "left-hand", {
+    position: [...pose.position],
+    rotation: [...pose.rotation],
+    scale: [...pose.scale],
+  });
+  assert(graph.nodes["display-1"].originId === "left-hand", "root re-anchored");
+  assert(graph.nodes["display-2"].originId === "left-hand", "child follows its root");
+  assert(graph.nodes["display-1"].localTransform.position[2] === -0.4, "root pose replaced");
+  assert(graph.nodes["display-2"].parentId === "display-1", "hierarchy kept");
+
+  // Recenter only moves world-anchored windows: nothing is left to move here.
+  assert(
+    recenterSpatialRoots(graph, [0, 1.6, 0], 0, [0, -0.08, -1.35]) === graph,
+    "hand-attached layout is not recentered",
+  );
+
+  // A world display placed on the hand display's left slot does not latch onto it. A spawned
+  // display hinges onto the group and inherits the hand origin; detached it keeps it, so it is
+  // moved back to the world explicitly.
+  graph = spawnDisplayForWorkspaceOutput(graph, output("2"));
+  const spawned = Object.values(graph.nodes).find((node) =>
+    node.kind === "display" && node.id !== "display-1" && node.id !== "display-2"
+  );
+  assert(spawned?.originId === "left-hand", "spawned into the hand group");
+  graph = detachDisplayHierarchy(graph, spawned.id);
+  assert(graph.nodes[spawned.id].originId === "left-hand", "detaching keeps the origin");
+  const slotPosition = worldPointOf(graph, "display-1", [-DISPLAY_PANEL_WIDTH, 0, 0.0125]);
+  const slotPose = {
+    position: slotPosition.toArray() as [number, number, number],
+    rotation: [0, 0, 0] as [number, number, number],
+    scale: [0.5, 0.5, 0.5] as [number, number, number],
+  };
+  graph = setSpatialRootOrigin(graph, spawned.id, "scene-origin", slotPose);
+  const world = graph.nodes[spawned.id];
+  graph = commitSpatialNodeTransformAndSnap(graph, world.id, slotPose);
+  assert(graph.nodes[world.id].parentId == null, "no snapping across origins");
 });
