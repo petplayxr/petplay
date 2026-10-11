@@ -1,0 +1,109 @@
+Press Ctrl-C to close
+Stageforge networking disabled. Enable it with --stageforge-networking or PETPLAY_STAGEFORGE_NETWORKING=1.
+[petplay boot] main actor started (novr=true)
+[WEBXRV2] [webxrhost] rAF polyfill=16.000ms (~62.5Hz); IWER XRSession uses global rAF
+[WEBXRV2] [webxrhost] surface=80x40 debugWindow=no session=immersive-ar alpha=yes capture=serial readback=stereo ringSize=3 queueDebug=off
+Listening on http://127.0.0.1:3990/
+[WEBXRV2] [webxrhost] IWER onBeforeFrameStart: OpenVR runs before tracked-input onFrameStart (Aardvark order)
+[WEBXRV2] [webxrhost] using pose-only renderer shim (no WebGPU renderer in raylib-only mode)
+[R3FJOB] {"rootId":"root_0","renderClaimed":false,"jobs":["root_0_frustum","root_0_visibility","root_0_render"]}
+Nominal frame rate updated to 120
+[WEBXRV2] [webxrhost] entered immersive-ar presenting=yes alpha=yes webgpuSceneDraw=no (raylib-only; use overlay "both"/"webgpu" to draw the projection layer)
+[WEBXRV2] [webxrhost] frame source ready session=present source=renderState.layers[0] layerTexture=yes width=40 height=40 format=bgra
+[DEPRECATED] Use `createWithEqualityFn` instead of `create` or use `useStoreWithEqualityFn` instead of `useStore`. They can be imported from 'zustand/traditional'. https://github.com/pmndrs/zustand/discussions/1937
+INFO: Initializing raylib 5.5
+INFO: Platform backend: DESKTOP (GLFW)
+INFO: Supported raylib modules:
+INFO:     > rcore:..... loaded (mandatory)
+INFO:     > rlgl:...... loaded (mandatory)
+INFO:     > rshapes:... loaded (optional)
+INFO:     > rtextures:. loaded (optional)
+INFO:     > rtext:..... loaded (optional)
+INFO:     > rmodels:... loaded (optional)
+INFO:     > raudio:.... loaded (optional)
+INFO: DISPLAY: Device initialized successfully
+INFO:     > Display size: 1920 x 1080
+INFO:     > Screen size:  1280 x 720
+INFO:     > Render size:  1280 x 720
+INFO:     > Viewport offsets: 0, 0
+INFO: GLAD: OpenGL extensions loaded successfully
+INFO: GL: Supported extensions count: 241
+INFO: GL: OpenGL device information:
+INFO:     > Vendor:   AMD
+INFO:     > Renderer: AMD Radeon RX 7900 XTX (radeonsi, navi31, ACO, DRM 3.64, 7.2.6-1-cachyos)
+INFO:     > Version:  4.6 (Core Profile) Mesa 26.2.3-arch3.1
+INFO:     > GLSL:     4.60
+INFO: GL: VAO extension detected, VAO functions loaded successfully
+INFO: GL: NPOT textures extension detected, full NPOT textures supported
+INFO: GL: DXT compressed textures supported
+INFO: GL: ETC2/EAC compressed textures supported
+INFO: PLATFORM: DESKTOP (GLFW - X11): Initialized successfully
+INFO: TEXTURE: [ID 1] Texture loaded successfully (1x1 | R8G8B8A8 | 1 mipmaps)
+INFO: TEXTURE: [ID 1] Default texture loaded successfully
+INFO: SHADER: [ID 1] Vertex shader compiled successfully
+INFO: SHADER: [ID 2] Fragment shader compiled successfully
+INFO: SHADER: [ID 3] Program shader loaded successfully
+INFO: SHADER: [ID 3] Default shader loaded successfully
+INFO: RLGL: Render batch vertex buffers loaded successfully in RAM (CPU)
+INFO: RLGL: Render batch vertex buffers loaded successfully in VRAM (GPU)
+INFO: RLGL: Default OpenGL state initialized successfully
+INFO: TEXTURE: [ID 2] Texture loaded successfully (128x128 | GRAY_ALPHA | 1 mipmaps)
+INFO: FONT: Default font loaded successfully (224 glyphs)
+INFO: SYSTEM: Working Directory: /home/ellie/git/petplay
+INFO: TIMER: Target time per frame: 8.333 milliseconds
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 5] Fragment shader compiled successfully
+INFO: SHADER: [ID 6] Program shader loaded successfully
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 5] Fragment shader compiled successfully
+INFO: SHADER: [ID 7] Program shader loaded successfully
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 5] Fragment shader compiled successfully
+INFO: SHADER: [ID 8] Program shader loaded successfully
+INFO: VAO: [ID 2] Mesh uploaded successfully to VRAM (GPU)
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 5] Fragment shader compiled successfully
+INFO: SHADER: [ID 9] Program shader loaded successfully
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 5] Fragment shader compiled successfully
+INFO: SHADER: [ID 10] Program shader loaded successfully
+[WEBXRV2] [webxr] view registered: desktop_view@9b8e8b33-cb0e-4bb2-9cb0-165090f57fe4 (desktop, cameraControl=false)
+[WEBXRV2] [webxr] raylib scene dispose: geometries=0
+[WEBXRV2] [webxr] raylib scene dispose: textMeshes=0
+[WEBXRV2] [webxr] raylib scene dispose: UI textures and meshes
+INFO: VAO: [ID 2] Unloaded vertex array data from VRAM (GPU)
+[WEBXRV2] [webxr] raylib scene dispose: shaders
+INFO: SHADER: [ID 8] Unloaded shader program data from VRAM (GPU)
+INFO: SHADER: [ID 9] Unloaded shader program data from VRAM (GPU)
+INFO: SHADER: [ID 7] Unloaded shader program data from VRAM (GPU)
+INFO: SHADER: [ID 10] Unloaded shader program data from VRAM (GPU)
+INFO: SHADER: [ID 6] Unloaded shader program data from VRAM (GPU)
+[WEBXRV2] [webxr] raylib scene dispose: complete
+INFO: TEXTURE: [ID 2] Unloaded texture data from VRAM (GPU)
+INFO: SHADER: [ID 3] Default shader unloaded successfully
+INFO: TEXTURE: [ID 1] Default texture unloaded successfully
+INFO: Window closed successfully
+[POSTMAN] Running cooperative actor shutdown hook...
+[POSTMAN] Cooperative actor shutdown complete; closing worker
+[petplay] received SIGTERM; shutting down
+[petplay] shutting down actor agentRepl@d542a516-d83c-4c7a-8688-ab7c29650563
+[POSTMAN] Running actor shutdown hook...
+[petplay] actor shutdown complete agentRepl@d542a516-d83c-4c7a-8688-ab7c29650563
+[petplay] shutting down actor webxr@49ac3074-abda-48b6-9db3-5dc107e30fd5
+[POSTMAN] Running actor shutdown hook...
+[WEBXRV2] [webxr] shutdown: stopping controller loop
+[WEBXRV2] [webxr] shutdown: stopping overlay loop
+[WEBXRV2] [webxr] shutdown: stopping WebXR host
+[WEBXRV2] [webxr] shutdown: cleaning WebGPU overlay
+[WEBXRV2] [webxr] shutdown: cleaning OpenVR overlay
+[WEBXRV2] [webxr] shutdown: cleaning Raylib renderer
+[WEBXRV2] [webxr] shutdown: native cleanup complete
+[petplay] actor shutdown complete webxr@49ac3074-abda-48b6-9db3-5dc107e30fd5
+[petplay] shutting down actor wrist_menu@00b1ea7f-8675-4c10-9883-99a963ab69a5
+[POSTMAN] Running actor shutdown hook...
+[petplay] actor shutdown complete wrist_menu@00b1ea7f-8675-4c10-9883-99a963ab69a5
+[petplay] shutting down actor main@e968933d-ebc9-499a-98dd-db122104b4b1
+[POSTMAN] Running actor shutdown hook...
+[petplay] actor shutdown complete main@e968933d-ebc9-499a-98dd-db122104b4b1
+CLEAN
+exit! WOOF~

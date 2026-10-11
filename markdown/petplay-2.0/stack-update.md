@@ -1,0 +1,36 @@
+# Track 7: Stack update
+
+Bring the rendering and interaction stack up to current versions before optimizing the CPU path
+([track 3](./stability-performance.md)). Profiling and tuning against old internals is wasted
+work once they change.
+
+## Today (2026-10-11)
+
+| Package | Pinned | Current upstream |
+|---|---|---|
+| `@react-three/fiber` | `10.0.0-alpha.2` (`classes/r3fWebgpuCompat.ts`) | `10.0.0-alpha.5`; canaries daily (`10.0.0-canary.*`); stable is 9.8.1 |
+| `three` | jsdelivr commit `30e9dd1b` (`deno.json`), lock has 0.184.0 | 0.186.1 |
+| `@pmndrs/xr` / `handle` / `pointer-events` | fork `mommysgoodpuppy/xr`, 2026-09-20 (has our one-hand-scaling HandleStore work) | upstream pmndrs/xr |
+| `@pmndrs/uikit` | upstream, 2026-05-06 | upstream main |
+| IWER | fork `mommysgoodpuppy/immersive-web-emulation-runtime` 2.2.0, 2026-05-11 | upstream |
+| `react` | 19.2.5 | — |
+
+All of these come in through the `submodules/threewebxrwebgpudeno` workspace member.
+
+## Plan
+
+1. r3f → newest v10 prerelease (alpha.5 or a pinned canary). Re-check the compat shim
+   (`r3fWebgpuCompat.ts`: legacy `useFrame` with `XRFrame`, `state.clock`), which tracks the v10
+   scheduler API.
+2. three → 0.186.x. Re-verify raythree extraction (`submodules/raythree`), since it reads three
+   internals, and the TSL materials.
+3. Rebase the xr fork on upstream. Upstream the HandleStore changes if pmndrs will take them,
+   so the fork gets smaller.
+4. uikit and IWER → latest. Rebase the IWER fork's "extra mods".
+5. After each step, run the playtest smoke + an `overlay:perf` capture and compare to the
+   pre-update baseline, so a regression has one clear cause.
+
+## Done when
+
+Everything is on current versions, the forks are rebased with their diff documented, and the
+perf baseline is no worse than before the update.
