@@ -11,6 +11,10 @@ Work:
 - **Soak test.** Run 4 h with SteamVR + capture + a desktop view, sampling `status` every minute.
   Pass criteria: no process exit, `repairs` stays flat, RSS growth under X MB/h, no fd/handle
   growth. The agent harness ([track 5](./agentic-playtesting.md)) runs it overnight.
+  First run (2026-10-11, `--novr`, no SteamVR or capture): 4 h, a wrist-menu and toast cycle
+  every 5 min (48/48 ok). Between cycles, RSS went 342 → 385 MB in the first 15 min, then stayed
+  flat (~355–390 MB); heap ~90–120 MB; scene nodes back to 73 after every cycle. No leak in the
+  scene/UI path. The SteamVR + capture soak is still to do.
 - **Native crash surface.** A segfault in any worker kills the process. Inventory the FFI
   entrypoints that run outside the render loop, and add a supervisor parent that restarts the
   server on native death (the dev-runner already half does this) and records the last

@@ -10,7 +10,9 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 
 ## Window / display
 
-- [~] **Overlay registry: spawn/despawn, per-window opacity, curve, size**
+- [~] **Overlay registry: spawn/despawn, per-window opacity, curve, size**. Opacity: "Opacity"
+  pills (100/75/50/25%) in a window's settings, persisted per node, sent to the overlay host as
+  `SetOverlayAlpha`; verified in `--novr` (uikit fades, layout saves it), not yet on real overlays
 - [~] **Grab / push-pull / scale gestures**, plus sensitivity settings
 - [~] **Attach to hand / head / world**: "Anchored to" pills in a window's settings (World, Head,
   Left hand, Right hand) move its whole hierarchy to that space without a jump, persisted per node;
@@ -42,7 +44,8 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 
 - [~] **Layout loading + locale switching** (`--keyboard-locale`)
 - [~] Sticky / toggle modifiers
-- [ ] **Keyboard pin + opacity**
+- [~] **Keyboard pin + opacity**: pin is the toolbar Lock; opacity uses the same per-node pills as
+  windows (the depth occluder is dropped below 100% so the desktop shows through)
 - [ ] Typing sounds
 
 ## Settings

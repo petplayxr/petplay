@@ -39,6 +39,7 @@ const state = actorState({
   textureReady: false,
   lastWidthMeters: -1,
   lastHmd: null as OpenVR.HmdMatrix34 | null,
+  lastAlpha: -1,
   captureFrames: 0,
   captureFps: DEFAULT_CAPTURE_FPS,
   captureFramesPresented: 0,
@@ -136,6 +137,8 @@ type StartDesktopPayload = {
 type SyncDisplayPosePayload = {
   hmd: OpenVR.HmdMatrix34;
   widthMeters: number;
+  /** Overlay alpha, 0..1; absent means opaque. */
+  opacity?: number;
 };
 
 type WorkspaceCrop = { x: number; y: number; width: number; height: number };
@@ -144,7 +147,7 @@ type SyncVirtualDisplayPayload = SyncDisplayPosePayload & {
   crop: WorkspaceCrop;
   name?: string;
 };
-type VirtualOverlay = SyncVirtualDisplayPayload & { handle: bigint };
+type VirtualOverlay = SyncVirtualDisplayPayload & { handle: bigint; appliedAlpha?: number };
 const virtualOverlays = new Map<string, VirtualOverlay>();
 const pendingVirtualDisplays = new Map<string, SyncVirtualDisplayPayload>();
 const virtualOverlayRemovalTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -271,11 +274,17 @@ new PostMan(
     },
     SYNCDISPLAYPOSE: (sync: SyncDisplayPosePayload) => {
       if (!state.overlayClass || !state.overlayHandle) return;
+      const alpha = sync.opacity ?? 1;
       if (
         state.lastHmd && matrixEquals(state.lastHmd, sync.hmd) &&
-        state.lastWidthMeters === sync.widthMeters
+        state.lastWidthMeters === sync.widthMeters &&
+        state.lastAlpha === alpha
       ) {
         return;
+      }
+      if (state.lastAlpha !== alpha) {
+        setOverlayAlphaLogged(state.overlayHandle, alpha, "display");
+        state.lastAlpha = alpha;
       }
       if (state.lastWidthMeters !== sync.widthMeters) {
         const wErr = state.overlayClass.SetOverlayWidthInMeters(
@@ -692,6 +701,11 @@ function syncVirtualDisplay(sync: SyncVirtualDisplayPayload): void {
     }
   }
   overlay.SetOverlayWidthInMeters(entry.handle, sync.widthMeters);
+  const alpha = sync.opacity ?? 1;
+  if (entry.appliedAlpha !== alpha) {
+    setOverlayAlphaLogged(entry.handle, alpha, entry.id);
+    entry.appliedAlpha = alpha;
+  }
   // TextureBounds already establishes the visible crop geometry in SteamVR.
   // Keep square texels; changing this stretches the monitor vertically.
   const aspectError = overlay.SetOverlayTexelAspect(entry.handle, 1);
@@ -714,6 +728,16 @@ function syncVirtualDisplay(sync: SyncVirtualDisplayPayload): void {
     overlay.SetOverlayTexture(entry.handle, state.textureStructPtr);
   }
   if (state.visible) overlay.ShowOverlay(entry.handle);
+}
+
+function setOverlayAlphaLogged(handle: bigint, alpha: number, label: string): void {
+  const err = state.overlayClass?.SetOverlayAlpha(handle, alpha);
+  if (err != null && err !== OpenVR.OverlayError.VROverlayError_None) {
+    LogChannel.log(
+      "actor",
+      `[displayOverlayHost] SetOverlayAlpha(${label}): ${OpenVR.OverlayError[err]}`,
+    );
+  }
 }
 
 function setVirtualOverlayMouseScale(entry: VirtualOverlay): void {
@@ -806,6 +830,7 @@ async function stopDesktopOverlay(): Promise<void> {
   state.textureStructPtr = null;
   state.lastWidthMeters = -1;
   state.lastHmd = null;
+  state.lastAlpha = -1;
   state.visible = false;
 }
 
@@ -964,6 +989,7 @@ async function startDesktopOpenVrOverlay(config: StartDesktopPayload) {
   state.textureReady = false;
   state.lastWidthMeters = -1;
   state.lastHmd = null;
+  state.lastAlpha = -1;
 
   await initGl(overlayKey);
   const createHandlePtr = P.BigUint64P<OpenVR.OverlayHandle>();

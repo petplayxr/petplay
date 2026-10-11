@@ -19,6 +19,7 @@ import {
   releaseHinge,
   resetSpatialNodeTransform,
   setSpatialNodeLocked,
+  setSpatialNodeOpacity,
   setSpatialRootOrigin,
   type SpatialGraph,
   spawnDisplayForWorkspaceOutput,
@@ -569,6 +570,18 @@ Deno.test("locking a node is a no-op when unchanged and survives a clone", () =>
     scale: [1, 1, 1],
   });
   assert(moved.nodes["display-1"].locked === true, "lock kept across later edits");
+});
+
+Deno.test("opacity is clamped, and full opacity clears the field", () => {
+  const graph = createInitialSpatialGraph();
+  assert(setSpatialNodeOpacity(graph, "display-1", 1) === graph, "opaque is already the default");
+  const faded = setSpatialNodeOpacity(graph, "display-1", 0.5);
+  assert(faded.nodes["display-1"].opacity === 0.5, "opacity set");
+  assert(graph.nodes["display-1"].opacity === undefined, "original graph untouched");
+  assert(setSpatialNodeOpacity(faded, "display-1", 0).nodes["display-1"].opacity === 0.1, "floor");
+  assert(setSpatialNodeOpacity(faded, "display-1", NaN) === faded, "NaN ignored");
+  const restored = setSpatialNodeOpacity(faded, "display-1", 1);
+  assert(!("opacity" in restored.nodes["display-1"]), "opaque leaves no field behind");
 });
 
 Deno.test("anchoring a child re-anchors its whole hierarchy; recenter and snapping skip it", () => {

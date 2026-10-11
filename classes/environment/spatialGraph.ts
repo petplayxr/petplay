@@ -41,6 +41,8 @@ type SpatialNodeBase = {
   onParentDelete: ParentDeleteBehavior;
   /** Pinned in place: grabs do not move, turn or scale it. Recenter still moves the layout. */
   locked?: boolean;
+  /** 0..1, unset means opaque. Only the node itself: children keep their own. */
+  opacity?: number;
 };
 
 export type BoxSnapSource = {
@@ -732,6 +734,24 @@ export function setSpatialNodeLocked(
   if (!node || (node.locked ?? false) === locked) return current;
   const graph = cloneGraph(current);
   graph.nodes[nodeId] = { ...node, locked };
+  return graph;
+}
+
+export const MIN_SPATIAL_NODE_OPACITY = 0.1;
+
+/** Clamped to [`MIN_SPATIAL_NODE_OPACITY`, 1], so a window can't vanish; 1 clears the field. */
+export function setSpatialNodeOpacity(
+  current: SpatialGraph,
+  nodeId: SpatialNodeId,
+  opacity: number,
+): SpatialGraph {
+  const node = current.nodes[nodeId];
+  if (!node || !Number.isFinite(opacity)) return current;
+  const clamped = Math.min(1, Math.max(MIN_SPATIAL_NODE_OPACITY, opacity));
+  if ((node.opacity ?? 1) === clamped) return current;
+  const graph = cloneGraph(current);
+  const { opacity: _previous, ...rest } = node;
+  graph.nodes[nodeId] = (clamped === 1 ? rest : { ...rest, opacity: clamped }) as SpatialNode;
   return graph;
 }
 

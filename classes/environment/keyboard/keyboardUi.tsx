@@ -582,6 +582,8 @@ export type KeyboardFromJsonProps = {
   columnBackground?: string;
   /** Uikit `pixelSize` for flex layout. */
   pixelSize?: number;
+  /** Whole-board opacity, 0..1; uikit's `opacity` is inherited by every key and label. */
+  opacity?: number;
   /** `compact` = main only; `arrows` = main + arrow cluster (default); `full` = nav + numpad. */
   layoutMode?: KeyboardLayoutMode;
 };
@@ -643,6 +645,7 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
       columnBackground = DEFAULT_KEYBOARD_COLUMN_BACKGROUND,
       pixelSize = DEFAULT_KEYBOARD_PIXEL_SIZE,
       layoutMode = getKeyboardLayoutMode(),
+      opacity = 1,
     },
     ref,
   ) {
@@ -906,6 +909,7 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
       <Container
         ref={ref}
         pixelSize={pixelSize}
+        opacity={opacity}
         flexDirection="row"
         alignItems="flex-start"
         gap={0}

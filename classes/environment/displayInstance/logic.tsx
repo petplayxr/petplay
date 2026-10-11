@@ -35,6 +35,8 @@ export type DisplayInstanceProps = DisplayInstanceFrameProps & {
   virtualDisplayId?: string;
   workspaceCrop?: WorkspaceRect;
   virtualDisplayName?: string;
+  /** Overlay alpha, 0..1 (default opaque). */
+  opacity?: number;
   /** Transform target for this display's GrabBox; defaults to the display itself. */
   manipulationTargetRef?: React.RefObject<THREE.Object3D | null>;
   /** Optional constraint/apply policy for the Handle targeting this display. */
@@ -80,6 +82,7 @@ export function DisplayInstance(
     virtualDisplayId,
     workspaceCrop,
     virtualDisplayName,
+    opacity = 1,
     manipulationTargetRef,
     manipulationOptions,
     manipulationStoreRef,
@@ -98,6 +101,7 @@ export function DisplayInstance(
   const rigidWorld = useRef(new THREE.Matrix4());
   const lastSentHmd = useRef<ReturnType<typeof hmd34FromColumnMajor4x4> | null>(null);
   const lastSentWidth = useRef<number | null>(null);
+  const lastSentOpacity = useRef<number | null>(null);
   /** Last crop sent to the overlay host, compared field-wise to avoid a per-frame JSON.stringify. */
   const lastSentCrop = useRef<WorkspaceRect | null>(null);
 
@@ -185,6 +189,7 @@ export function DisplayInstance(
       if (
         hmd34ApproxEqual(hmd, lastSentHmd.current) &&
         Math.abs(lastSentWidth.current - widthMeters) < 0.0001 &&
+        lastSentOpacity.current === opacity &&
         cropUnchanged
       ) {
         return;
@@ -192,6 +197,7 @@ export function DisplayInstance(
     }
     lastSentHmd.current = hmd;
     lastSentWidth.current = widthMeters;
+    lastSentOpacity.current = opacity;
     lastSentCrop.current = workspaceCrop ? { ...workspaceCrop } : null;
     try {
       PostMan.PostMessage(
@@ -205,12 +211,13 @@ export function DisplayInstance(
               crop: workspaceCrop,
               hmd,
               widthMeters,
+              opacity,
             },
           }
           : {
             target: targetActor,
             type: "SYNCDISPLAYPOSE",
-            payload: { hmd, widthMeters },
+            payload: { hmd, widthMeters, opacity },
           },
       );
     } catch {

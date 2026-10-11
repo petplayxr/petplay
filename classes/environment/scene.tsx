@@ -63,6 +63,7 @@ import {
   SCENE_ORIGIN_ID,
   setHingeAngle,
   setSpatialNodeLocked,
+  setSpatialNodeOpacity,
   setSpatialRootOrigin,
   type SpatialGraph,
   type SpatialNode,
@@ -830,6 +831,29 @@ function AnchorSettingsSection(
   );
 }
 
+const OPACITY_STEPS = [1, 0.75, 0.5, 0.25] as const;
+
+function OpacitySettingsSection(
+  { node, setGraph }: {
+    node: SpatialNode;
+    setGraph: React.Dispatch<React.SetStateAction<SpatialGraph>>;
+  },
+) {
+  const current = node.opacity ?? 1;
+  return (
+    <SpatialSettingsSection label="Opacity">
+      {OPACITY_STEPS.map((step) => (
+        <SpatialSettingsButton
+          key={step}
+          label={`${Math.round(step * 100)}%`}
+          selected={Math.abs(current - step) < 0.001}
+          onClick={() => setGraph((latest) => setSpatialNodeOpacity(latest, node.id, step))}
+        />
+      ))}
+    </SpatialSettingsSection>
+  );
+}
+
 type SpatialGraphViewProps = {
   graph: SpatialGraph;
   setGraph: React.Dispatch<React.SetStateAction<SpatialGraph>>;
@@ -1118,6 +1142,7 @@ function DisplaySpatialNodeView({
         virtualDisplayId={node.id}
         virtualDisplayName={node.workspaceOutputName ?? `PetPlay ${node.id}`}
         workspaceCrop={workspaceCrop}
+        opacity={node.opacity}
         onMouse={activeDisplayOverlayHostActor != null ? croppedMouseSink : undefined}
         mouseButtonForPointer={mouseButtonForPointer}
         rayHitSurface={activeDisplayOverlayHostActor != null}
@@ -1154,6 +1179,7 @@ function DisplaySpatialNodeView({
                   ))}
                 </SpatialSettingsSection>
                 <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
+                <OpacitySettingsSection node={node} setGraph={setGraph} />
                 <SpatialSettingsSection
                   label={assignedSide == null
                     ? "Free spatial element"
@@ -1303,13 +1329,19 @@ function KeyboardSpatialNodeView({
         manipulationStoreRef={setManipulationStore}
         onGrabBoxSize={updateBounds}
         onSpatialFocus={selectNode}
+        opacity={node.opacity}
       >
         {selectedNodeId === node.id && (
           <SpatialContextToolbar
             title="Keyboard"
             position={[0, -node.snapSource.size[1] * 0.5 - 0.085, node.snapSource.size[2]]}
             actions={contextActions}
-            settings={<AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />}
+            settings={
+              <>
+                <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
+                <OpacitySettingsSection node={node} setGraph={setGraph} />
+              </>
+            }
           />
         )}
       </KeyboardPanel>

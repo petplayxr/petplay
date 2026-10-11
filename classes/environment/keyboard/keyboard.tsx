@@ -47,6 +47,8 @@ export type KeyboardPanelProps = WorldKeyboardPanelProps & {
   manipulationStoreRef?: React.Ref<HandleStore<unknown>>;
   onGrabBoxSize?: (size: [number, number, number]) => void;
   onSpatialFocus?: () => void;
+  /** 0..1 (default opaque). */
+  opacity?: number;
   children?: React.ReactNode;
 };
 
@@ -70,6 +72,7 @@ export function KeyboardPanel(
     manipulationStoreRef,
     onGrabBoxSize,
     onSpatialFocus,
+    opacity = 1,
     children,
   }: KeyboardPanelProps = {},
 ) {
@@ -162,6 +165,7 @@ export function KeyboardPanel(
                 locale={locale.id}
                 layoutMode={layoutMode}
                 pixelSize={pixel}
+                opacity={opacity}
               />
             </group>
             {
@@ -170,22 +174,25 @@ export function KeyboardPanel(
                * nothing but depth, drawn first, so anything depth-tested later that sits behind the
                * board fails against it — other objects' chrome, and the box's own rear bars, which
                * makes the grab box read as a frame around the board instead of a wireframe cube.
-               * Not pickable: the keys and the grab hull own pointer input here.
+               * Not pickable: the keys and the grab hull own pointer input here. Left out when the
+               * board is faded, or it would hide what should show through.
                */
             }
-            <mesh
-              position={[0, 0, -grabSize[2] / 2 + GRABBOX_CHROME_THICKNESS]}
-              renderOrder={-100}
-              {...({ pointerEvents: "none" } as Record<string, unknown>)}
-            >
-              <planeGeometry args={[grabSize[0], grabSize[1]]} />
-              <meshBasicMaterial
-                depthTest
-                depthWrite
-                colorWrite={false}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
+            {opacity >= 1 && (
+              <mesh
+                position={[0, 0, -grabSize[2] / 2 + GRABBOX_CHROME_THICKNESS]}
+                renderOrder={-100}
+                {...({ pointerEvents: "none" } as Record<string, unknown>)}
+              >
+                <planeGeometry args={[grabSize[0], grabSize[1]]} />
+                <meshBasicMaterial
+                  depthTest
+                  depthWrite
+                  colorWrite={false}
+                  side={THREE.DoubleSide}
+                />
+              </mesh>
+            )}
             {children}
           </GrabBox>
         )
