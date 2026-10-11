@@ -33,7 +33,7 @@ import {
   type HandleState,
   type HandleStore,
 } from "@pmndrs/handle";
-import { useWindowLayerVisible } from "./windowLayerMode.ts";
+import { subscribeLayoutRecenter, useWindowLayerVisible } from "./windowLayerMode.ts";
 import {
   setGrabboxOutlineVisible,
   useGrabboxOutlineVisible,
@@ -58,6 +58,7 @@ import {
   IDENTITY_SPATIAL_TRANSFORM,
   initializeWorkspaceLayoutOutputs,
   type KeyboardSpatialNode,
+  recenterSpatialRoots,
   reconcileWorkspaceOutputs,
   releaseHinge,
   resetSpatialNodeTransform,
@@ -611,6 +612,30 @@ function WindowLayer({
       });
     });
   }, [camera, forwardOffset, position, quaternion, renderer, rotation, visible]);
+
+  React.useEffect(() =>
+    subscribeLayoutRecenter(() => {
+      const xr = (renderer as unknown as {
+        xr?: { getCamera?: (camera: THREE.Camera) => THREE.Camera };
+      }).xr;
+      const poseCamera = Deno.args.includes("--desktop")
+        ? camera
+        : xr?.getCamera?.(camera as unknown as THREE.Camera) ?? camera;
+      poseCamera.updateWorldMatrix(true, false);
+      const head = poseCamera.getWorldPosition(new THREE.Vector3());
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(
+        poseCamera.getWorldQuaternion(new THREE.Quaternion()),
+      );
+      const yaw = Math.atan2(-forward.x, -forward.z);
+      setGraph((current) =>
+        recenterSpatialRoots(
+          current,
+          head.toArray() as [number, number, number],
+          yaw,
+          forwardOffset.toArray() as [number, number, number],
+        )
+      );
+    }), [camera, forwardOffset, renderer]);
 
   if (!visible) return null;
 

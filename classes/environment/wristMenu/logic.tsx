@@ -12,7 +12,7 @@ import { PostMan } from "../../../submodules/stageforge/mod.ts";
 import { WristMenuUi } from "./ui.tsx";
 import type { WristMenuButtonId, WristMenuStateSnapshot } from "./types.ts";
 import { setToolEditMode } from "../toolEditMode.ts";
-import { setWindowLayerVisible } from "../windowLayerMode.ts";
+import { requestLayoutRecenter, setWindowLayerVisible } from "../windowLayerMode.ts";
 import { getAgentReplBaseUrl } from "../../utils.ts";
 import {
   addWorkspaceLayoutOutput,
@@ -306,6 +306,7 @@ export function WristMenuPanel(
             layoutActive={buttonState.layoutActive}
             editActive={buttonState.editActive}
             onToggle={handleToggle}
+            onRecenter={requestLayoutRecenter}
             workspaceLayout={workspaceLayout}
             onAssignOutput={assignWorkspaceLayoutOutput}
             onAddOutput={addWorkspaceLayoutOutput}

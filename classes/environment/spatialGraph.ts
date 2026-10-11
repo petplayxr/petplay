@@ -625,6 +625,63 @@ export function commitNodeTransform(
   return graph;
 }
 
+/**
+ * Recenter: move the whole layout rigidly so the primary display (lowest-ordinal root display)
+ * sits at `offset` in front of the head, facing it. Only yaw is taken from the head, so looking
+ * down at the wrist while recentering does not tilt every display. Every root moves by the same
+ * transform, which keeps the arrangement between separate roots; children follow their parents.
+ */
+export function recenterSpatialRoots(
+  current: SpatialGraph,
+  headPosition: [number, number, number],
+  headYaw: number,
+  offset: [number, number, number],
+): SpatialGraph {
+  const roots = Object.values(current.nodes).filter((node) =>
+    node.parentId == null && !node.constraint
+  );
+  const primary = roots
+    .filter((node): node is DisplaySpatialNode => node.kind === "display")
+    .sort((a, b) => a.ordinal - b.ordinal)[0];
+  if (primary == null) return current;
+
+  const up = new THREE.Vector3(0, 1, 0);
+  const yawOf = (rotation: [number, number, number]) => {
+    const forward = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(...rotation, "XYZ"));
+    return Math.atan2(-forward.x, -forward.z);
+  };
+  const primaryPosition = new THREE.Vector3(...primary.localTransform.position);
+  const target = new THREE.Vector3(...offset).applyAxisAngle(up, headYaw)
+    .add(new THREE.Vector3(...headPosition));
+  const turn = new THREE.Quaternion().setFromAxisAngle(
+    up,
+    headYaw - yawOf(primary.localTransform.rotation),
+  );
+
+  const graph = cloneGraph(current);
+  for (const node of roots) {
+    const position = new THREE.Vector3(...node.localTransform.position)
+      .sub(primaryPosition)
+      .applyQuaternion(turn)
+      .add(target);
+    const rotation = new THREE.Euler().setFromQuaternion(
+      turn.clone().multiply(
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(...node.localTransform.rotation, "XYZ")),
+      ),
+      "XYZ",
+    );
+    graph.nodes[node.id] = {
+      ...node,
+      localTransform: {
+        ...node.localTransform,
+        position: position.toArray() as [number, number, number],
+        rotation: [rotation.x, rotation.y, rotation.z],
+      },
+    };
+  }
+  return graph;
+}
+
 /** Commit a completed free manipulation and adopt the closest overlapping attachment slot. */
 export function commitSpatialNodeTransformAndSnap(
   current: SpatialGraph,

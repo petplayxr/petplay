@@ -49,6 +49,8 @@ export type WristOverlayProps = {
   active?: Partial<Record<WristOverlayToggleId, boolean>>;
   onToggle?: (id: WristOverlayToggleId) => void;
   onOpenSettings?: () => void;
+  /** Move the layout in front of the head. */
+  onRecenter?: () => void;
   status?: string;
   /** Displays currently in the spatial graph, for the readout. */
   displayCount?: number;
@@ -176,6 +178,7 @@ export function WristOverlay(
     active = {},
     onToggle,
     onOpenSettings,
+    onRecenter,
     status = "Native module active",
     displayCount = 0,
     pointerEventsType,
@@ -218,9 +221,8 @@ export function WristOverlay(
         is off — it manipulates the spatial layer, and with layout off there is
         nothing on screen for it to act on.
 
-        The fourth tile is empty rather than filled with a plausible-looking
-        control. Every remaining candidate has no state in PetPlay to read or
-        write yet, and a button that does nothing is worse than a visible gap.
+        Recenter is an action, not a mode, so it never takes the accent. It is
+        dimmed with Edit: with layout off there is no layout to move.
       */}
       <TileRow>
         <GlyphTile
@@ -235,7 +237,7 @@ export function WristOverlay(
           onClick={() => onToggle?.("edit")}
         />
         <GlyphTile icon="settings" onClick={onOpenSettings} />
-        <Tile units={1} />
+        <GlyphTile icon="open_with" disabled={!on("layout")} onClick={onRecenter} />
       </TileRow>
 
       {/*

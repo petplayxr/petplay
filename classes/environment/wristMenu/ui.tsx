@@ -18,6 +18,7 @@ export type WristMenuUiProps = {
   layoutActive?: boolean;
   editActive?: boolean;
   onToggle?: (id: WristMenuButtonId) => void;
+  onRecenter?: () => void;
   workspaceLayout?: WorkspaceLayoutSnapshot;
   onAssignOutput?: (displayId: string, outputId: string) => void;
   onAddOutput?: (outputId: string) => void;
@@ -198,6 +199,7 @@ export function WristMenuUi(
     layoutActive = false,
     editActive = false,
     onToggle,
+    onRecenter,
     workspaceLayout = { outputs: [], displays: [] },
     onAssignOutput,
     onAddOutput,
@@ -238,6 +240,7 @@ export function WristMenuUi(
       active={{ layout: layoutActive, edit: editActive }}
       onToggle={onToggle}
       onOpenSettings={() => setView("settings")}
+      onRecenter={onRecenter}
       pointerEventsType={pe}
     />
   );

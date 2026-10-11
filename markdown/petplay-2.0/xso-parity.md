@@ -23,7 +23,7 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 ## Wrist
 
 - [~] **Wrist menu root**
-- [ ] **Clock / date / session length**
+- [x] **Clock / date** (session length dropped on purpose, see `wristOverlay.tsx`)
 - [ ] **Battery for HMD/controllers/trackers**
 - [ ] Media now-playing row
 - [ ] Wrist offset/rotation/scale/opacity settings, dominant hand
@@ -50,7 +50,7 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 
 - [~] Laser hover/click
 - [ ] **Haptics on hover/click**
-- [ ] **Recenter action**
+- [~] **Recenter action**: wrist tile moves the whole layout (yaw only) in front of the head; verified in `--novr`, not yet in a headset
 - [ ] SteamVR input bindings for our actions, user-rebindable
 - [ ] Tooltips
 

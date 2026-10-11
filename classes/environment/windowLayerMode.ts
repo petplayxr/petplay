@@ -23,3 +23,15 @@ export function useWindowLayerVisible(): boolean {
     getWindowLayerVisible,
   );
 }
+
+const recenterListeners = new Set<() => void>();
+
+/** Ask the spatial layer to move the layout in front of the head (wrist Recenter tile, REPL). */
+export function requestLayoutRecenter(): void {
+  for (const listener of recenterListeners) listener();
+}
+
+export function subscribeLayoutRecenter(listener: () => void): () => void {
+  recenterListeners.add(listener);
+  return () => recenterListeners.delete(listener);
+}

@@ -33,6 +33,7 @@ export const WRIST_MAIN = {
   layout: [-201, -66],
   edit: [-67, -66],
   settings: [67, -66],
+  recenter: [201, -66],
 } as const satisfies Record<string, PanelPoint>;
 
 /** Settings page rows' right-hand pills (`classes/environment/wristMenu/ui.tsx`). */

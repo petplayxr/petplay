@@ -14,6 +14,7 @@ import {
   getSpatialNodeWorldMatrix,
   initializeWorkspaceLayoutOutputs,
   normalizeSpatialLayout,
+  recenterSpatialRoots,
   reconcileWorkspaceOutputs,
   releaseHinge,
   resetSpatialNodeTransform,
@@ -510,5 +511,43 @@ Deno.test("normalization keeps the keyboard tray hang and is a no-op when alread
   assert(
     normalizeSpatialLayout(graph) === graph,
     "an already-normalized layout should be returned unchanged",
+  );
+});
+
+Deno.test("recenter puts the primary display in front of the head and keeps the arrangement", () => {
+  let graph = createInitialSpatialGraph();
+  graph = spawnDisplayForWorkspaceOutput(graph, output("2"));
+  const spawned = Object.values(graph.nodes).find((node) =>
+    node.kind === "display" && node.id !== "display-1"
+  );
+  assert(spawned != null, "expected a spawned display");
+  graph = detachDisplayHierarchy(graph, spawned.id);
+  const loose = graph.nodes[spawned.id];
+  assert(loose?.parentId == null, "expected a second root display");
+  graph = commitNodeTransform(graph, "display-1", {
+    position: [3, 1, 2],
+    rotation: [0, 0.4, 0],
+    scale: [1, 1, 1],
+  });
+  graph = commitNodeTransform(graph, loose.id, {
+    position: [3, 1.5, 2],
+    rotation: [0, 0.4, 0],
+    scale: [1, 1, 1],
+  });
+  const gapBefore = worldPointOf(graph, "display-1", [0, 0, 0])
+    .distanceTo(worldPointOf(graph, loose.id, [0, 0, 0]));
+
+  // Head at (0, 1.6, 0) turned 90 degrees left: forward is -x.
+  const recentered = recenterSpatialRoots(graph, [0, 1.6, 0], Math.PI / 2, [0, -0.08, -1.35]);
+  const primary = worldPointOf(recentered, "display-1", [0, 0, 0]);
+  assert(primary.distanceTo(new THREE.Vector3(-1.35, 1.52, 0)) < 1e-6, `primary at ${primary.toArray()}`);
+  // The panel faces the head: its forward (-z) points along the head's forward (-x).
+  const facing = worldPointOf(recentered, "display-1", [0, 0, -1]).sub(primary);
+  assert(facing.distanceTo(new THREE.Vector3(-1, 0, 0)) < 1e-6, `facing ${facing.toArray()}`);
+  const gapAfter = primary.distanceTo(worldPointOf(recentered, loose.id, [0, 0, 0]));
+  assert(Math.abs(gapAfter - gapBefore) < 1e-6, "roots keep their spacing");
+  assert(
+    worldPointOf(recentered, loose.id, [0, 0, 0]).y - primary.y > 0.499,
+    "recenter does not tilt the arrangement",
   );
 });
