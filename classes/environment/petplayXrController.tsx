@@ -220,17 +220,22 @@ export function PetplayDefaultXRController(props: DefaultXRControllerOptions) {
       {grabPointerOptions !== false && (
         <CombinedPointer>
           <DefaultXRControllerGrabPointer {...grabPointerProps} />
-          {laserEnabled && (
-            <PetplayGrabRayPointer
-              {...(grabForRay as RayPointerOptions)}
-              minDistance={minD}
-            />
-          )}
+          <PetplayGrabRayPointer
+            {...(grabForRay as RayPointerOptions)}
+            minDistance={minD}
+          />
         </CombinedPointer>
       )}
-      {rayPointerOptions !== false && laserEnabled && (
+      {
+        /*
+        The laser setting hides the beam only. Dropping the pointer too would leave no way to point
+        at the wrist menu's settings page and turn it back on.
+      */
+      }
+      {rayPointerOptions !== false && (
         <PetplayDefaultXRInputSourceRayPointer
           {...rayP}
+          {...(laserEnabled ? {} : { rayModel: false })}
           makeDefault
           minDistance={minD}
         />

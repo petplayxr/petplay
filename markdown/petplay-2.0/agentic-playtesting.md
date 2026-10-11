@@ -44,6 +44,9 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
 - `utils/overlay-perf-harness.ts`: synthetic controller input (`installSyntheticInput`, `aimAt`)
   and scripted scenarios (hover, trigger, squeeze-grab drag, edge sweep, joystick), run inside the
   `webxr` worker.
+- `utils/playtest.ts`: wrist-menu playtesting on top of that input. `faceWristMenu` holds the
+  right wrist so the panel faces the head; `clickWristMenu`/`hoverWristMenu` take panel points
+  (`WRIST_MAIN`, `WRIST_SETTINGS`). Load it via `/eval`, then `client.ts capture` to look.
 - `--novr` / `dev:desktop` for runs without SteamVR, and the null driver toggle for runs with
   SteamVR but no headset.
 

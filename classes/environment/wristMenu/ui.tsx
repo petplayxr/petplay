@@ -6,6 +6,7 @@ import { COLOR, INNER_GAP, OUTLINE_WIDTH, RADIUS } from "../ui/tokens.ts";
 import { WristOverlay } from "../ui/wristOverlay.tsx";
 import type { WristMenuButtonId } from "./types.ts";
 import type { WorkspaceLayoutSnapshot } from "../workspaceLayoutStore.ts";
+import { setSetting, type SettingKey, useSetting } from "../../settings.ts";
 
 export type { WristMenuButtonId } from "./types.ts";
 
@@ -125,6 +126,69 @@ function MonitorAssignments({
   );
 }
 
+/** A persisted boolean setting as a full-width row: label on the left, ON/OFF pill on the right. */
+function SettingToggleRow(
+  { label, setting }: {
+    label: string;
+    setting: Extract<SettingKey, "grabboxOutline" | "controllerLaser">;
+  },
+) {
+  const value = useSetting(setting);
+  return (
+    <Container
+      flexDirection="row"
+      alignItems="center"
+      justifyContent="space-between"
+      padding={INNER_GAP}
+      borderRadius={RADIUS.tile}
+      backgroundColor={COLOR.tile}
+      backgroundOpacity={1}
+    >
+      <Text color={COLOR.ink} fontSize={14}>{label}</Text>
+      <Pill
+        slots={1}
+        units={2}
+        tone={value ? "accent" : "outline"}
+        fontSize={13}
+        onClick={() => setSetting(setting, !value)}
+      >
+        {value ? "ON" : "OFF"}
+      </Pill>
+    </Container>
+  );
+}
+
+/** Settings reachable from the wrist; every row here is persisted by `classes/settings.ts`. */
+function SettingsView(
+  { onBack, onOpenMonitors }: { onBack: () => void; onOpenMonitors: () => void },
+) {
+  return (
+    <Container flexDirection="column" gap={INNER_GAP} width={448}>
+      <Container flexDirection="row" alignItems="center" gap={INNER_GAP}>
+        <Button paddingX={0} paddingY={0} backgroundOpacity={0} onClick={onBack}>
+          <Pill slots={1} units={2} fontSize={14}>BACK</Pill>
+        </Button>
+        <Pill slots={3} units={2} tone="accent" fontSize={14}>SETTINGS</Pill>
+      </Container>
+      <SettingToggleRow label="Grab-box outlines" setting="grabboxOutline" />
+      <SettingToggleRow label="Laser beams" setting="controllerLaser" />
+      <Container
+        flexDirection="row"
+        alignItems="center"
+        justifyContent="space-between"
+        padding={INNER_GAP}
+        borderRadius={RADIUS.tile}
+        backgroundColor={COLOR.tile}
+        backgroundOpacity={1}
+        onClick={onOpenMonitors}
+      >
+        <Text color={COLOR.ink} fontSize={14}>Monitors</Text>
+        <Pill slots={1} units={2} fontSize={13} onClick={onOpenMonitors}>OPEN</Pill>
+      </Container>
+    </Container>
+  );
+}
+
 export function WristMenuUi(
   {
     clock = DEFAULT_CLOCK,
@@ -141,7 +205,15 @@ export function WristMenuUi(
   }: WristMenuUiProps,
 ) {
   const pe: AllowedPointerEventsType = pointerEventsType ?? "all";
-  const [view, setView] = useState<"main" | "monitors">("main");
+  const [view, setView] = useState<"main" | "settings" | "monitors">("main");
+
+  if (view === "settings") {
+    return (
+      <Shell pointerEventsType={pe}>
+        <SettingsView onBack={() => setView("main")} onOpenMonitors={() => setView("monitors")} />
+      </Shell>
+    );
+  }
 
   if (view === "monitors") {
     return (
@@ -150,7 +222,7 @@ export function WristMenuUi(
           workspaceLayout={workspaceLayout}
           onAssignOutput={onAssignOutput}
           onAddOutput={onAddOutput}
-          onBack={() => setView("main")}
+          onBack={() => setView("settings")}
         />
       </Shell>
     );
@@ -165,7 +237,7 @@ export function WristMenuUi(
       displayCount={workspaceLayout.displays.length}
       active={{ layout: layoutActive, edit: editActive }}
       onToggle={onToggle}
-      onOpenSettings={() => setView("monitors")}
+      onOpenSettings={() => setView("settings")}
       pointerEventsType={pe}
     />
   );

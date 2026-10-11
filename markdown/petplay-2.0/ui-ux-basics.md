@@ -14,6 +14,13 @@ None of this is novel. It's the stuff whose absence makes the app feel like a de
 - Migrate flags → settings where a user would ever want to change them (keyboard locale, laser
   mode, outline mode, capture FPS, start-with-SteamVR).
 
+**Progress (2026-10-11):** `classes/settings.ts` is the store (grab-box outline, laser beam,
+keyboard locale; persisted, unknown keys kept). The `webxr` actor loads it on init and answers
+`GETSETTINGS` / `SETSETTING`. The wrist settings tile opens a Settings page with toggles and the
+Monitors list. The laser toggle hides the beam only: turning the ray pointer off too would leave no
+way to point at the page and undo it. `keyboardLocale` is in the schema but not wired to the
+keyboard yet. Scripted check: `utils/playtest.ts`.
+
 ## First run
 
 - Explain the portal dialog ("choose **Full Workspace**") *before* it appears.

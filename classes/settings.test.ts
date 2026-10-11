@@ -43,5 +43,5 @@ Deno.test("setSetting persists, round-trips and preserves unknown keys", () => {
 
 Deno.test("setSetting rejects invalid values", () => {
   // deno-lint-ignore no-explicit-any
-  assertThrows(() => setSetting("wristClock", "on" as any));
+  assertThrows(() => setSetting("grabboxOutline", "on" as any));
 });

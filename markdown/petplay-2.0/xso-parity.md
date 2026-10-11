@@ -37,7 +37,8 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 
 ## Settings
 
-- [ ] **Global settings store + surface** → [track 4](./ui-ux-basics.md)
+- [~] **Global settings store + surface** → [track 4](./ui-ux-basics.md): store, actor
+      messages and a wrist settings page landed 2026-10-11; tabs and more keys still to come
 
 ## Notifications
 

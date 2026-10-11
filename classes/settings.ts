@@ -30,7 +30,7 @@ export const SETTINGS_SCHEMA = {
   } satisfies SettingSpec<boolean>,
   controllerLaser: {
     default: true as boolean,
-    label: "Controller laser pointers",
+    label: "Controller laser beams (pointing works either way)",
     valid: isBoolean,
   } satisfies SettingSpec<boolean>,
   keyboardLocale: {
@@ -38,14 +38,11 @@ export const SETTINGS_SCHEMA = {
     label: "Keyboard legend locale; null follows --keyboard-locale / the host layout",
     valid: isLocaleOrNull,
   } satisfies SettingSpec<string | null>,
-  wristClock: {
-    default: true as boolean,
-    label: "Clock and battery row on the wrist menu",
-    valid: isBoolean,
-  } satisfies SettingSpec<boolean>,
 };
 
-export type Settings = { [K in keyof typeof SETTINGS_SCHEMA]: (typeof SETTINGS_SCHEMA)[K]["default"] };
+export type Settings = {
+  [K in keyof typeof SETTINGS_SCHEMA]: (typeof SETTINGS_SCHEMA)[K]["default"];
+};
 export type SettingKey = keyof Settings;
 
 export function defaultSettings(): Settings {
@@ -63,7 +60,9 @@ export function isValidSetting<K extends SettingKey>(key: K, value: unknown): va
 }
 
 /** Known keys with valid values win; invalid ones fall back to the default; unknown keys are kept. */
-export function parseSettings(text: string): { settings: Settings; extra: Record<string, unknown> } {
+export function parseSettings(
+  text: string,
+): { settings: Settings; extra: Record<string, unknown> } {
   const settings = defaultSettings();
   const extra: Record<string, unknown> = {};
   let raw: unknown;
