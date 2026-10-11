@@ -1,9 +1,10 @@
 # Track 6: XSOverlay parity
 
-Reference: the AssetRipper export at `/home/ellie/git/xsoextract/AssetRipper_export_20260819_191117`.
-The first survey is in [`docs/basics.md`](../../docs/basics.md) (HAVE / PARTIAL / LACK per
-area, with the XSO source file names). This file is the **checklist** for working through it.
-Scope is everyday usability, not every XSO feature.
+Reference: the AssetRipper export at
+`/home/ellie/git/xsoextract/AssetRipper_export_20260819_191117`. The first survey is in
+[`docs/basics.md`](../../docs/basics.md) (HAVE / PARTIAL / LACK per area, with the XSO source file
+names). This file is the **checklist** for working through it. Scope is everyday usability, not
+every XSO feature.
 
 Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 blocking.
 
@@ -12,9 +13,12 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 - [~] **Overlay registry: spawn/despawn, per-window opacity, curve, size**
 - [~] **Grab / push-pull / scale gestures**, plus sensitivity settings
 - [ ] **Attach to hand / head / world**
-- [~] **Pin / lock window**: per-node `locked` (toolbar Lock action) freezes grabs, persisted; grab freeze verified in `--novr`, toolbar click not yet
+- [~] **Pin / lock window**: per-node `locked` (toolbar Lock action) freezes grabs, persisted;
+  verified in `--novr` through the UI (toolbar click toggles it; a locked display doesn't move under
+  a grab, an unlocked one does)
 - [ ] Mouse-block and auto-hide per window
-- [~] **Named layouts: save/load**: three slots on the wrist (Settings → Saved layouts), files in `layouts/slot-N.json` beside the live layout; playtested in `--novr`. Not named yet
+- [~] **Named layouts: save/load**: three slots on the wrist (Settings → Saved layouts), files in
+  `layouts/slot-N.json` beside the live layout; playtested in `--novr`. Not named yet
 - [ ] **Window list with live previews and monitor picker**
 - [ ] Individual app-window capture (not just monitors/workspace crops)
 - [ ] Toolbar follows its window edge; spawn-in animation
@@ -24,7 +28,9 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 
 - [~] **Wrist menu root**
 - [x] **Clock / date** (session length dropped on purpose, see `wristOverlay.tsx`)
-- [ ] **Battery for HMD/controllers/trackers**
+- [~] **Battery for HMD/controllers/trackers**: wrist tile shows L/R controller and HMD from OpenVR
+  (30 s poll), low-battery toast under 15%; verified in `--novr` with fake readings, not yet on
+  hardware. No trackers
 - [ ] Media now-playing row
 - [ ] Wrist offset/rotation/scale/opacity settings, dominant hand
 
@@ -37,20 +43,25 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 
 ## Settings
 
-- [~] **Global settings store + surface** → [track 4](./ui-ux-basics.md): store, actor
-      messages and a wrist settings page landed 2026-10-11; tabs and more keys still to come
+- [~] **Global settings store + surface** → [track 4](./ui-ux-basics.md): store, actor messages and
+  a wrist settings page landed 2026-10-11; tabs and more keys still to come
 
 ## Notifications
 
-- [ ] **Toast queue with an overlay slot**
-- [ ] External API: XSO-compatible WebSocket/UDP so VRChat tools that already target XSO
-      work with PetPlay unchanged. This one item is worth a lot.
+- [x] **Toast queue with an overlay slot**: head-locked stack of up to 3 (`toastStore.ts`,
+      `toastOverlay.tsx`); used for layout slots and capture lost/reconnected
+- [~] External API: XSO-compatible WebSocket/UDP so VRChat tools that already target XSO work with
+  PetPlay unchanged. `xsoNotificationReceiver.ts`: legacy UDP 42069 and WebSocket 42070
+  `SendNotification`, verified with an external sender in `--novr`. Notifications only; no icons
+  yet, and none of the API's other commands
 
 ## Input / feedback
 
-- [~] Laser hover/click
-- [ ] **Haptics on hover/click**
-- [~] **Recenter action**: wrist tile moves the whole layout (yaw only) in front of the head; verified in `--novr`, not yet in a headset
+- [~] Laser hover/click: cursor dot at the hit point (grey-square bug fixed)
+- [~] **Haptics on hover/click**: OpenVR vibration action, pulses on wrist/toolbar hover and click,
+  "Vibration" setting; pulse routing verified in `--novr` (no sink there), not yet felt on hardware
+- [~] **Recenter action**: wrist tile moves the whole layout (yaw only) in front of the head;
+  verified in `--novr`, not yet in a headset
 - [ ] SteamVR input bindings for our actions, user-rebindable
 - [ ] Tooltips
 
