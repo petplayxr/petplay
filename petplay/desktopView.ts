@@ -31,6 +31,7 @@ import { WebXRRaythreeRaylibRenderer } from "../classes/webxrRaythreeRaylibRende
 import type { WebXRRaythreeRenderPayload } from "../classes/webxrRaythreeScene.ts";
 import {
   getScreenCaptureStatus,
+  hasPendingScreenCapture,
   requestScreenCapture,
   runPendingScreenCapture,
 } from "../classes/environment/screenCapture.ts";
@@ -56,6 +57,10 @@ export type StartDesktopViewPayload = {
 const RENDER_CONTEXT_ID = "desktop-decoupled-view";
 /** A payload is acked once it has been rendered; a busy view gets a fresh frame. */
 const LOOP_SLEEP_MS = 1;
+/** Loop sleep while there is nothing new to draw; only window events are polled. */
+const IDLE_LOOP_SLEEP_MS = 4;
+/** An unchanged payload is still redrawn this often, so the window never shows stale damage. */
+const IDLE_REDRAW_MS = 250;
 /** One-shot captures wait this long for a payload carrying geometry before giving up on it. */
 const CAPTURE_FALLBACK_MS = 5_000;
 /** Silence this long after receiving frames means the scene's view registry was rebuilt. */
@@ -292,11 +297,21 @@ async function runDesktopViewWindow(): Promise<void> {
 
     let fpsMarkAt = performance.now();
     const windowStartedAt = fpsMarkAt;
+    let lastDrawAt = 0;
     while (!raylib.WindowShouldClose() && !state.stopRequested) {
-      drawLatestFrame(renderer);
-      // After EndDrawing: the frame is complete and no draw is in flight, which
-      // is the only point where reading the framebuffer is safe.
-      runPendingScreenCapture();
+      // Draw only when there is something new: an unchanged scene costs a
+      // window-event poll, not a full re-render at the window's refresh rate.
+      const drawDue = latestSeq !== renderedSeq || hasPendingScreenCapture() ||
+        raylib.IsWindowResized() || performance.now() - lastDrawAt >= IDLE_REDRAW_MS;
+      if (drawDue) {
+        drawLatestFrame(renderer);
+        lastDrawAt = performance.now();
+        // After EndDrawing: the frame is complete and no draw is in flight, which
+        // is the only point where reading the framebuffer is safe.
+        runPendingScreenCapture();
+      } else {
+        raylib.PollInputEvents();
+      }
       // One-shot capture. The first payloads a view receives can still be
       // priming frames with no geometry, so wait for one that carries content;
       // a scene that is legitimately empty still gets captured on the fallback
@@ -339,7 +354,7 @@ async function runDesktopViewWindow(): Promise<void> {
         registerWithWebXr();
         lastFrameAt = now;
       }
-      await wait(LOOP_SLEEP_MS);
+      await wait(drawDue ? LOOP_SLEEP_MS : IDLE_LOOP_SLEEP_MS);
     }
   } finally {
     unregisterWithWebXr();
@@ -353,9 +368,8 @@ async function runDesktopViewWindow(): Promise<void> {
 }
 
 /**
- * Draws the latest payload into the window framebuffer. Re-drawing an unchanged
- * payload keeps the window presenting at its own rate; the scene still advances
- * only as fast as the `webxr` actor extracts it.
+ * Draws the latest payload into the window framebuffer. The loop calls this for
+ * new payloads, pending captures and resizes, plus an `IDLE_REDRAW_MS` keepalive.
  */
 function drawLatestFrame(renderer: WebXRRaythreeRaylibRenderer): void {
   raylib.BeginDrawing();

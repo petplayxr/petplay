@@ -51,3 +51,16 @@ Idle targets that are visible already:
 
 - The desktop view redraws at 120 fps with no new IR and no camera movement.
 - webxr re-extracts and re-publishes IR every host frame even when the scene is unchanged.
+
+## 2026-10-11: first idle and transport fixes
+
+- The desktop view only redraws for a new payload, a pending capture, a resize, or every 250 ms.
+  Before, it re-rendered the same payload at the window refresh rate.
+- stageforge `processBigInts` is copy-on-write (stageforge `ecbfb64`). `runFunctions` used to
+  deep-copy every incoming payload in every actor.
+- Result with `client desktop` in `--novr`: the view's render worker went from 11% to 6.7% of a
+  core, and the view process total from about 15% to about 12%. The rest is mostly the
+  websocket relay on both main threads (view about 4.8%, server about 4.1%). The view is a
+  separate process (GLFW), so every IR frame crosses the socket. Sending only `leftEye` + `ui` to
+  views would shrink that, but the clone/serialize cost measured in-worker is small (0.09 ms per
+  frame, mostly the 30 KB UI snapshot).

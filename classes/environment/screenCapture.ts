@@ -40,6 +40,11 @@ export function requestScreenCapture(path: string): Promise<string> {
   });
 }
 
+/** True while a capture is queued and the render loop still has to draw a frame for it. */
+export function hasPendingScreenCapture(): boolean {
+  return pending != null;
+}
+
 /** Diagnostics readable over the REPL without triggering another capture. */
 export function getScreenCaptureStatus(): {
   pendingPath: string | null;
