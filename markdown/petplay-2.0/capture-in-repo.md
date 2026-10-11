@@ -39,5 +39,5 @@ ARM64 (cross) and Windows. There are no binaries in `resources/` for it.
 
 ## Related issues
 
-- [capture-receiver-has-no-reconnect](../issues/capture-receiver-has-no-reconnect/README.md)
+- [capture-receiver-has-no-reconnect](../issues/FIXED-capture-receiver-has-no-reconnect/README.md)
 - [fixed-ports-collide-across-instances](../issues/fixed-ports-collide-across-instances/README.md)

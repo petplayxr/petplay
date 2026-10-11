@@ -164,6 +164,8 @@ export class ScreenCapturer {
               resolve();
             } else if (type === "connected") {
               this.log("Client connected to worker");
+            } else if (type === "disconnected") {
+              this.handleDisconnect();
             } else if (type === "frame") {
               this.frameData = { data, width, height, receiveTime };
               const waiters = this.frameWaiters.splice(0);
@@ -252,6 +254,23 @@ export class ScreenCapturer {
         },
       }),
     );
+  }
+
+  /**
+   * The frame socket dropped. The worker's listener only ever accepts one connection, so a helper
+   * that is still alive can never deliver another frame: stop it, and let `onExit` (the owner's
+   * restart path) bring up a fresh helper and receiver.
+   */
+  private handleDisconnect(): void {
+    if (this.stopping) return;
+    this.log("Frame socket disconnected; stopping the helper so it is restarted");
+    if (this.process != null && this.processExit === null) {
+      try {
+        this.process.kill();
+      } catch {
+        // Already exiting; its status callback reports the exit.
+      }
+    }
   }
 
   /** Capture rate the helper process was launched with. */

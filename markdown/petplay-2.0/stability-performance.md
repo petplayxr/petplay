@@ -16,7 +16,7 @@ Work:
   server on native death (the dev-runner already half does this) and records the last
   `nativeCrashTrace` into an issue folder.
 - **Known gaps** from `docs/ARCHITECTURE.md` §9, each now an issue:
-  [capture reconnect](../issues/capture-receiver-has-no-reconnect/README.md),
+  [capture reconnect](../issues/FIXED-capture-receiver-has-no-reconnect/README.md),
   [fixed ports](../issues/fixed-ports-collide-across-instances/README.md),
   [process-group SIGTERM](../issues/process-group-sigterm-kills-children-mid-flight/README.md),
   [snapshots only on RELOAD](../issues/snapshots-only-cover-reload/README.md),

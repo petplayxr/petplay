@@ -51,6 +51,36 @@ const state = actorState({
 });
 
 let warmCapturePromise: Promise<ScreenCapturer> | null = null;
+
+/**
+ * Capture restarts back off so a helper that dies at once (portal denied, port taken) does not
+ * spin. A helper that ran for `CAPTURE_STABLE_MS` resets the delay.
+ */
+const CAPTURE_RESTART_MIN_MS = 1_000;
+const CAPTURE_RESTART_MAX_MS = 30_000;
+const CAPTURE_STABLE_MS = 60_000;
+let captureRestartDelayMs = CAPTURE_RESTART_MIN_MS;
+let captureStartedAt = 0;
+let captureRestartTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleCaptureRestart(reason: string): void {
+  if (state.shuttingDown || captureRestartTimer != null) return;
+  if (performance.now() - captureStartedAt > CAPTURE_STABLE_MS) {
+    captureRestartDelayMs = CAPTURE_RESTART_MIN_MS;
+  }
+  const delay = captureRestartDelayMs;
+  captureRestartDelayMs = Math.min(CAPTURE_RESTART_MAX_MS, captureRestartDelayMs * 2);
+  LogChannel.error("actor", `[displayOverlayHost] ${reason}; restarting capture in ${delay}ms`);
+  captureRestartTimer = setTimeout(() => {
+    captureRestartTimer = null;
+    if (state.shuttingDown) return;
+    ensureWarmScreenCapturer().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      state.lastStartError = message;
+      scheduleCaptureRestart(`capture restart failed: ${message}`);
+    });
+  }, delay);
+}
 const openVrRuntime = new OpenVrRuntime("Display overlay host OpenVR");
 
 const START_DESKTOP_MAX_ATTEMPTS = 4;
@@ -131,6 +161,8 @@ new PostMan(
     },
     __SHUTDOWN__: async (_payload: unknown) => {
       state.shuttingDown = true;
+      if (captureRestartTimer != null) clearTimeout(captureRestartTimer);
+      captureRestartTimer = null;
       await stopDisplayOverlayHost();
       releaseDisplayOverlayOpenVr();
     },
@@ -440,9 +472,8 @@ async function initScreenCapturer(fps: number): Promise<ScreenCapturer> {
       warmCapturePromise = null;
       if (state.shuttingDown) return;
       const message = `screen-streamer exited (code=${status.code}, success=${status.success})`;
-      LogChannel.error("actor", `[displayOverlayHost] ${message}; restarting warm capture`);
       state.lastStartError = message;
-      void capturer.dispose().finally(() => ensureWarmScreenCapturer());
+      void capturer.dispose().finally(() => scheduleCaptureRestart(message));
     },
   });
   await capturer.start();
@@ -484,6 +515,7 @@ async function ensureWarmScreenCapturer(): Promise<ScreenCapturer> {
     await stopStaleScreenStreamer();
     const capturer = await initScreenCapturer(state.captureFps);
     state.screenCapturer = capturer;
+    captureStartedAt = performance.now();
     LogChannel.log("actor", "[displayOverlayHost] screen capture warmed at actor startup");
     return capturer;
   })();
