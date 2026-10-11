@@ -72,6 +72,8 @@ import {
 import { loadKdeWorkspaceOutputs, type WorkspaceOutput } from "./workspaceDisplays.ts";
 import { publishWorkspaceLayout, registerWorkspaceLayoutActions } from "./workspaceLayoutStore.ts";
 import {
+  getLayoutSlotPath,
+  listLayoutSlots,
   loadSpatialLayoutSync,
   saveSpatialLayoutSync,
   spatialLayoutPersistenceEnabled,
@@ -498,6 +500,11 @@ function WindowLayer({
     };
   });
   const [graph, setGraph] = React.useState(layoutBootstrap.graph);
+  const graphRef = React.useRef(graph);
+  graphRef.current = graph;
+  const [layoutSlots, setLayoutSlots] = React.useState(() =>
+    layoutBootstrap.persistenceEnabled ? listLayoutSlots() : []
+  );
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>("display-1");
   const handleStores = React.useMemo(() => new Map<string, HandleStore<unknown>>(), []);
   const [workspaceOutputs, setWorkspaceOutputs] = React.useState<
@@ -559,8 +566,9 @@ function WindowLayer({
         )?.id ??
           null,
       })),
+      layoutSlots,
     });
-  }, [graph, workspaceOutputs]);
+  }, [graph, layoutSlots, workspaceOutputs]);
 
   React.useEffect(() =>
     registerWorkspaceLayoutActions({
@@ -575,7 +583,23 @@ function WindowLayer({
           setGraph((current) => spawnDisplayForWorkspaceOutput(current, output));
         }
       },
-    }), [workspaceOutputs]);
+      // Slots save the graph as it is; loading reconciles it with today's outputs, so a slot
+      // saved with a monitor that is now unplugged still loads.
+      saveSlot: (slot) => {
+        if (!layoutBootstrap.persistenceEnabled) return;
+        saveSpatialLayoutSync(graphRef.current, getLayoutSlotPath(slot));
+        setLayoutSlots(listLayoutSlots());
+      },
+      loadSlot: (slot) => {
+        const loaded = loadSpatialLayoutSync(getLayoutSlotPath(slot));
+        if (loaded == null) return;
+        setGraph(
+          workspaceOutputs.length > 0
+            ? reconcileWorkspaceOutputs(loaded, workspaceOutputs)
+            : loaded,
+        );
+      },
+    }), [layoutBootstrap.persistenceEnabled, workspaceOutputs]);
 
   React.useEffect(() => {
     if (selectedNodeId != null && graph.nodes[selectedNodeId]?.kind !== "control") return;

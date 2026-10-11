@@ -38,11 +38,19 @@ export const WRIST_MAIN = {
 
 /** Settings page rows' right-hand pills (`classes/environment/wristMenu/ui.tsx`). */
 export const WRIST_SETTINGS = {
-  back: [-210, 124],
-  grabboxOutline: [201, 50],
-  controllerLaser: [201, -33],
-  monitors: [201, -116],
+  back: [-210, 165],
+  grabboxOutline: [201, 91],
+  controllerLaser: [201, 8],
+  monitors: [201, -75],
+  layouts: [201, -158],
 } as const satisfies Record<string, PanelPoint>;
+
+/** Saved layouts page: SAVE and LOAD pills per slot row. */
+export const WRIST_LAYOUTS = {
+  back: [-210, 124],
+  save: (slot: 1 | 2 | 3): PanelPoint => [137, 133 - 83 * slot],
+  load: (slot: 1 | 2 | 3): PanelPoint => [201, 133 - 83 * slot],
+} as const;
 
 /** Where the panel is held for a capture: in front of the IWER default head at 1.6 m. */
 const VIEW_TARGET = new THREE.Vector3(0, 1.6, -0.2);

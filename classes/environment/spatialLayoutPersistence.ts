@@ -172,3 +172,21 @@ export function saveSpatialLayoutSync(
     console.warn(`[spatial-layout] could not save ${path}`, error);
   }
 }
+
+/** Named layouts are numbered slots, kept beside the live layout in `layouts/`. */
+export const LAYOUT_SLOT_COUNT = 3;
+
+export function getLayoutSlotPath(slot: number, livePath = getSpatialLayoutPath()): string {
+  if (!Number.isInteger(slot) || slot < 1 || slot > LAYOUT_SLOT_COUNT) {
+    throw new Error(`layout slot must be 1..${LAYOUT_SLOT_COUNT}, got ${slot}`);
+  }
+  return join(dirname(livePath), "layouts", `slot-${slot}.json`);
+}
+
+/** Which slots hold a loadable layout, index 0 = slot 1. */
+export function listLayoutSlots(livePath = getSpatialLayoutPath()): boolean[] {
+  return Array.from(
+    { length: LAYOUT_SLOT_COUNT },
+    (_, index) => loadSpatialLayoutSync(getLayoutSlotPath(index + 1, livePath)) != null,
+  );
+}

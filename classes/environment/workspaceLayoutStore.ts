@@ -17,11 +17,15 @@ export type WorkspaceLayoutDisplay = {
 export type WorkspaceLayoutSnapshot = {
   outputs: WorkspaceLayoutOutput[];
   displays: WorkspaceLayoutDisplay[];
+  /** Saved layout slots that hold a layout, index 0 = slot 1. */
+  layoutSlots?: boolean[];
 };
 
 type WorkspaceLayoutActions = {
   assignOutput: (displayId: string, outputId: string) => void;
   addOutput: (outputId: string) => void;
+  saveSlot: (slot: number) => void;
+  loadSlot: (slot: number) => void;
 };
 
 let snapshot: WorkspaceLayoutSnapshot = { outputs: [], displays: [] };
@@ -47,6 +51,14 @@ export function assignWorkspaceLayoutOutput(displayId: string, outputId: string)
 
 export function addWorkspaceLayoutOutput(outputId: string): void {
   actions?.addOutput(outputId);
+}
+
+export function saveLayoutSlot(slot: number): void {
+  actions?.saveSlot(slot);
+}
+
+export function loadLayoutSlot(slot: number): void {
+  actions?.loadSlot(slot);
 }
 
 export function useWorkspaceLayoutSnapshot(): WorkspaceLayoutSnapshot {

@@ -1,4 +1,6 @@
 import {
+  getLayoutSlotPath,
+  listLayoutSlots,
   loadSpatialLayoutSync,
   parseSpatialLayout,
   saveSpatialLayoutSync,
@@ -76,4 +78,27 @@ Deno.test("desktop persistence has exactly one scene owner", () => {
     spatialLayoutPersistenceEnabled(["--desktop-control-child", "--desktop"]),
     "desktop viewer persists",
   );
+});
+
+Deno.test("layout slots live beside the live layout and list only loadable files", () => {
+  const dir = Deno.makeTempDirSync();
+  const live = `${dir}/spatial-layout.json`;
+  try {
+    assert(getLayoutSlotPath(2, live) === `${dir}/layouts/slot-2.json`, "slot path");
+    let threw = false;
+    try {
+      getLayoutSlotPath(0, live);
+    } catch {
+      threw = true;
+    }
+    assert(threw, "slot 0 is rejected");
+    saveSpatialLayoutSync(createInitialSpatialGraph(), getLayoutSlotPath(2, live));
+    Deno.writeTextFileSync(getLayoutSlotPath(3, live), "not json");
+    assert(
+      JSON.stringify(listLayoutSlots(live)) === "[false,true,false]",
+      `slots ${JSON.stringify(listLayoutSlots(live))}`,
+    );
+  } finally {
+    Deno.removeSync(dir, { recursive: true });
+  }
 });

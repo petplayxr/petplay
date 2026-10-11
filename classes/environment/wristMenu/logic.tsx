@@ -17,6 +17,8 @@ import { getAgentReplBaseUrl } from "../../utils.ts";
 import {
   addWorkspaceLayoutOutput,
   assignWorkspaceLayoutOutput,
+  loadLayoutSlot,
+  saveLayoutSlot,
   useWorkspaceLayoutSnapshot,
 } from "../workspaceLayoutStore.ts";
 import { GrabBox } from "../grabbox.tsx";
@@ -310,6 +312,8 @@ export function WristMenuPanel(
             workspaceLayout={workspaceLayout}
             onAssignOutput={assignWorkspaceLayoutOutput}
             onAddOutput={addWorkspaceLayoutOutput}
+            onSaveLayout={saveLayoutSlot}
+            onLoadLayout={loadLayoutSlot}
             pointerEventsType={menuPointerType}
           />
         </GrabBox>

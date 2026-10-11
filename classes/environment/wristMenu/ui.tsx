@@ -22,6 +22,8 @@ export type WristMenuUiProps = {
   workspaceLayout?: WorkspaceLayoutSnapshot;
   onAssignOutput?: (displayId: string, outputId: string) => void;
   onAddOutput?: (outputId: string) => void;
+  onSaveLayout?: (slot: number) => void;
+  onLoadLayout?: (slot: number) => void;
   /** Only the opposite controller’s pointer should hit the menu (set from `WristMenuPanel` in XR). */
   pointerEventsType?: AllowedPointerEventsType;
 };
@@ -127,6 +129,62 @@ function MonitorAssignments({
   );
 }
 
+/**
+ * Saved layout slots: SAVE writes the current arrangement, LOAD brings it back. LOAD is disabled
+ * on an empty slot rather than hidden, so the rows keep their places.
+ */
+function LayoutSlotsView(
+  { slots, onSave, onLoad, onBack }: {
+    slots: boolean[];
+    onSave?: (slot: number) => void;
+    onLoad?: (slot: number) => void;
+    onBack: () => void;
+  },
+) {
+  return (
+    <Container flexDirection="column" gap={INNER_GAP} width={448}>
+      <Container flexDirection="row" alignItems="center" gap={INNER_GAP}>
+        <Button paddingX={0} paddingY={0} backgroundOpacity={0} onClick={onBack}>
+          <Pill slots={1} units={2} fontSize={14}>BACK</Pill>
+        </Button>
+        <Pill slots={3} units={2} tone="accent" fontSize={14}>LAYOUTS</Pill>
+      </Container>
+      {[1, 2, 3].map((slot) => {
+        const saved = slots[slot - 1] ?? false;
+        return (
+          <Container
+            key={slot}
+            flexDirection="row"
+            alignItems="center"
+            justifyContent="space-between"
+            padding={INNER_GAP}
+            borderRadius={RADIUS.tile}
+            backgroundColor={COLOR.tile}
+            backgroundOpacity={1}
+          >
+            <Text color={saved ? COLOR.ink : COLOR.inkDim} fontSize={14}>
+              Layout {slot}
+              {saved ? "" : " (empty)"}
+            </Text>
+            <Container flexDirection="row" gap={INNER_GAP}>
+              <Pill slots={1} units={2} fontSize={13} onClick={() => onSave?.(slot)}>SAVE</Pill>
+              <Pill
+                slots={1}
+                units={2}
+                fontSize={13}
+                disabled={!saved}
+                onClick={() => onLoad?.(slot)}
+              >
+                LOAD
+              </Pill>
+            </Container>
+          </Container>
+        );
+      })}
+    </Container>
+  );
+}
+
 /** A persisted boolean setting as a full-width row: label on the left, ON/OFF pill on the right. */
 function SettingToggleRow(
   { label, setting }: {
@@ -161,7 +219,11 @@ function SettingToggleRow(
 
 /** Settings reachable from the wrist; every row here is persisted by `classes/settings.ts`. */
 function SettingsView(
-  { onBack, onOpenMonitors }: { onBack: () => void; onOpenMonitors: () => void },
+  { onBack, onOpenMonitors, onOpenLayouts }: {
+    onBack: () => void;
+    onOpenMonitors: () => void;
+    onOpenLayouts: () => void;
+  },
 ) {
   return (
     <Container flexDirection="column" gap={INNER_GAP} width={448}>
@@ -186,6 +248,19 @@ function SettingsView(
         <Text color={COLOR.ink} fontSize={14}>Monitors</Text>
         <Pill slots={1} units={2} fontSize={13} onClick={onOpenMonitors}>OPEN</Pill>
       </Container>
+      <Container
+        flexDirection="row"
+        alignItems="center"
+        justifyContent="space-between"
+        padding={INNER_GAP}
+        borderRadius={RADIUS.tile}
+        backgroundColor={COLOR.tile}
+        backgroundOpacity={1}
+        onClick={onOpenLayouts}
+      >
+        <Text color={COLOR.ink} fontSize={14}>Saved layouts</Text>
+        <Pill slots={1} units={2} fontSize={13} onClick={onOpenLayouts}>OPEN</Pill>
+      </Container>
     </Container>
   );
 }
@@ -203,16 +278,35 @@ export function WristMenuUi(
     workspaceLayout = { outputs: [], displays: [] },
     onAssignOutput,
     onAddOutput,
+    onSaveLayout,
+    onLoadLayout,
     pointerEventsType,
   }: WristMenuUiProps,
 ) {
   const pe: AllowedPointerEventsType = pointerEventsType ?? "all";
-  const [view, setView] = useState<"main" | "settings" | "monitors">("main");
+  const [view, setView] = useState<"main" | "settings" | "monitors" | "layouts">("main");
 
   if (view === "settings") {
     return (
       <Shell pointerEventsType={pe}>
-        <SettingsView onBack={() => setView("main")} onOpenMonitors={() => setView("monitors")} />
+        <SettingsView
+          onBack={() => setView("main")}
+          onOpenMonitors={() => setView("monitors")}
+          onOpenLayouts={() => setView("layouts")}
+        />
+      </Shell>
+    );
+  }
+
+  if (view === "layouts") {
+    return (
+      <Shell pointerEventsType={pe}>
+        <LayoutSlotsView
+          slots={workspaceLayout.layoutSlots ?? []}
+          onSave={onSaveLayout}
+          onLoad={onLoadLayout}
+          onBack={() => setView("settings")}
+        />
       </Shell>
     );
   }
