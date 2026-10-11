@@ -16,6 +16,7 @@
     "jsr:@std/assert@*": "0.217.0",
     "jsr:@std/assert@0.214": "0.214.0",
     "jsr:@std/assert@0.217": "0.217.0",
+    "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/encoding@0.214": "0.214.0",
     "jsr:@std/encoding@0.217.0": "0.217.0",
     "jsr:@std/fmt@0.214": "0.214.0",
@@ -127,6 +128,12 @@
       "integrity": "c98e279362ca6982d5285c3b89517b757c1e3477ee9f14eb2fdf80a45aaa9642",
       "dependencies": [
         "jsr:@std/fmt@0.217"
+      ]
+    },
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
       ]
     },
     "@std/encoding@0.214.0": {

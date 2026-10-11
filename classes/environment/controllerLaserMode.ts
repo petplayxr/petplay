@@ -1,39 +1,18 @@
-import { useSyncExternalStore } from "react";
-
-type ControllerLaserListener = () => void;
-
-let controllerLaserEnabled = true;
-const listeners = new Set<ControllerLaserListener>();
-
-function emitControllerLaserChange(): void {
-  for (const listener of listeners) {
-    listener();
-  }
-}
+import { getSetting, setSetting, subscribeSettings, useSetting } from "../settings.ts";
 
 export function setControllerLaserEnabled(enabled: boolean): void {
-  if (controllerLaserEnabled === enabled) {
-    return;
-  }
-  controllerLaserEnabled = enabled;
-  emitControllerLaserChange();
+  setSetting("controllerLaser", enabled);
 }
 
 export function getControllerLaserEnabled(): boolean {
-  return controllerLaserEnabled;
+  return getSetting("controllerLaser");
 }
 
-export function subscribeControllerLaserEnabled(listener: ControllerLaserListener): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+/** Fires on any settings change; callers re-read `getControllerLaserEnabled`. */
+export function subscribeControllerLaserEnabled(listener: () => void): () => void {
+  return subscribeSettings(listener);
 }
 
 export function useControllerLaserEnabled(): boolean {
-  return useSyncExternalStore(
-    subscribeControllerLaserEnabled,
-    getControllerLaserEnabled,
-    getControllerLaserEnabled,
-  );
+  return useSetting("controllerLaser");
 }

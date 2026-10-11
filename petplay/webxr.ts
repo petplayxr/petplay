@@ -57,6 +57,7 @@ import {
   type VrcCameraDebugPose,
 } from "../classes/vrcCameraDebugState.ts";
 import { captureDenoCpuProfile } from "../classes/denoCpuProfile.ts";
+import { getSettings, isSettingKey, loadSettings, setSetting } from "../classes/settings.ts";
 
 const WEBXR_SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -332,6 +333,7 @@ new PostMan(
   {
     __INIT__: (_payload: void) => {
       PostMan.setTopic("muffin");
+      loadSettings();
     },
     __SHUTDOWN__: async (_payload: unknown) => {
       await stopWebXR();
@@ -340,6 +342,12 @@ new PostMan(
       return getWebXRStatus();
     },
     EVALJS: (payload: { code: string }) => evaluateWebXrJs(payload.code),
+    GETSETTINGS: (_payload: unknown) => getSettings(),
+    SETSETTING: (payload: { key: string; value: unknown }) => {
+      if (!isSettingKey(payload.key)) throw new Error(`unknown setting "${payload.key}"`);
+      setSetting(payload.key, payload.value as never);
+      return getSettings();
+    },
     __SNAPSHOT__: (_payload: unknown) => {
       return {
         started: state.startup != null || state.host != null,

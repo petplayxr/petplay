@@ -1,37 +1,19 @@
-import { useSyncExternalStore } from "react";
-
-type GrabboxOutlineListener = () => void;
-
-let grabboxOutlineVisible = true;
-const listeners = new Set<GrabboxOutlineListener>();
-
-function emitGrabboxOutlineChange(): void {
-  for (const listener of listeners) {
-    listener();
-  }
-}
+import { getSetting, setSetting, useSetting } from "../settings.ts";
 
 /** Whether grab-box chrome draws. The interaction hull stays active either way. */
 export function getGrabboxOutlineVisible(): boolean {
-  return grabboxOutlineVisible;
+  return getSetting("grabboxOutline");
 }
 
 export function setGrabboxOutlineVisible(visible: boolean): void {
-  if (grabboxOutlineVisible === visible) return;
-  grabboxOutlineVisible = visible;
-  emitGrabboxOutlineChange();
+  setSetting("grabboxOutline", visible);
 }
 
 export function toggleGrabboxOutlineVisible(): boolean {
-  setGrabboxOutlineVisible(!grabboxOutlineVisible);
-  return grabboxOutlineVisible;
-}
-
-function subscribe(listener: GrabboxOutlineListener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  setGrabboxOutlineVisible(!getGrabboxOutlineVisible());
+  return getGrabboxOutlineVisible();
 }
 
 export function useGrabboxOutlineVisible(): boolean {
-  return useSyncExternalStore(subscribe, getGrabboxOutlineVisible, getGrabboxOutlineVisible);
+  return useSetting("grabboxOutline");
 }
