@@ -242,6 +242,32 @@ function SettingToggleRow(
   );
 }
 
+/** Which controller wears the wrist menu: pressing the pill moves it to the other hand. */
+function WristHandRow() {
+  const hand = useSetting("wristMenuHand");
+  return (
+    <Container
+      flexDirection="row"
+      alignItems="center"
+      justifyContent="space-between"
+      padding={INNER_GAP}
+      borderRadius={RADIUS.tile}
+      backgroundColor={COLOR.tile}
+      backgroundOpacity={1}
+    >
+      <Text color={COLOR.ink} fontSize={14}>Wrist menu on</Text>
+      <Pill
+        slots={1}
+        units={2}
+        fontSize={13}
+        onClick={() => setSetting("wristMenuHand", hand === "right" ? "left" : "right")}
+      >
+        {hand === "right" ? "RIGHT" : "LEFT"}
+      </Pill>
+    </Container>
+  );
+}
+
 /** Settings reachable from the wrist; every row here is persisted by `classes/settings.ts`. */
 function SettingsView(
   { onBack, onOpenMonitors, onOpenLayouts }: {
@@ -261,6 +287,7 @@ function SettingsView(
       <SettingToggleRow label="Grab-box outlines" setting="grabboxOutline" />
       <SettingToggleRow label="Laser beams" setting="controllerLaser" />
       <SettingToggleRow label="Vibration" setting="haptics" />
+      <WristHandRow />
       <Container
         flexDirection="row"
         alignItems="center"

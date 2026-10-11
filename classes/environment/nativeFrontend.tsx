@@ -1,4 +1,7 @@
 import React from "react";
+import { useXRInputSourceStateContext } from "@pmndrs/xr";
+import { useSetting } from "../settings.ts";
+import { PetplayDefaultXRController } from "./petplayXrController.tsx";
 import {
   WristMenuControllerHud,
   WristMenuPanel,
@@ -16,6 +19,11 @@ export function NativeFrontend() {
   return <WristMenuPanel />;
 }
 
+/** Either controller: the one named by the `wristMenuHand` setting wears the wrist menu. */
 export function NativeControllerHud({ actorId }: NativeControllerHudProps) {
-  return <WristMenuControllerHud actorId={actorId} />;
+  const handedness = useXRInputSourceStateContext().inputSource.handedness;
+  const wristHand = useSetting("wristMenuHand");
+  return handedness === wristHand
+    ? <WristMenuControllerHud actorId={actorId} />
+    : <PetplayDefaultXRController model={false} rayPointer={{ minDistance: -1 }} />;
 }

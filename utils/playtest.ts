@@ -38,12 +38,13 @@ export const WRIST_MAIN = {
 
 /** Settings page rows' right-hand pills (`classes/environment/wristMenu/ui.tsx`). */
 export const WRIST_SETTINGS = {
-  back: [-210, 206],
-  grabboxOutline: [201, 132],
-  controllerLaser: [201, 50],
-  haptics: [201, -33],
-  monitors: [201, -116],
-  layouts: [201, -199],
+  back: [-210, 247.5],
+  grabboxOutline: [201, 173.5],
+  controllerLaser: [201, 91.5],
+  haptics: [201, 8.5],
+  wristHand: [201, -74.5],
+  monitors: [201, -157.5],
+  layouts: [201, -240.5],
 } as const satisfies Record<string, PanelPoint>;
 
 /** Saved layouts page: SAVE and LOAD pills per slot row. */

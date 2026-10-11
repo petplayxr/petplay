@@ -18,7 +18,6 @@ import {
   StereoTextureReadbackRing,
   TextureReadbackRing,
 } from "./webgpu.ts";
-import { PetplayDefaultXRController } from "./environment/petplayXrController.tsx";
 import { NativeControllerHud } from "./environment/nativeFrontend.tsx";
 import { WebXRScene } from "./environment/scene.tsx";
 import { FpsCounter } from "./fpsCounter.ts";
@@ -1359,11 +1358,8 @@ export class WebXRHost {
               actorId: options.wristMenuActor ?? null,
             }),
           left: () =>
-            React.createElement(PetplayDefaultXRController, {
-              model: false,
-              rayPointer: {
-                minDistance: -1,
-              },
+            React.createElement(NativeControllerHud, {
+              actorId: options.wristMenuActor ?? null,
             }),
         },
       });

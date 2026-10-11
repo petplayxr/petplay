@@ -38,7 +38,9 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
   (30 s poll), low-battery toast under 15%; verified in `--novr` with fake readings, not yet on
   hardware. No trackers
 - [ ] Media now-playing row
-- [ ] Wrist offset/rotation/scale/opacity settings, dominant hand
+- [~] Wrist offset/rotation/scale/opacity settings, dominant hand. Hand done: "Wrist menu on"
+  (Settings page) moves the menu to the other controller, which then gets the ray; verified in
+  `--novr`. Offset/rotation/scale/opacity still to do
 
 ## Keyboard
 
