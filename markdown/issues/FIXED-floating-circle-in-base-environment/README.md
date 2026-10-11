@@ -1,6 +1,6 @@
 # A stray floating circle is drawn in the base environment
 
-Status: open
+Status: fixed 2026-10-11 (gated behind `PETPLAY_VRC_CAMERA_DEBUG=1`; confirm in VR with VRChat running)
 Track: ui-ux-basics
 
 ## What happens

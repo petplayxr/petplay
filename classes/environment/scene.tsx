@@ -201,6 +201,8 @@ function createLinuxKeyboardSink(actor: string): KeyboardSink {
   };
 }
 
+/** VRC camera OSC debug markers; off unless `PETPLAY_VRC_CAMERA_DEBUG=1`. */
+const SHOW_VRC_CAMERA_DEBUG = Deno.env.get("PETPLAY_VRC_CAMERA_DEBUG") === "1";
 
 function VrcCameraDebugVisuals() {
   const cameraGroupRef = useRef<THREE.Group>(null!);
@@ -1537,7 +1539,7 @@ export function WebXRScene(
       <pointLight intensity={8} position={[0, 1.9, -1.25]} color="#ffb347" />
       {/* <XROrigin /> */}
 
-      <VrcCameraDebugVisuals />
+      {SHOW_VRC_CAMERA_DEBUG && <VrcCameraDebugVisuals />}
 
       <WindowLayer
         displayOverlayHostActor={displayOverlayHostActor}
