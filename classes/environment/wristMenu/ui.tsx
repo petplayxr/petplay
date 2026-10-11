@@ -4,6 +4,7 @@ import { Button, Container, Text } from "../../../submodules/threewebxrwebgpuden
 import { Pill, Shell } from "../ui/primitives.tsx";
 import { COLOR, INNER_GAP, OUTLINE_WIDTH, RADIUS } from "../ui/tokens.ts";
 import { WristOverlay } from "../ui/wristOverlay.tsx";
+import { useBatteryReadings } from "../batteryStore.ts";
 import type { WristMenuButtonId } from "./types.ts";
 import type { WorkspaceLayoutSnapshot } from "../workspaceLayoutStore.ts";
 import { setSetting, type SettingKey, useSetting } from "../../settings.ts";
@@ -286,6 +287,7 @@ export function WristMenuUi(
 ) {
   const pe: AllowedPointerEventsType = pointerEventsType ?? "all";
   const [view, setView] = useState<"main" | "settings" | "monitors" | "layouts">("main");
+  const batteries = useBatteryReadings();
 
   if (view === "settings") {
     return (
@@ -332,6 +334,7 @@ export function WristMenuUi(
       elapsed={elapsed}
       status={statusLabel}
       displayCount={workspaceLayout.displays.length}
+      batteries={batteries}
       active={{ layout: layoutActive, edit: editActive }}
       onToggle={onToggle}
       onOpenSettings={() => setView("settings")}

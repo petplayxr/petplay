@@ -31,6 +31,7 @@ import { Icon, type IconName } from "./icons.tsx";
 import { UiImage } from "./image.tsx";
 import { Footer, Pill, Shell, Slot, SlotRow, Tile, TileRow } from "./primitives.tsx";
 import { COLOR, GAP, LAST_ROW_HEIGHT, RADIUS, unitSpan } from "./tokens.ts";
+import type { BatteryReading, BatteryReadings } from "../batteryStore.ts";
 
 /** Glyph ink: dark on an accent fill, light at rest. One fixed pairing. */
 function glyphInk(active: boolean): string {
@@ -54,6 +55,7 @@ export type WristOverlayProps = {
   status?: string;
   /** Displays currently in the spatial graph, for the readout. */
   displayCount?: number;
+  batteries?: BatteryReadings;
   pointerEventsType?: AllowedPointerEventsType;
 };
 
@@ -68,11 +70,13 @@ function ClockTile(
   const size = unitSpan(2);
   return (
     <Tile units={2} rows={2}>
-      {/*
+      {
+        /*
         The wallpaper is the tile's surface, not an element inside it, so it
         takes the tile's own corner radius. `focus` keeps the right edge of a
         wide image, matching the crop the design called for.
-      */}
+      */
+      }
       <UiImage
         texture="wallpaper"
         width={size}
@@ -81,11 +85,13 @@ function ClockTile(
         focus={[1, 0.5]}
       />
       <Pill slots={4} units={2} tone="accent" fontSize={44}>{clock}</Pill>
-      {/*
+      {
+        /*
         Time and date only. There was a third pill here showing a session
         counter that read "496509:25:18" — the value was wrong and, working or
         not, an uptime figure is not something you glance at a wrist for.
-      */}
+      */
+      }
       <Pill slots={4} units={2} fontSize={14}>{dateLabel}</Pill>
     </Tile>
   );
@@ -125,9 +131,7 @@ function SlotTile(
             // the absence is legible, and the room for a fourth is visible.
             return <Slot key={`empty-${index}`} units={2} empty />;
           }
-          const ink = slot.disabled
-            ? COLOR.inkDim
-            : glyphInk(slot.active ?? false);
+          const ink = slot.disabled ? COLOR.inkDim : glyphInk(slot.active ?? false);
           return (
             <Slot
               key={index}
@@ -144,6 +148,16 @@ function SlotTile(
       </SlotRow>
     </Tile>
   );
+}
+
+function batteryReadout(
+  prefix: string,
+  reading: BatteryReading | undefined,
+  icon: IconName,
+) {
+  if (reading == null) return null;
+  const percent = `${Math.round(reading.percent)}%`;
+  return { icon, active: reading.charging, value: prefix ? `${prefix} ${percent}` : percent };
 }
 
 /** A 1x1 tile is a rounded square, not a circle — rule 3 is about nesting depth. */
@@ -181,6 +195,7 @@ export function WristOverlay(
     onRecenter,
     status = "Native module active",
     displayCount = 0,
+    batteries = {},
     pointerEventsType,
   }: WristOverlayProps,
 ) {
@@ -192,11 +207,13 @@ export function WristOverlay(
       <Container flexDirection="row" gap={GAP} alignItems="flex-start">
         <ClockTile clock={clock} dateLabel={dateLabel} />
         <Container flexDirection="column" gap={GAP}>
-          {/*
+          {
+            /*
             The 2x1 tiles hold *readouts*: a label pill over a row of small
             circles. Actions live in the big 1x1 tiles below, where they are
             easier to hit with a pointer from the other hand.
-          */}
+          */
+          }
           <SlotTile
             label="DISPLAYS"
             labelSlots={3}
@@ -207,23 +224,41 @@ export function WristOverlay(
               null,
             ]}
           />
-          {/*
-            Reserved for battery. Left as a plain tile rather than a labelled
-            one with empty circles: PetPlay has no battery source yet, so even
-            the label would be a promise the panel cannot keep.
-          */}
-          <Tile units={2} />
+          {
+            /*
+            Battery: left, right, headset, from OpenVR. Charging takes the
+            accent. With no readings (no SteamVR, or a tethered headset and
+            controllers still waking) it stays a plain tile rather than a
+            label over empty circles.
+          */
+          }
+          {batteries.left || batteries.right || batteries.hmd
+            ? (
+              <SlotTile
+                label="BATTERY"
+                labelSlots={3}
+                slots={[
+                  batteryReadout("L", batteries.left, "videogame_asset"),
+                  batteryReadout("R", batteries.right, "videogame_asset"),
+                  batteryReadout("", batteries.hmd, "headset"),
+                  null,
+                ]}
+              />
+            )
+            : <Tile units={2} />}
         </Container>
       </Container>
 
-      {/*
+      {
+        /*
         Row 3: the primary actions, as full tiles. Edit is dimmed while layout
         is off — it manipulates the spatial layer, and with layout off there is
         nothing on screen for it to act on.
 
         Recenter is an action, not a mode, so it never takes the accent. It is
         dimmed with Edit: with layout off there is no layout to move.
-      */}
+      */
+      }
       <TileRow>
         <GlyphTile
           icon="grid_view"
@@ -240,12 +275,14 @@ export function WristOverlay(
         <GlyphTile icon="open_with" disabled={!on("layout")} onClick={onRecenter} />
       </TileRow>
 
-      {/*
+      {
+        /*
         Row 4 is squeezed to one sub-unit so the panel comes out square, and is
         currently empty. It held SETTINGS (now a tile above) and EXIT, which was
         removed: the only shutdown path in the tree is a `Deno.exit(1)` in the
         desktop child's error handler, so the button did nothing.
-      */}
+      */
+      }
       <TileRow>
         <Tile units={4} height={LAST_ROW_HEIGHT} />
       </TileRow>

@@ -59,6 +59,8 @@ import {
 import { captureDenoCpuProfile } from "../classes/denoCpuProfile.ts";
 import { getSettings, isSettingKey, loadSettings, setSetting } from "../classes/settings.ts";
 import { pushToast, type ToastInput } from "../classes/environment/toastStore.ts";
+import { batteryStore } from "../classes/environment/batteryStore.ts";
+import { readOpenVrBatteries } from "../classes/openVrBattery.ts";
 
 const WEBXR_SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -1318,7 +1320,34 @@ function getWebXRStatus() {
   };
 }
 
+const BATTERY_POLL_MS = 30_000;
+let batteryPoll: ReturnType<typeof setInterval> | null = null;
+
+/** Wrist battery readout and low-battery toasts (`classes/environment/batteryStore.ts`). */
+function startBatteryPoll(): void {
+  if (batteryPoll != null) return;
+  const poll = () => {
+    const vr = state.nativeRaylibVrSystem;
+    if (vr == null) return;
+    try {
+      batteryStore.publish(readOpenVrBatteries(vr, {
+        left: state.nativeRaylibLeftControllerIndex,
+        right: state.nativeRaylibRightControllerIndex,
+      }));
+    } catch (error) {
+      LogChannel.log("webxrv2", `[webxr] battery poll failed: ${error}`);
+    }
+  };
+  // The controller indices resolve over the first frames; a quick first read fills the tile.
+  setTimeout(poll, 3_000);
+  batteryPoll = setInterval(poll, BATTERY_POLL_MS);
+}
+
 async function stopWebXR(): Promise<true> {
+  if (batteryPoll != null) {
+    clearInterval(batteryPoll);
+    batteryPoll = null;
+  }
   stopPresentationWatch();
   LogChannel.log("webxrv2", "[webxr] shutdown: stopping controller loop");
   state.controllerRunning = false;
@@ -1638,6 +1667,7 @@ function initializeRaylibOpenVrPacer(
     throw new Error(`invalid vrSystemPointer for ${label}`);
   }
   state.nativeRaylibVrSystem = new OpenVR.IVRSystem(systemPointer);
+  startBatteryPoll();
   if (payload.vrRenderModelsPointer) {
     const renderModelsPointer = Deno.UnsafePointer.create(
       typeof payload.vrRenderModelsPointer === "bigint"
