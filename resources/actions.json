@@ -39,6 +39,10 @@
     {
       "name": "/actions/main/in/MiddleClickModifier",
       "type": "boolean"
+    },
+    {
+      "name": "/actions/main/out/Haptic",
+      "type": "vibration"
     }
   ],
   "action_sets": [

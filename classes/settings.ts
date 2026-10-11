@@ -33,6 +33,11 @@ export const SETTINGS_SCHEMA = {
     label: "Controller laser beams (pointing works either way)",
     valid: isBoolean,
   } satisfies SettingSpec<boolean>,
+  haptics: {
+    default: true as boolean,
+    label: "Controller vibration on button hover and click",
+    valid: isBoolean,
+  } satisfies SettingSpec<boolean>,
   keyboardLocale: {
     default: null as string | null,
     label: "Keyboard legend locale; null follows --keyboard-locale / the host layout",

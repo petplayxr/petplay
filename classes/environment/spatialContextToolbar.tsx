@@ -18,6 +18,7 @@ import { Container, Text } from "../../submodules/threewebxrwebgpudeno/webgpu-ui
 import { Pill } from "./ui/primitives.tsx";
 import { Icon, type IconName } from "./ui/icons.tsx";
 import { COLOR, GAP, INNER_GAP, OUTLINE_WIDTH, RADIUS, UNIT, unitSpan } from "./ui/tokens.ts";
+import { pulseForPointerEvent } from "./haptics.ts";
 
 /**
  * Action id -> glyph.
@@ -102,9 +103,15 @@ function ActionTile(
       justifyContent="center"
       backgroundColor={filled ? fill : hovered ? COLOR.tileHi : COLOR.tile}
       backgroundOpacity={1}
-      onPointerOver={action.disabled ? undefined : () => setHovered(true)}
+      onPointerOver={action.disabled ? undefined : (event: unknown) => {
+        setHovered(true);
+        pulseForPointerEvent(event, "hover");
+      }}
       onPointerOut={action.disabled ? undefined : () => setHovered(false)}
-      onClick={action.disabled ? undefined : action.run}
+      onClick={action.disabled ? undefined : (event: unknown) => {
+        pulseForPointerEvent(event, "click");
+        action.run();
+      }}
       {...({ title: action.label } as Record<string, unknown>)}
     >
       <Icon

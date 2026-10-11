@@ -26,6 +26,7 @@ import React, { useState } from "react";
 import type { AllowedPointerEventsType } from "@pmndrs/pointer-events";
 import { Container, Text } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
 import {
+  clampRadius,
   COLOR,
   FOOTER_HEIGHT,
   GAP,
@@ -34,12 +35,12 @@ import {
   LAST_ROW_HEIGHT,
   OUTLINE_WIDTH,
   RADIUS,
-  UNIT,
-  clampRadius,
   slotSize,
   slotSpan,
+  UNIT,
   unitSpan,
 } from "./tokens.ts";
+import { pulseForPointerEvent } from "../haptics.ts";
 
 /**
  * Pill / circle intent, resolved to a real number by {@link clampRadius}.
@@ -55,6 +56,27 @@ import {
  * to do rather than the renderer's.
  */
 const FULL_ROUND = 999;
+
+/** Hover handlers for a button: highlight state plus a haptic tick on the pointing hand. */
+function hoverHandlers(enabled: boolean, setHovered: (hovered: boolean) => void) {
+  if (!enabled) return { onPointerOver: undefined, onPointerOut: undefined };
+  return {
+    onPointerOver: (event: unknown) => {
+      setHovered(true);
+      pulseForPointerEvent(event, "hover");
+    },
+    onPointerOut: () => setHovered(false),
+  };
+}
+
+/** A click handler that also pulses the clicking hand. */
+function withClickHaptic(onClick: (() => void) | undefined) {
+  if (onClick == null) return undefined;
+  return (event: unknown) => {
+    pulseForPointerEvent(event, "click");
+    onClick();
+  };
+}
 
 export type PillTone = "outline" | "accent" | "solid" | "danger";
 
@@ -109,15 +131,10 @@ export function Pill(
       backgroundColor={fill}
       backgroundOpacity={filled && !disabled ? 1 : 0}
       borderWidth={filled && !disabled ? 0 : OUTLINE_WIDTH}
-      borderColor={disabled
-        ? COLOR.inkDim
-        : hovered && onClick
-        ? COLOR.accent
-        : COLOR.outline}
+      borderColor={disabled ? COLOR.inkDim : hovered && onClick ? COLOR.accent : COLOR.outline}
       borderOpacity={1}
-      onPointerOver={onClick && !disabled ? () => setHovered(true) : undefined}
-      onPointerOut={onClick && !disabled ? () => setHovered(false) : undefined}
-      onClick={disabled ? undefined : onClick}
+      {...hoverHandlers(onClick != null && !disabled, setHovered)}
+      onClick={disabled ? undefined : withClickHaptic(onClick)}
     >
       <Text color={ink} fontSize={fontSize}>
         {children}
@@ -166,9 +183,8 @@ export function Slot(
       borderWidth={active && !disabled ? 0 : OUTLINE_WIDTH}
       borderColor={disabled ? COLOR.inkDim : hovered ? COLOR.accent : COLOR.outline}
       borderOpacity={1}
-      onPointerOver={onClick && !disabled ? () => setHovered(true) : undefined}
-      onPointerOut={onClick && !disabled ? () => setHovered(false) : undefined}
-      onClick={disabled ? undefined : onClick}
+      {...hoverHandlers(onClick != null && !disabled, setHovered)}
+      onClick={disabled ? undefined : withClickHaptic(onClick)}
     >
       {children}
     </Container>
@@ -204,9 +220,8 @@ export function Tile(
       gap={INNER_GAP}
       backgroundColor={active ? COLOR.accent : hovered ? COLOR.tileHi : COLOR.tile}
       backgroundOpacity={fill ? 1 : 0}
-      onPointerOver={onClick ? () => setHovered(true) : undefined}
-      onPointerOut={onClick ? () => setHovered(false) : undefined}
-      onClick={onClick}
+      {...hoverHandlers(onClick != null, setHovered)}
+      onClick={withClickHaptic(onClick)}
     >
       {children}
     </Container>
@@ -273,7 +288,7 @@ export function Control<T extends string>(
             justifyContent="center"
             backgroundColor={COLOR.accent}
             backgroundOpacity={selected ? 1 : 0}
-            onClick={onChange ? () => onChange(option.value) : undefined}
+            onClick={withClickHaptic(onChange ? () => onChange(option.value) : undefined)}
           >
             <Text color={selected ? COLOR.onAccent : COLOR.inkDim} fontSize={fontSize}>
               {option.label}

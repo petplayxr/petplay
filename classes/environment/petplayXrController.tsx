@@ -1,13 +1,11 @@
 import { Pointer, type RayPointerOptions } from "@pmndrs/pointer-events";
 import {
   CombinedPointer,
-  defaultRayPointerOpacity,
   DefaultXRControllerGrabPointer,
   type DefaultXRControllerOptions,
   type DefaultXRInputSourceGrabPointerOptions,
   type DefaultXRInputSourceRayPointerOptions,
   DefaultXRInputSourceTeleportPointer,
-  PointerCursorModel,
   usePointerXRInputSourceEvents,
   useRayPointer,
   useXRInputSourceStateContext,
@@ -15,10 +13,18 @@ import {
   XRSpace,
 } from "@pmndrs/xr";
 import { useFrame } from "@react-three/fiber/webgpu";
-import React, { forwardRef, Suspense, useImperativeHandle, useMemo, useRef } from "react";
+import React, {
+  forwardRef,
+  Suspense,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from "react";
 import { type ColorRepresentation, type Mesh, MeshBasicMaterial, Object3D } from "three/webgpu";
 import { HandPoker } from "./handPoker.tsx";
 import { useControllerLaserEnabled } from "./controllerLaserMode.ts";
+import { registerPointerHand } from "./haptics.ts";
 
 function spreadable<T>(value: true | T | undefined): T | undefined {
   if (value === true || value === undefined) {
@@ -141,11 +147,80 @@ const HudPointerRayModel = forwardRef<Object3D, HudRayModelOptions & { pointer: 
   },
 );
 
+/** Cursor dot radius in metres at 1 m; it grows with distance so it stays about the same size. */
+const CURSOR_RADIUS_PER_METRE = 0.005;
+const CURSOR_MIN_RADIUS = 0.003;
+/** Pulled back toward the controller so it never z-fights the surface it sits on. */
+const CURSOR_SURFACE_GAP = 0.002;
+
+/**
+ * A flat dot where the ray hits an interactable. Replaces pmndrs' `PointerCursorModel`, whose
+ * shader material the raythree HUD path cannot translate (it drew as a large grey quad). Facing
+ * back along the ray rather than along the surface normal keeps it round from where you look.
+ */
+function HudPointerCursorModel(
+  { pointer, color = 0xffffff, renderOrder = 10000 }: {
+    pointer: Pointer;
+    color?: ColorRepresentation;
+    renderOrder?: number;
+  },
+) {
+  const material = useMemo(
+    () =>
+      new MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.9,
+        toneMapped: false,
+        depthTest: true,
+        depthWrite: false,
+      }),
+    [color],
+  );
+  const ref = useRef<Mesh>(null);
+  useFrame(() => {
+    const mesh = ref.current;
+    if (mesh == null) return;
+    const intersection = pointer.getEnabled() ? pointer.getIntersection() : undefined;
+    const distance = intersection?.distance;
+    if (
+      intersection == null || intersection.object?.isVoidObject === true ||
+      distance == null || !Number.isFinite(distance) || distance <= CURSOR_SURFACE_GAP
+    ) {
+      mesh.visible = false;
+      return;
+    }
+    const radius = Math.max(CURSOR_MIN_RADIUS, CURSOR_RADIUS_PER_METRE * distance);
+    mesh.visible = true;
+    mesh.position.set(0, 0, -(distance - CURSOR_SURFACE_GAP));
+    mesh.scale.set(radius, radius, radius);
+    mesh.updateMatrix();
+  });
+  return (
+    <mesh
+      matrixAutoUpdate={false}
+      visible={false}
+      renderOrder={renderOrder}
+      ref={ref}
+      material={material as never}
+      userData={{ raythreeHudOverUi: true }}
+      {...({ pointerEvents: "none" } as Record<string, unknown>)}
+    >
+      <circleGeometry args={[1, 20]} />
+    </mesh>
+  );
+}
+
 function PetplayDefaultXRInputSourceRayPointer(props: DefaultXRInputSourceRayPointerOptions) {
   const state = useXRInputSourceStateContext();
   const ref = useRef<Object3D>(null);
   const pointer = useRayPointer(ref, state, props);
   usePointerXRInputSourceEvents(pointer, state.inputSource, "select", state.events);
+  const handedness = state.inputSource.handedness;
+  useEffect(() => {
+    if (handedness !== "left" && handedness !== "right") return;
+    return registerPointerHand(pointer.id, handedness);
+  }, [pointer, handedness]);
   const rayModelOptions = props.rayModel;
   const cursorModelOptions = props.cursorModel;
   const rayOpts = spreadable(rayModelOptions);
@@ -159,13 +234,7 @@ function PetplayDefaultXRInputSourceRayPointer(props: DefaultXRInputSourceRayPoi
           {...rayOpts}
         />
       )}
-      {cursorModelOptions != null && cursorModelOptions !== false && (
-        <PointerCursorModel
-          pointer={pointer}
-          opacity={defaultRayPointerOpacity}
-          {...spreadable(cursorModelOptions)}
-        />
-      )}
+      {cursorModelOptions !== false && <HudPointerCursorModel pointer={pointer} />}
     </XRSpace>
   );
 }

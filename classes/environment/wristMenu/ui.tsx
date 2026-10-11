@@ -189,7 +189,7 @@ function LayoutSlotsView(
 function SettingToggleRow(
   { label, setting }: {
     label: string;
-    setting: Extract<SettingKey, "grabboxOutline" | "controllerLaser">;
+    setting: Extract<SettingKey, "grabboxOutline" | "controllerLaser" | "haptics">;
   },
 ) {
   const value = useSetting(setting);
@@ -235,6 +235,7 @@ function SettingsView(
       </Container>
       <SettingToggleRow label="Grab-box outlines" setting="grabboxOutline" />
       <SettingToggleRow label="Laser beams" setting="controllerLaser" />
+      <SettingToggleRow label="Vibration" setting="haptics" />
       <Container
         flexDirection="row"
         alignItems="center"

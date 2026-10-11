@@ -23,6 +23,7 @@ import * as OpenVR from "../submodules/OpenVR_TS_Bindings_Deno/openvr_bindings.t
 import { P } from "../submodules/OpenVR_TS_Bindings_Deno/pointers.ts";
 import { createStruct } from "../submodules/OpenVR_TS_Bindings_Deno/utils.ts";
 import { tempFile } from "./utils.ts";
+import { type HapticPulse, setHapticSink } from "./environment/haptics.ts";
 
 export type DirectOpenVrHmdPose = {
   /** Column-major 4x4 world-from-HMD matrix. */
@@ -111,6 +112,7 @@ export class DirectOpenVrInputSource {
   private joystickRightHandle = OpenVR.k_ulInvalidActionHandle;
   private rightClickModifierHandle = OpenVR.k_ulInvalidActionHandle;
   private middleClickModifierHandle = OpenVR.k_ulInvalidActionHandle;
+  private hapticHandle = OpenVR.k_ulInvalidActionHandle;
   private actionSetHandle = OpenVR.k_ulInvalidActionSetHandle;
   private leftHandPathHandle = OpenVR.k_ulInvalidInputValueHandle;
   private rightHandPathHandle = OpenVR.k_ulInvalidInputValueHandle;
@@ -253,6 +255,12 @@ export class DirectOpenVrInputSource {
     this.joystickRightHandle = getActionHandle("/actions/main/in/JoystickRight");
     this.rightClickModifierHandle = getActionHandle("/actions/main/in/RightClickModifier");
     this.middleClickModifierHandle = getActionHandle("/actions/main/in/MiddleClickModifier");
+    try {
+      this.hapticHandle = getActionHandle("/actions/main/out/Haptic");
+    } catch {
+      // Haptics are feedback only; input works without them.
+      this.hapticHandle = OpenVR.k_ulInvalidActionHandle;
+    }
 
     const actionSetPtr = P.BigUint64P<OpenVR.ActionSetHandle>();
     error = this.vrInput.GetActionSetHandle("/actions/main", actionSetPtr);
@@ -275,6 +283,24 @@ export class DirectOpenVrInputSource {
 
     this.dualActiveActionSetBuffer = new ArrayBuffer(OpenVR.ActiveActionSetStruct.byteSize * 2);
     this.inputReady = true;
+    if (this.hapticHandle !== OpenVR.k_ulInvalidActionHandle) {
+      setHapticSink((hand, pulse) => this.vibrate(hand, pulse));
+    }
+  }
+
+  /** One vibration pulse on a hand (see `classes/environment/haptics.ts`). */
+  vibrate(hand: "left" | "right", pulse: HapticPulse): void {
+    if (!this.vrInput || !this.inputReady) return;
+    const device = hand === "left" ? this.leftHandPathHandle : this.rightHandPathHandle;
+    if (device === OpenVR.k_ulInvalidInputValueHandle) return;
+    this.vrInput.TriggerHapticVibrationAction(
+      this.hapticHandle,
+      0,
+      pulse.durationS,
+      pulse.frequency,
+      pulse.amplitude,
+      device,
+    );
   }
 
   /**
@@ -411,6 +437,8 @@ export class DirectOpenVrInputSource {
 
   /** Reset IVRInput state so the source stops reading actions. */
   resetInput(): void {
+    setHapticSink(null);
+    this.hapticHandle = OpenVR.k_ulInvalidActionHandle;
     this.vrInput = null;
     this.inputReady = false;
     this.grabLeftHandle = OpenVR.k_ulInvalidActionHandle;

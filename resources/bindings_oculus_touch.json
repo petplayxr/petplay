@@ -3,6 +3,16 @@
   "alias_info": {},
   "bindings": {
     "/actions/main": {
+      "haptics": [
+        {
+          "output": "/actions/main/out/Haptic",
+          "path": "/user/hand/left/output/haptic"
+        },
+        {
+          "output": "/actions/main/out/Haptic",
+          "path": "/user/hand/right/output/haptic"
+        }
+      ],
       "poses": [
         {
           "output": "/actions/main/in/HandPoseLeft",
