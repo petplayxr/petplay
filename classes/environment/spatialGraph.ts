@@ -39,6 +39,8 @@ type SpatialNodeBase = {
   localTransform: SpatialTransform;
   constraint?: SpatialConstraint;
   onParentDelete: ParentDeleteBehavior;
+  /** Pinned in place: grabs do not move, turn or scale it. Recenter still moves the layout. */
+  locked?: boolean;
 };
 
 export type BoxSnapSource = {
@@ -666,7 +668,9 @@ export function recenterSpatialRoots(
       .add(target);
     const rotation = new THREE.Euler().setFromQuaternion(
       turn.clone().multiply(
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(...node.localTransform.rotation, "XYZ")),
+        new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(...node.localTransform.rotation, "XYZ"),
+        ),
       ),
       "XYZ",
     );
@@ -679,6 +683,18 @@ export function recenterSpatialRoots(
       },
     };
   }
+  return graph;
+}
+
+export function setSpatialNodeLocked(
+  current: SpatialGraph,
+  nodeId: SpatialNodeId,
+  locked: boolean,
+): SpatialGraph {
+  const node = current.nodes[nodeId];
+  if (!node || (node.locked ?? false) === locked) return current;
+  const graph = cloneGraph(current);
+  graph.nodes[nodeId] = { ...node, locked };
   return graph;
 }
 
@@ -911,7 +927,9 @@ export function normalizeSpatialLayout(current: SpatialGraph): SpatialGraph {
   const nodes: SpatialGraph["nodes"] = {};
   let changed = JSON.stringify(hitboxes) !== JSON.stringify(current.hitboxes);
   for (const node of Object.values(current.nodes)) {
-    if ((node.kind !== "display" && node.kind !== "keyboard") || node.constraint?.kind !== "hinge") {
+    if (
+      (node.kind !== "display" && node.kind !== "keyboard") || node.constraint?.kind !== "hinge"
+    ) {
       nodes[node.id] = node;
       continue;
     }

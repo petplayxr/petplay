@@ -12,7 +12,7 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 - [~] **Overlay registry: spawn/despawn, per-window opacity, curve, size**
 - [~] **Grab / push-pull / scale gestures**, plus sensitivity settings
 - [ ] **Attach to hand / head / world**
-- [ ] **Pin / lock window**
+- [~] **Pin / lock window**: per-node `locked` (toolbar Lock action) freezes grabs, persisted; grab freeze verified in `--novr`, toolbar click not yet
 - [ ] Mouse-block and auto-hide per window
 - [ ] **Named layouts: save/load**
 - [ ] **Window list with live previews and monitor picker**

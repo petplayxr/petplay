@@ -34,10 +34,7 @@ import {
   type HandleStore,
 } from "@pmndrs/handle";
 import { subscribeLayoutRecenter, useWindowLayerVisible } from "./windowLayerMode.ts";
-import {
-  setGrabboxOutlineVisible,
-  useGrabboxOutlineVisible,
-} from "./grabboxOutlineMode.ts";
+import { setGrabboxOutlineVisible, useGrabboxOutlineVisible } from "./grabboxOutlineMode.ts";
 import { useHingedOneHandScaleMaxGrabOffset } from "./spatialManipulationMode.ts";
 import { GrabBox } from "./grabbox.tsx";
 import {
@@ -63,6 +60,7 @@ import {
   releaseHinge,
   resetSpatialNodeTransform,
   setHingeAngle,
+  setSpatialNodeLocked,
   type SpatialGraph,
   type SpatialNode,
   type SpatialTransform,
@@ -407,7 +405,9 @@ function CommonOverlayChords({
         }
       }
       if (closestStore != null && closestPointerId != null && closestDistanceSq <= 0.25 * 0.25) {
-        const constraint = closestNodeId == null ? undefined : graph.nodes[closestNodeId]?.constraint;
+        const constraint = closestNodeId == null
+          ? undefined
+          : graph.nodes[closestNodeId]?.constraint;
         if (constraint?.kind === "hinge") {
           // A hinge has no free translation, so the stick angles it instead of pushing it away.
           // Handing over an absolute angle rebases the grab, so the hand stops turning the hinge
@@ -420,7 +420,8 @@ function CommonOverlayChords({
             // on the mirrored right/bottom one, so flip it for the mirrored sides.
             const side = constraint.attachmentSlotId.match(/-(left|right|top|bottom)-slot$/)?.[1];
             const direction = side === "right" || side === "bottom" ? 1 : -1;
-            const requested = current + direction * axis * JOYSTICK_HINGE_RADIANS_PER_SECOND * delta;
+            const requested = current +
+              direction * axis * JOYSTICK_HINGE_RADIANS_PER_SECOND * delta;
             closestStore.setTargetAxisAngle(
               closestPointerId,
               constraint.axis,
@@ -713,6 +714,17 @@ function objectTransform(target: import("three").Object3D): SpatialTransform {
   };
 }
 
+/** A locked node keeps its handle (so a grab is still swallowed) but every axis is frozen. */
+function useLockedGrabOptions(
+  options: Omit<HandleOptions<unknown>, "filter">,
+  locked: boolean,
+): Omit<HandleOptions<unknown>, "filter"> {
+  return React.useMemo(
+    () => locked ? { ...options, translate: false, rotate: false, scale: false } : options,
+    [locked, options],
+  );
+}
+
 function useScaleToDelete(
   nodeId: string,
   grabSize: [number, number, number],
@@ -856,6 +868,7 @@ function DisplaySpatialNodeView({
     [commitFreeTransform, manipulationOptions],
   );
   const deletion = useScaleToDelete(node.id, DISPLAY_GRAB_SIZE, baseOptions, setGraph);
+  const grabOptions = useLockedGrabOptions(deletion.options, node.locked ?? false);
   const children = getSpatialChildren(graph, node.id);
   const attachmentRole = getDisplayAttachmentRole(graph, node.id);
   const outputConnected = node.workspaceOutputId != null && node.workspaceOutputConnected !== false;
@@ -902,6 +915,13 @@ function DisplaySpatialNodeView({
       });
     }
     actions.push({
+      id: "lock",
+      label: node.locked ? "Locked — unlock" : "Lock",
+      // Accent reports the state, as with "Linked — detach".
+      tone: node.locked ? "accent" : "normal",
+      run: () => setGraph((current) => setSpatialNodeLocked(current, node.id, !node.locked)),
+    });
+    actions.push({
       id: "delete",
       label: "Delete",
       tone: "danger",
@@ -943,7 +963,7 @@ function DisplaySpatialNodeView({
         rayHitSurface={activeDisplayOverlayHostActor != null}
         shellRayPickable={activeDisplayOverlayHostActor == null}
         manipulationTargetRef={targetRef}
-        manipulationOptions={deletion.options}
+        manipulationOptions={grabOptions}
         manipulationStoreRef={setManipulationStore}
         onSpatialFocus={selectNode}
         onSpatialHoverChange={setHovered}
@@ -1063,6 +1083,7 @@ function KeyboardSpatialNodeView({
     [commitFreeTransform, manipulationOptions],
   );
   const deletion = useScaleToDelete(node.id, node.snapSource.size, baseOptions, setGraph);
+  const grabOptions = useLockedGrabOptions(deletion.options, node.locked ?? false);
   const children = getSpatialChildren(graph, node.id);
   const selectNode = React.useCallback(() => onSelectNode(node.id), [node.id, onSelectNode]);
   const contextActions = React.useMemo<SpatialContextAction[]>(() => {
@@ -1081,13 +1102,20 @@ function KeyboardSpatialNodeView({
       });
     }
     actions.push({
+      id: "lock",
+      label: node.locked ? "Locked — unlock" : "Lock",
+      // Accent reports the state, as with "Linked — detach".
+      tone: node.locked ? "accent" : "normal",
+      run: () => setGraph((current) => setSpatialNodeLocked(current, node.id, !node.locked)),
+    });
+    actions.push({
       id: "delete",
       label: "Delete",
       tone: "danger",
       run: () => setGraph((current) => deleteSpatialNode(current, node.id)),
     });
     return actions;
-  }, [node.id, node.parentId, setGraph]);
+  }, [node.id, node.locked, node.parentId, setGraph]);
 
   return (
     <group
@@ -1110,7 +1138,7 @@ function KeyboardSpatialNodeView({
         scale={[1, 1, 1]}
         onKey={onKey}
         manipulationTargetRef={targetRef}
-        manipulationOptions={deletion.options}
+        manipulationOptions={grabOptions}
         manipulationStoreRef={setManipulationStore}
         onGrabBoxSize={updateBounds}
         onSpatialFocus={selectNode}
@@ -1280,7 +1308,8 @@ function AttachedSpatialNodeView(
           initialGrabberDistanceRef.current = distance;
           // `state.current.time` is the pointerdown `timeStamp` on the first apply and frame seconds
           // afterwards, so it cannot serve as a clock.
-          breakawaySettleUntilRef.current = performance.now() + HINGE_BREAKAWAY_SETTLE_SECONDS * 1000;
+          breakawaySettleUntilRef.current = performance.now() +
+            HINGE_BREAKAWAY_SETTLE_SECONDS * 1000;
           breakawayHoldRef.current = 0;
           const grabbedObject = event.object as unknown as THREE.Object3D;
           grabbedObject.updateWorldMatrix(true, false);
@@ -1356,7 +1385,16 @@ function AttachedSpatialNodeView(
         breakawaySettleUntilRef.current = 0;
       }
     },
-    [camera, canvasSize.height, canvasSize.width, hinge, node, node.id, oneHandScaleMaxGrabOffset, setGraph],
+    [
+      camera,
+      canvasSize.height,
+      canvasSize.width,
+      hinge,
+      node,
+      node.id,
+      oneHandScaleMaxGrabOffset,
+      setGraph,
+    ],
   );
   const hingeOptions = React.useMemo<Omit<HandleOptions<unknown>, "filter">>(
     () => ({

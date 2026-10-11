@@ -18,10 +18,11 @@ import {
   reconcileWorkspaceOutputs,
   releaseHinge,
   resetSpatialNodeTransform,
+  setSpatialNodeLocked,
+  type SpatialGraph,
   spawnDisplayForWorkspaceOutput,
   spawnHingedDisplay,
   spawnHingedDisplayWithAutomaticOutput,
-  type SpatialGraph,
 } from "./spatialGraph.ts";
 import { DEFAULT_DISPLAY_HEIGHT, DISPLAY_PANEL_WIDTH } from "./displayMetrics.ts";
 import type { WorkspaceOutput } from "./workspaceDisplays.ts";
@@ -540,7 +541,10 @@ Deno.test("recenter puts the primary display in front of the head and keeps the 
   // Head at (0, 1.6, 0) turned 90 degrees left: forward is -x.
   const recentered = recenterSpatialRoots(graph, [0, 1.6, 0], Math.PI / 2, [0, -0.08, -1.35]);
   const primary = worldPointOf(recentered, "display-1", [0, 0, 0]);
-  assert(primary.distanceTo(new THREE.Vector3(-1.35, 1.52, 0)) < 1e-6, `primary at ${primary.toArray()}`);
+  assert(
+    primary.distanceTo(new THREE.Vector3(-1.35, 1.52, 0)) < 1e-6,
+    `primary at ${primary.toArray()}`,
+  );
   // The panel faces the head: its forward (-z) points along the head's forward (-x).
   const facing = worldPointOf(recentered, "display-1", [0, 0, -1]).sub(primary);
   assert(facing.distanceTo(new THREE.Vector3(-1, 0, 0)) < 1e-6, `facing ${facing.toArray()}`);
@@ -550,4 +554,18 @@ Deno.test("recenter puts the primary display in front of the head and keeps the 
     worldPointOf(recentered, loose.id, [0, 0, 0]).y - primary.y > 0.499,
     "recenter does not tilt the arrangement",
   );
+});
+
+Deno.test("locking a node is a no-op when unchanged and survives a clone", () => {
+  const graph = createInitialSpatialGraph();
+  assert(setSpatialNodeLocked(graph, "display-1", false) === graph, "unlocking an unlocked node");
+  const locked = setSpatialNodeLocked(graph, "display-1", true);
+  assert(locked.nodes["display-1"].locked === true, "locked flag set");
+  assert(graph.nodes["display-1"].locked !== true, "original graph untouched");
+  const moved = commitNodeTransform(locked, "display-1", {
+    position: [1, 1, 1],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+  });
+  assert(moved.nodes["display-1"].locked === true, "lock kept across later edits");
 });
