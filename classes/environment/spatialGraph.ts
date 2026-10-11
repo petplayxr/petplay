@@ -6,6 +6,7 @@ import {
   DEFAULT_DISPLAY_DEPTH,
   DEFAULT_DISPLAY_HEIGHT,
   DISPLAY_PANEL_WIDTH,
+  MAX_DISPLAY_CURVATURE,
 } from "./displayMetrics.ts";
 
 export type SpatialNodeId = string;
@@ -43,6 +44,8 @@ type SpatialNodeBase = {
   locked?: boolean;
   /** 0..1, unset means opaque. Only the node itself: children keep their own. */
   opacity?: number;
+  /** Displays: OpenVR overlay curvature, 0 < c <= `MAX_DISPLAY_CURVATURE`; unset means flat. */
+  curvature?: number;
 };
 
 export type BoxSnapSource = {
@@ -752,6 +755,22 @@ export function setSpatialNodeOpacity(
   const graph = cloneGraph(current);
   const { opacity: _previous, ...rest } = node;
   graph.nodes[nodeId] = (clamped === 1 ? rest : { ...rest, opacity: clamped }) as SpatialNode;
+  return graph;
+}
+
+/** Clamped to [0, `MAX_DISPLAY_CURVATURE`]; 0 clears the field. */
+export function setSpatialNodeCurvature(
+  current: SpatialGraph,
+  nodeId: SpatialNodeId,
+  curvature: number,
+): SpatialGraph {
+  const node = current.nodes[nodeId];
+  if (!node || !Number.isFinite(curvature)) return current;
+  const clamped = Math.min(MAX_DISPLAY_CURVATURE, Math.max(0, curvature));
+  if ((node.curvature ?? 0) === clamped) return current;
+  const graph = cloneGraph(current);
+  const { curvature: _previous, ...rest } = node;
+  graph.nodes[nodeId] = (clamped === 0 ? rest : { ...rest, curvature: clamped }) as SpatialNode;
   return graph;
 }
 

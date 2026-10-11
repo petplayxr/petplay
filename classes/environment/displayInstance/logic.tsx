@@ -37,6 +37,8 @@ export type DisplayInstanceProps = DisplayInstanceFrameProps & {
   virtualDisplayName?: string;
   /** Overlay alpha, 0..1 (default opaque). */
   opacity?: number;
+  /** Overlay curvature (OpenVR `SetOverlayCurvature`), 0 = flat. */
+  curvature?: number;
   /** Transform target for this display's GrabBox; defaults to the display itself. */
   manipulationTargetRef?: React.RefObject<THREE.Object3D | null>;
   /** Optional constraint/apply policy for the Handle targeting this display. */
@@ -83,6 +85,7 @@ export function DisplayInstance(
     workspaceCrop,
     virtualDisplayName,
     opacity = 1,
+    curvature = 0,
     manipulationTargetRef,
     manipulationOptions,
     manipulationStoreRef,
@@ -102,6 +105,7 @@ export function DisplayInstance(
   const lastSentHmd = useRef<ReturnType<typeof hmd34FromColumnMajor4x4> | null>(null);
   const lastSentWidth = useRef<number | null>(null);
   const lastSentOpacity = useRef<number | null>(null);
+  const lastSentCurvature = useRef<number | null>(null);
   /** Last crop sent to the overlay host, compared field-wise to avoid a per-frame JSON.stringify. */
   const lastSentCrop = useRef<WorkspaceRect | null>(null);
 
@@ -190,6 +194,7 @@ export function DisplayInstance(
         hmd34ApproxEqual(hmd, lastSentHmd.current) &&
         Math.abs(lastSentWidth.current - widthMeters) < 0.0001 &&
         lastSentOpacity.current === opacity &&
+        lastSentCurvature.current === curvature &&
         cropUnchanged
       ) {
         return;
@@ -198,6 +203,7 @@ export function DisplayInstance(
     lastSentHmd.current = hmd;
     lastSentWidth.current = widthMeters;
     lastSentOpacity.current = opacity;
+    lastSentCurvature.current = curvature;
     lastSentCrop.current = workspaceCrop ? { ...workspaceCrop } : null;
     try {
       PostMan.PostMessage(
@@ -212,12 +218,13 @@ export function DisplayInstance(
               hmd,
               widthMeters,
               opacity,
+              curvature,
             },
           }
           : {
             target: targetActor,
             type: "SYNCDISPLAYPOSE",
-            payload: { hmd, widthMeters, opacity },
+            payload: { hmd, widthMeters, opacity, curvature },
           },
       );
     } catch {
@@ -238,6 +245,7 @@ export function DisplayInstance(
       <DisplayInstanceFrame
         ref={handleRef}
         {...frameProps}
+        curvature={curvature}
         manipulationTargetRef={manipulationTargetRef}
         manipulationOptions={manipulationOptions}
         manipulationStoreRef={manipulationStoreRef}

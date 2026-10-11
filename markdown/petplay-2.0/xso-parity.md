@@ -13,6 +13,11 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 - [~] **Overlay registry: spawn/despawn, per-window opacity, curve, size**. Opacity: "Opacity"
   pills (100/75/50/25%) in a window's settings, persisted per node, sent to the overlay host as
   `SetOverlayAlpha`; verified in `--novr` (uikit fades, layout saves it), not yet on real overlays
+  Curve: "Curve" pills (Flat/10/20/30%, OpenVR's fraction of a cylinder) in a display's settings,
+  persisted, sent as `SetOverlayCurvature`; the ray proxy bends to the same cylinder
+  (`displayInstance/curvedSurface.ts`) so clicks land on the curved pixels. The grab-box chrome
+  stays flat. Assumes OpenVR keeps the centre column on the transform with the edges toward the
+  viewer; check in a headset
 - [~] **Grab / push-pull / scale gestures**, plus sensitivity settings
 - [~] **Attach to hand / head / world**: "Anchored to" pills in a window's settings (World, Head,
   Left hand, Right hand) move its whole hierarchy to that space without a jump, persisted per node;

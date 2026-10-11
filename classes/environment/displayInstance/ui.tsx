@@ -16,6 +16,7 @@ import {
   DEFAULT_DISPLAY_HEIGHT,
   DISPLAY_ASPECT_WIDTH_OVER_HEIGHT,
 } from "../displayMetrics.ts";
+import { createDisplaySurfaceGeometry } from "./curvedSurface.ts";
 
 // deno-lint-ignore no-explicit-any
 extend(THREE as any);
@@ -47,6 +48,8 @@ export type DisplayInstanceFrameProps = {
    * proxy surface to stop on the display instead of extending through it.
    */
   rayHitSurface?: boolean;
+  /** OpenVR overlay curvature; the ray proxy bends to match (`curvedSurface.ts`). */
+  curvature?: number;
   /** Optional display-space mouse sink; receives normalized 0..1 coordinates on the screen plane. */
   onMouse?: DisplayMouseSink;
   mouseButtonForPointer?: (event: PenPointerEvent) => DisplayMouseButton | undefined;
@@ -102,6 +105,7 @@ export const DisplayInstanceFrame = forwardRef<THREE.Group, DisplayInstanceFrame
       lineColor = DEFAULT_GRABBOX_LINE_COLOR,
       shellRayPickable = false,
       rayHitSurface = true,
+      curvature = 0,
       onMouse,
       mouseButtonForPointer,
       manipulationTargetRef,
@@ -117,6 +121,11 @@ export const DisplayInstanceFrame = forwardRef<THREE.Group, DisplayInstanceFrame
       () => height * DISPLAY_ASPECT_WIDTH_OVER_HEIGHT,
       [height],
     );
+    const surfaceGeometry = useMemo(
+      () => createDisplaySurfaceGeometry(width, height, curvature),
+      [width, height, curvature],
+    );
+    useEffect(() => () => surfaceGeometry.dispose(), [surfaceGeometry]);
     const pendingClickRef = useRef<PendingDisplayClick | null>(null);
     const mainControllerGate = useMemo(() => createMainControllerGate(), []);
 
@@ -272,12 +281,12 @@ export const DisplayInstanceFrame = forwardRef<THREE.Group, DisplayInstanceFrame
               {...({
                 pointerEvents: "auto",
                 pointerEventsType: { allow: "ray" },
-                // Prefer the flat screen proxy over the surrounding GrabBox
+                // Prefer the screen proxy over the surrounding GrabBox
                 // hull, even though the hull is a little closer to the hand.
                 pointerEventsOrder: 1,
               } as Record<string, unknown>)}
             >
-              <planeGeometry args={[width, height]} />
+              <primitive object={surfaceGeometry} attach="geometry" />
               <meshBasicMaterial
                 depthTest
                 depthWrite

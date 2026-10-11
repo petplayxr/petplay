@@ -62,6 +62,7 @@ import {
   resetSpatialNodeTransform,
   SCENE_ORIGIN_ID,
   setHingeAngle,
+  setSpatialNodeCurvature,
   setSpatialNodeLocked,
   setSpatialNodeOpacity,
   setSpatialRootOrigin,
@@ -854,6 +855,30 @@ function OpacitySettingsSection(
   );
 }
 
+/** Curvature as OpenVR's fraction of a full cylinder; 0.2 on a default display is a ~1.4 m radius. */
+const CURVATURE_STEPS = [0, 0.1, 0.2, 0.3] as const;
+
+function CurvatureSettingsSection(
+  { node, setGraph }: {
+    node: SpatialNode;
+    setGraph: React.Dispatch<React.SetStateAction<SpatialGraph>>;
+  },
+) {
+  const current = node.curvature ?? 0;
+  return (
+    <SpatialSettingsSection label="Curve">
+      {CURVATURE_STEPS.map((step) => (
+        <SpatialSettingsButton
+          key={step}
+          label={step === 0 ? "Flat" : `${Math.round(step * 100)}%`}
+          selected={Math.abs(current - step) < 0.001}
+          onClick={() => setGraph((latest) => setSpatialNodeCurvature(latest, node.id, step))}
+        />
+      ))}
+    </SpatialSettingsSection>
+  );
+}
+
 type SpatialGraphViewProps = {
   graph: SpatialGraph;
   setGraph: React.Dispatch<React.SetStateAction<SpatialGraph>>;
@@ -1143,6 +1168,7 @@ function DisplaySpatialNodeView({
         virtualDisplayName={node.workspaceOutputName ?? `PetPlay ${node.id}`}
         workspaceCrop={workspaceCrop}
         opacity={node.opacity}
+        curvature={node.curvature}
         onMouse={activeDisplayOverlayHostActor != null ? croppedMouseSink : undefined}
         mouseButtonForPointer={mouseButtonForPointer}
         rayHitSurface={activeDisplayOverlayHostActor != null}
@@ -1180,6 +1206,7 @@ function DisplaySpatialNodeView({
                 </SpatialSettingsSection>
                 <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
                 <OpacitySettingsSection node={node} setGraph={setGraph} />
+                <CurvatureSettingsSection node={node} setGraph={setGraph} />
                 <SpatialSettingsSection
                   label={assignedSide == null
                     ? "Free spatial element"

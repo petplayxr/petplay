@@ -10,6 +10,9 @@
 /** 16:9 content aspect (width = height × this value). */
 export const DISPLAY_ASPECT_WIDTH_OVER_HEIGHT = 16 / 9;
 
+/** Most display curvature we offer (OpenVR accepts up to 1, a closed cylinder). */
+export const MAX_DISPLAY_CURVATURE = 0.5;
+
 /** Default full-height of the display frame in scene units (meters). */
 export const DEFAULT_DISPLAY_HEIGHT = 0.5;
 

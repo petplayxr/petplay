@@ -40,6 +40,7 @@ const state = actorState({
   lastWidthMeters: -1,
   lastHmd: null as OpenVR.HmdMatrix34 | null,
   lastAlpha: -1,
+  lastCurvature: -1,
   captureFrames: 0,
   captureFps: DEFAULT_CAPTURE_FPS,
   captureFramesPresented: 0,
@@ -139,6 +140,8 @@ type SyncDisplayPosePayload = {
   widthMeters: number;
   /** Overlay alpha, 0..1; absent means opaque. */
   opacity?: number;
+  /** `SetOverlayCurvature`, 0..1; absent means flat. */
+  curvature?: number;
 };
 
 type WorkspaceCrop = { x: number; y: number; width: number; height: number };
@@ -147,7 +150,11 @@ type SyncVirtualDisplayPayload = SyncDisplayPosePayload & {
   crop: WorkspaceCrop;
   name?: string;
 };
-type VirtualOverlay = SyncVirtualDisplayPayload & { handle: bigint; appliedAlpha?: number };
+type VirtualOverlay = SyncVirtualDisplayPayload & {
+  handle: bigint;
+  appliedAlpha?: number;
+  appliedCurvature?: number;
+};
 const virtualOverlays = new Map<string, VirtualOverlay>();
 const pendingVirtualDisplays = new Map<string, SyncVirtualDisplayPayload>();
 const virtualOverlayRemovalTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -275,16 +282,22 @@ new PostMan(
     SYNCDISPLAYPOSE: (sync: SyncDisplayPosePayload) => {
       if (!state.overlayClass || !state.overlayHandle) return;
       const alpha = sync.opacity ?? 1;
+      const curvature = sync.curvature ?? 0;
       if (
         state.lastHmd && matrixEquals(state.lastHmd, sync.hmd) &&
         state.lastWidthMeters === sync.widthMeters &&
-        state.lastAlpha === alpha
+        state.lastAlpha === alpha &&
+        state.lastCurvature === curvature
       ) {
         return;
       }
       if (state.lastAlpha !== alpha) {
         setOverlayAlphaLogged(state.overlayHandle, alpha, "display");
         state.lastAlpha = alpha;
+      }
+      if (state.lastCurvature !== curvature) {
+        setOverlayCurvatureLogged(state.overlayHandle, curvature, "display");
+        state.lastCurvature = curvature;
       }
       if (state.lastWidthMeters !== sync.widthMeters) {
         const wErr = state.overlayClass.SetOverlayWidthInMeters(
@@ -706,6 +719,11 @@ function syncVirtualDisplay(sync: SyncVirtualDisplayPayload): void {
     setOverlayAlphaLogged(entry.handle, alpha, entry.id);
     entry.appliedAlpha = alpha;
   }
+  const curvature = sync.curvature ?? 0;
+  if (entry.appliedCurvature !== curvature) {
+    setOverlayCurvatureLogged(entry.handle, curvature, entry.id);
+    entry.appliedCurvature = curvature;
+  }
   // TextureBounds already establishes the visible crop geometry in SteamVR.
   // Keep square texels; changing this stretches the monitor vertically.
   const aspectError = overlay.SetOverlayTexelAspect(entry.handle, 1);
@@ -736,6 +754,16 @@ function setOverlayAlphaLogged(handle: bigint, alpha: number, label: string): vo
     LogChannel.log(
       "actor",
       `[displayOverlayHost] SetOverlayAlpha(${label}): ${OpenVR.OverlayError[err]}`,
+    );
+  }
+}
+
+function setOverlayCurvatureLogged(handle: bigint, curvature: number, label: string): void {
+  const err = state.overlayClass?.SetOverlayCurvature(handle, curvature);
+  if (err != null && err !== OpenVR.OverlayError.VROverlayError_None) {
+    LogChannel.log(
+      "actor",
+      `[displayOverlayHost] SetOverlayCurvature(${label}): ${OpenVR.OverlayError[err]}`,
     );
   }
 }
@@ -831,6 +859,7 @@ async function stopDesktopOverlay(): Promise<void> {
   state.lastWidthMeters = -1;
   state.lastHmd = null;
   state.lastAlpha = -1;
+  state.lastCurvature = -1;
   state.visible = false;
 }
 
@@ -990,6 +1019,7 @@ async function startDesktopOpenVrOverlay(config: StartDesktopPayload) {
   state.lastWidthMeters = -1;
   state.lastHmd = null;
   state.lastAlpha = -1;
+  state.lastCurvature = -1;
 
   await initGl(overlayKey);
   const createHandlePtr = P.BigUint64P<OpenVR.OverlayHandle>();

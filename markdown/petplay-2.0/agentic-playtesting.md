@@ -28,10 +28,9 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
 ### Current state (checked 2026-10-11)
 
 - `--novr` boots cleanly: actors come up, the XR loop runs at ~60 fps, and the REPL answers.
-- **`client capture` fails in `--novr`:** views get no frames because scene extraction only
-  runs inside the OpenVR overlay pump. See
-  [novr-desktop-view-receives-no-frames](../issues/novr-desktop-view-receives-no-frames/README.md).
-  This is the first blocker.
+- `client capture` works in `--novr` (fixed 2026-10-11, see
+  [novr-desktop-view-receives-no-frames](../issues/FIXED-novr-desktop-view-receives-no-frames/README.md)):
+  the PNG shows the scene, so UI layout can be checked by eye.
 - Desktop capture/display presentation is disabled in `--novr` (it's backed by an OpenVR
   overlay), so displays can't be tested without SteamVR.
 

@@ -18,6 +18,7 @@ import {
   reconcileWorkspaceOutputs,
   releaseHinge,
   resetSpatialNodeTransform,
+  setSpatialNodeCurvature,
   setSpatialNodeLocked,
   setSpatialNodeOpacity,
   setSpatialRootOrigin,
@@ -627,4 +628,15 @@ Deno.test("anchoring a child re-anchors its whole hierarchy; recenter and snappi
   const world = graph.nodes[spawned.id];
   graph = commitSpatialNodeTransformAndSnap(graph, world.id, slotPose);
   assert(graph.nodes[world.id].parentId == null, "no snapping across origins");
+});
+
+Deno.test("curvature is clamped, and flat clears the field", () => {
+  const graph = createInitialSpatialGraph();
+  assert(setSpatialNodeCurvature(graph, "display-1", 0) === graph, "flat is already the default");
+  const curved = setSpatialNodeCurvature(graph, "display-1", 0.2);
+  assert(curved.nodes["display-1"].curvature === 0.2, "curvature set");
+  assert(graph.nodes["display-1"].curvature === undefined, "original graph untouched");
+  assert(setSpatialNodeCurvature(curved, "display-1", 3).nodes["display-1"].curvature === 0.5, "cap");
+  assert(setSpatialNodeCurvature(curved, "display-1", NaN) === curved, "NaN ignored");
+  assert(!("curvature" in setSpatialNodeCurvature(curved, "display-1", -1).nodes["display-1"]), "flat");
 });
