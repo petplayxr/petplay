@@ -16,6 +16,7 @@ import type {
   WheelEvent as PenWheelEvent,
 } from "@pmndrs/pointer-events";
 import { useGrabboxOutlineVisible } from "./grabboxOutlineMode.ts";
+import { penHandler } from "./penEvents.ts";
 
 // deno-lint-ignore no-explicit-any
 extend(THREE as any);
@@ -209,7 +210,7 @@ export const GrabBox = forwardRef<THREE.Group, GrabBoxProps>(function GrabBox(
   const box = (
     <group
       ref={boxRef}
-      onWheel={handleWheel}
+      onWheel={penHandler(handleWheel)}
       onPointerOver={onSpatialFocus}
       onPointerEnter={handleHoverEnter}
       onPointerLeave={handleHoverLeave}

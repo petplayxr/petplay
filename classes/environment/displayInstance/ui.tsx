@@ -9,6 +9,7 @@ import { UiImage } from "../ui/image.tsx";
 import { DEFAULT_GRABBOX_LINE_COLOR, GrabBox } from "../grabbox.tsx";
 import { createMainControllerGate } from "../mainController.ts";
 import type { DisplayMouseButton, DisplayMouseSink } from "./mouse.ts";
+import { penHandler } from "../penEvents.ts";
 import type { HandleOptions, HandleStore } from "@pmndrs/handle";
 import {
   DEFAULT_DISPLAY_DEPTH,
@@ -264,10 +265,10 @@ export const DisplayInstanceFrame = forwardRef<THREE.Group, DisplayInstanceFrame
             <mesh
               renderOrder={-100}
               userData={{ displayInstanceRayHitSurface: true }}
-              onPointerMove={emitMove}
-              onPointerDown={(e: PenPointerEvent) => emitButton(e, true)}
-              onPointerUp={(e: PenPointerEvent) => emitButton(e, false)}
-              onPointerCancel={(e: PenPointerEvent) => emitButton(e, false, true)}
+              onPointerMove={penHandler(emitMove)}
+              onPointerDown={penHandler((e: PenPointerEvent) => emitButton(e, true))}
+              onPointerUp={penHandler((e: PenPointerEvent) => emitButton(e, false))}
+              onPointerCancel={penHandler((e: PenPointerEvent) => emitButton(e, false, true))}
               {...({
                 pointerEvents: "auto",
                 pointerEventsType: { allow: "ray" },

@@ -1,14 +1,14 @@
-export * from "npm:@react-three/fiber@10.0.0-alpha.2";
+export * from "npm:@react-three/fiber@10.0.0-alpha.5";
 
 import {
   useFrame as useFiberFrame,
   useStore,
-} from "npm:@react-three/fiber@10.0.0-alpha.2";
+} from "npm:@react-three/fiber@10.0.0-alpha.5";
 import type {
   FrameNextCallback,
   FrameNextState,
   UseFrameNextOptions,
-} from "npm:@react-three/fiber@10.0.0-alpha.2";
+} from "npm:@react-three/fiber@10.0.0-alpha.5";
 import { currentXRFrame } from "./xrFrameBridge.ts";
 
 /**

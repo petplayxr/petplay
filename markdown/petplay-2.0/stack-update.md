@@ -30,6 +30,18 @@ All of these come in through the `submodules/threewebxrwebgpudeno` workspace mem
 5. After each step, run the playtest smoke + an `overlay:perf` capture and compare to the
    pre-update baseline, so a regression has one clear cause.
 
+## Progress
+
+- 2026-10-11: steps 1–2 done. r3f is on `10.0.0-alpha.5`, three on `0.186.1`, `@types/three`
+  on 0.186. `three` now maps to `npm:three@0.186.1/*` instead of a jsdelivr URL. Before this,
+  two three copies were loaded: r3f's npm peer (it created the `Scene`) and the jsdelivr build
+  (everything else). Now there's one. A root `overrides` entry pins every npm consumer to the
+  same version, and meshline is mapped to its ESM build so it stops `require`-ing the CJS three.
+  `deno task check` went from 16 to 11 errors in our code (752 → 151 filtered). `overlay:perf`
+  r3f avg went from about 0.48 to 0.55 ms per frame (likely the v10 scheduler; look at it in
+  the perf pass).
+  Server RSS went from about 344 to 313 MB.
+
 ## Done when
 
 Everything is on current versions, the forks are rebased with their diff documented, and the

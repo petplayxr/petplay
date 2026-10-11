@@ -16,7 +16,7 @@ import {
 } from "@pmndrs/xr";
 import { useFrame } from "@react-three/fiber/webgpu";
 import React, { forwardRef, Suspense, useImperativeHandle, useMemo, useRef } from "react";
-import { MeshBasicMaterial, Object3D } from "three/webgpu";
+import { type ColorRepresentation, type Mesh, MeshBasicMaterial, Object3D } from "three/webgpu";
 import { HandPoker } from "./handPoker.tsx";
 import { useControllerLaserEnabled } from "./controllerLaserMode.ts";
 
@@ -27,7 +27,7 @@ function spreadable<T>(value: true | T | undefined): T | undefined {
   return value;
 }
 
-type HudRayColor = number | string | readonly [number, number, number];
+type HudRayColor = ColorRepresentation | readonly [number, number, number];
 
 type HudRayModelOptions = {
   renderOrder?: number;
@@ -88,10 +88,8 @@ function updateHudRayModel(
     material.color.set(color[0]!, color[1]!, color[2]!);
   } else if (color == null) {
     material.color.set(0xffffff);
-  } else if (typeof color === "number") {
-    material.color.setHex(color);
   } else {
-    material.color.set(String(color));
+    material.color.set(color as ColorRepresentation);
   }
   material.opacity = typeof options.opacity === "function"
     ? options.opacity(pointer)
@@ -116,7 +114,7 @@ const HudPointerRayModel = forwardRef<Object3D, HudRayModelOptions & { pointer: 
         }),
       [],
     );
-    const internalRef = useRef<Object3D>(null);
+    const internalRef = useRef<Mesh>(null);
     useImperativeHandle(ref, () => internalRef.current!);
     useFrame(() => {
       if (internalRef.current != null) {

@@ -86,7 +86,7 @@ function Backdrop() {
 }
 
 function UiStand() {
-  const groupRef = React.useRef<THREE.Object3D | null>(null);
+  const groupRef = React.useRef<THREE.Group | null>(null);
   const clock = useThree((s) => (s as unknown as { clock: THREE.Clock }).clock);
 
   useFrame(() => {

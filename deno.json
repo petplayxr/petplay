@@ -8,6 +8,9 @@
     "lib": ["deno.window", "deno.unstable", "dom", "dom.iterable"]
   },
   "nodeModulesDir": "auto",
+  // A single npm three for the app and every npm consumer (r3f peer, gainmap-js, iwer devui);
+  // keep in step with the `three` imports below.
+  "overrides": { "three": "0.186.1" },
   "imports": {
     "@gfx/dwm": "jsr:@gfx/dwm@^0.3.9",
     "@milly/namedpipe": "jsr:@milly/namedpipe@^1.1.0",
@@ -27,12 +30,12 @@
     "@types/react": "npm:@types/react@^19.2.14",
     "react-dom": "npm:react-dom@^19.2.5",
     //three.js
-    "three": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@30e9dd1b8ac9b9bec8f37a30a07bbed1dc63f392/build/three.webgpu.js",
-    "three/webgpu": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@30e9dd1b8ac9b9bec8f37a30a07bbed1dc63f392/build/three.webgpu.js",
-    "three/addons/": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@30e9dd1b8ac9b9bec8f37a30a07bbed1dc63f392/examples/jsm/",
-    "three/tsl": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@30e9dd1b8ac9b9bec8f37a30a07bbed1dc63f392/build/three.tsl.js",
-    "https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@30e9dd1b8ac9b9bec8f37a30a07bbed1dc63f392/",
-    "@types/three": "npm:@types/three@^0.182.0",
+    "three": "npm:three@0.186.1/webgpu",
+    "three/webgpu": "npm:three@0.186.1/webgpu",
+    "three/addons/": "npm:/three@0.186.1/examples/jsm/",
+    "three/tsl": "npm:three@0.186.1/tsl",
+    "https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/": "npm:/three@0.186.1/",
+    "@types/three": "npm:@types/three@^0.186.0",
     "@win32/km": "https://raw.githubusercontent.com/DjDeveloperr/deno_win32/refs/heads/main/api/UI/Input/KeyboardAndMouse.ts"
   },
   "tasks": {

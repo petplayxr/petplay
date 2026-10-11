@@ -79,6 +79,7 @@ import {
 } from "./spatialLayoutPersistence.ts";
 import { isDesktopMousePointerType } from "./spatialPointer.ts";
 import type { DirectOpenVrInputSource } from "../directOpenVrInputSource.ts";
+import { penHandler } from "./penEvents.ts";
 import {
   type SpatialContextAction,
   SpatialContextToolbar,
@@ -1463,7 +1464,7 @@ function SpatialControlView({
         interactionHull={false}
         grabbable={false}
       >
-        <mesh onClick={activate}>
+        <mesh onClick={penHandler(activate)}>
           <boxGeometry args={[0.11, 0.11, 0.035]} />
           <meshBasicNodeMaterial colorNode={TSL.color(color)} />
         </mesh>

@@ -1,10 +1,10 @@
-export * from "npm:@react-three/fiber@10.0.0-alpha.2/webgpu";
+export * from "npm:@react-three/fiber@10.0.0-alpha.5/webgpu";
 
-import { getScheduler, useStore } from "npm:@react-three/fiber@10.0.0-alpha.2/webgpu";
+import { getScheduler, useStore } from "npm:@react-three/fiber@10.0.0-alpha.5/webgpu";
 import type {
   FrameNextState,
   UseFrameNextOptions,
-} from "npm:@react-three/fiber@10.0.0-alpha.2/webgpu";
+} from "npm:@react-three/fiber@10.0.0-alpha.5/webgpu";
 import React from "react";
 import { currentXRFrame } from "./xrFrameBridge.ts";
 
