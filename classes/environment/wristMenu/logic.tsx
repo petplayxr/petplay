@@ -366,6 +366,8 @@ export function WristMenuPanel(
             interactionHullFilter={(_id, pointerType, pointerState) =>
               !isPointerBlockedByHost(pointerType, pointerState, hostHandedness, attached)}
             grabFilter={(e: PenPointerEvent) =>
+              // The trigger ray presses the menu's controls; only squeeze grabs.
+              e.pointerType !== "ray" &&
               e.pointerType !== "poker" &&
               !isPointerEventFromHostHand(e, hostHandedness, attached)}
           >
