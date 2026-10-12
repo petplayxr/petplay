@@ -86,10 +86,12 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   with a keyboard attached, the toolbar now sits above the window.
 - `tests/playtest/wrist.ts`: the clock matches the host, battery readings (published into the
   store) show on the wrist and one low-battery toast fires below 15%, the Settings toggles write
-  their settings, the Wrist menu page steps size, opacity and hand, and dragging the panel moves
-  it. Passes in about 40 s (2026-10-12). Its first run found
+  their settings, edit mode needs the windows shown and goes off with them, the Monitors page
+  reassigns the window's output and back (and adds a display for a free output), the Wrist menu
+  page steps size, opacity and hand, and dragging the panel moves it. Passes in about 60 s
+  (2026-10-12). Its first run found
   [wrist button clicks nudging the menu](../issues/FIXED-wrist-button-clicks-nudge-the-menu/README.md).
-  `deno task playtest all` runs all seven in about 3.5 minutes.
+  `deno task playtest all` runs all seven in about 4 minutes.
 - `--novr` / `dev:desktop` for runs without SteamVR, and the null driver toggle for runs with
   SteamVR but no headset.
 - `utils/headsetCheck.ts`: for what only a person in the headset can judge. `runHeadsetCheck(host)`

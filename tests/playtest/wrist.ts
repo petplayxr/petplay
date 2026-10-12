@@ -20,6 +20,14 @@ import {
 import { batteryStore } from "../../classes/environment/batteryStore.ts";
 import { toastQueue } from "../../classes/environment/toastStore.ts";
 import { getSetting, setSetting } from "../../classes/settings.ts";
+import { getToolEditMode } from "../../classes/environment/toolEditMode.ts";
+import { getWindowLayerVisible } from "../../classes/environment/windowLayerMode.ts";
+import {
+  editSpatialGraph,
+  getSpatialGraph,
+  getWorkspaceLayoutSnapshot,
+} from "../../classes/environment/workspaceLayoutStore.ts";
+import { deleteSpatialNode } from "../../classes/environment/spatialGraph.ts";
 import { aim, LEFT_ORIGIN, worldOf } from "./lib/steps.ts";
 
 function wristMenu(ctx: PlaytestContext): THREE.Object3D {
@@ -41,6 +49,17 @@ function wristTexts(ctx: PlaytestContext): string[] {
     if (typeof text === "string") texts.push(text);
   });
   return texts;
+}
+
+/** Clicks the wrist panel where `text` is drawn. */
+async function clickWristText(ctx: PlaytestContext, text: string) {
+  const object = wristText(ctx, text);
+  if (!ctx.expect(object, `the wrist shows "${text}"`)) return false;
+  const menu = wristMenu(ctx);
+  menu.updateWorldMatrix(true, true);
+  const local = menu.worldToLocal(worldOf(object!).position);
+  await ctx.t.clickWristMenu([local.x / 0.001, local.y / 0.001]);
+  return true;
 }
 
 const lowToasts = () =>
@@ -136,6 +155,87 @@ export const steps: PlaytestStep[] = [
           })`,
         );
       } finally {
+        await ctx.t.clickWristMenu(WRIST_SETTINGS.back);
+      }
+    },
+  },
+  {
+    name: "edit-mode",
+    run: async (ctx) => {
+      await ctx.t.faceWristMenu();
+      // Edit acts on the windows, so it needs them shown.
+      if (getWindowLayerVisible()) await ctx.t.clickWristMenu(WRIST_MAIN.layout);
+      await ctx.waitFor(() => !getWindowLayerVisible(), "the windows are hidden");
+      await ctx.t.clickWristMenu(WRIST_MAIN.edit);
+      await ctx.sleep(300);
+      ctx.expect(!getToolEditMode(), "edit stays off while the windows are hidden");
+      await ctx.t.clickWristMenu(WRIST_MAIN.layout);
+      await ctx.waitFor(getWindowLayerVisible, "the windows show");
+      const before = getToolEditMode();
+      await ctx.t.clickWristMenu(WRIST_MAIN.edit);
+      await ctx.waitFor(() => getToolEditMode() === !before, "the edit tile toggles edit mode");
+      await ctx.t.clickWristMenu(WRIST_MAIN.edit);
+      await ctx.waitFor(() => getToolEditMode() === before, "and toggles it back");
+      await ctx.t.clickWristMenu(WRIST_MAIN.edit);
+      await ctx.waitFor(getToolEditMode, "edit on again");
+      await ctx.t.clickWristMenu(WRIST_MAIN.layout);
+      await ctx.waitFor(() => !getToolEditMode(), "hiding the windows turns edit off with them");
+    },
+  },
+  {
+    name: "monitors",
+    run: async (ctx) => {
+      await ctx.t.faceWristMenu();
+      await ctx.t.clickWristMenu(WRIST_MAIN.settings);
+      await ctx.t.clickWristMenu(WRIST_SETTINGS.monitors);
+      const added: string[] = [];
+      try {
+        if (!await ctx.waitFor(() => wristText(ctx, "MONITORS"), "the Monitors page opens")) return;
+        const { outputs, displays } = getWorkspaceLayoutSnapshot();
+        ctx.note(`outputs: ${outputs.map((output) => output.name).join(", ")}`);
+        if (!ctx.expect(outputs.length > 0, "the host's outputs are listed")) return;
+        const root = displays.find((display) => display.root);
+        if (!ctx.expect(root, "a root display is listed")) return;
+        const node = () => getSpatialGraph()?.nodes[root!.id];
+        const original = node()?.workspaceOutputId;
+        const other = outputs.find((output) => output.id !== original);
+        if (other != null) {
+          if (!await clickWristText(ctx, other.name)) return;
+          await ctx.waitFor(
+            () => node()?.workspaceOutputId === other.id,
+            `picking ${other.name} assigns it to the root display`,
+          );
+          const back = outputs.find((output) => output.id === original);
+          if (back != null && await clickWristText(ctx, back.name)) {
+            await ctx.waitFor(
+              () => node()?.workspaceOutputId === original,
+              `and ${back.name} puts it back`,
+            );
+          }
+        } else {
+          ctx.note("one output only: nothing to reassign");
+        }
+        const free = getWorkspaceLayoutSnapshot().outputs.find((output) =>
+          output.assignedDisplayId == null
+        );
+        if (free != null) {
+          const before = new Set(Object.keys(getSpatialGraph()?.nodes ?? {}));
+          if (!await clickWristText(ctx, `Add ${free.name}`)) return;
+          await ctx.waitFor(
+            () =>
+              Object.values(getSpatialGraph()?.nodes ?? {}).some((candidate) =>
+                !before.has(candidate.id) && candidate.workspaceOutputId === free.id &&
+                added.push(candidate.id) > 0
+              ),
+            `Add ${free.name} adds a display showing it`,
+          );
+        } else {
+          ctx.note("every output is assigned: nothing to add");
+        }
+      } finally {
+        for (const id of added) editSpatialGraph((graph) => deleteSpatialNode(graph, id));
+        await ctx.t.faceWristMenu();
+        await clickWristText(ctx, "BACK");
         await ctx.t.clickWristMenu(WRIST_SETTINGS.back);
       }
     },

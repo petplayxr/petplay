@@ -76,6 +76,11 @@ export function useWorkspaceLayoutSnapshot(): WorkspaceLayoutSnapshot {
   );
 }
 
+/** The outputs and displays the wrist menu shows. For scripts and the REPL. */
+export function getWorkspaceLayoutSnapshot(): WorkspaceLayoutSnapshot {
+  return snapshot;
+}
+
 /** The live spatial graph, or null before the scene mounts. For scripts and the REPL. */
 export function getSpatialGraph(): SpatialGraph | null {
   return actions?.getGraph() ?? null;
