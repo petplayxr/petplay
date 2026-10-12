@@ -1,19 +1,11 @@
 import { useSyncExternalStore } from "react";
 import { LogChannel } from "@mommysgoodpuppy/logchannel";
-import type {
-  KeyboardLocale,
-  KeyboardLocaleId,
-  KeyboardLocaleKey,
-  LayoutFormat,
-} from "./types.ts";
+import type { KeyboardLocale, KeyboardLocaleId, KeyboardLocaleKey, LayoutFormat } from "./types.ts";
 import { US_KEYS } from "./usLayout.ts";
 import { FI_KEYS } from "./fiLayout.ts";
+import { getSetting, subscribeSettings } from "../../settings.ts";
 
-export type {
-  KeyboardLocale,
-  KeyboardLocaleId,
-  KeyboardLocaleKey,
-} from "./types.ts";
+export type { KeyboardLocale, KeyboardLocaleId, KeyboardLocaleKey } from "./types.ts";
 
 /** Ids must also exist in [KeyboardLocaleId](types.ts); this record owns their tables. */
 export const KEYBOARD_LOCALES: Record<KeyboardLocaleId, KeyboardLocale> = {
@@ -93,11 +85,7 @@ export function keyLegendFromScan(
   }
   const shifted = respectCapsLock ? mods.shift !== mods.caps : mods.shift;
   return {
-    main: mods.altGr === true && key.altGr != null
-      ? key.altGr
-      : shifted
-      ? key.shift
-      : key.base,
+    main: mods.altGr === true && key.altGr != null ? key.altGr : shifted ? key.shift : key.base,
     shiftLabel: key.shift,
     altGrLabel: key.altGr,
   };
@@ -108,7 +96,13 @@ export function scanCodeHexToNumber(hex: string): number {
 }
 
 /** Where the active locale id came from; surfaced for diagnostics. */
-export type KeyboardLocaleSource = "arg" | "env" | "host-layout" | "runtime" | "default";
+export type KeyboardLocaleSource =
+  | "setting"
+  | "arg"
+  | "env"
+  | "host-layout"
+  | "runtime"
+  | "default";
 
 /** Active locale and where it was chosen — for status readouts, not behaviour. */
 export function getKeyboardLocaleInfo(): {
@@ -118,7 +112,16 @@ export function getKeyboardLocaleInfo(): {
   return { id: getKeyboardLocaleId(), source: currentLocaleSource ?? "default" };
 }
 
+/**
+ * The `keyboardLocale` setting comes first: it's what the user picked in VR, so a launch flag
+ * must not undo it. Unset (null), or a locale this build has no table for, falls through to the
+ * flag, the env and the host layout.
+ */
 function requestedKeyboardLocaleId(): { id: string | null; source: KeyboardLocaleSource } {
+  const fromSetting = getSetting("keyboardLocale");
+  if (fromSetting != null && isKeyboardLocaleId(fromSetting)) {
+    return { id: fromSetting, source: "setting" };
+  }
   const fromArgs = Deno.args
     .find((arg) => arg.startsWith(LOCALE_ARG_PREFIX))
     ?.slice(LOCALE_ARG_PREFIX.length);
@@ -209,6 +212,21 @@ export function setKeyboardLocale(id: string): KeyboardLocale {
   }
   return next;
 }
+
+let lastLocaleSetting = getSetting("keyboardLocale");
+// The settings file loads after this module (the webxr actor's init), and the user can change it
+// any time: re-resolve whenever the setting moves.
+subscribeSettings(() => {
+  const next = getSetting("keyboardLocale");
+  if (next === lastLocaleSetting) return;
+  lastLocaleSetting = next;
+  const before = currentLocaleId;
+  currentLocaleId = null;
+  if (getKeyboardLocaleId() === before) return;
+  for (const listener of [...localeListeners]) {
+    listener();
+  }
+});
 
 export function subscribeKeyboardLocale(listener: () => void): () => void {
   localeListeners.add(listener);

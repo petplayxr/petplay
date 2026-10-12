@@ -8,6 +8,7 @@ import {
   setKeyboardLocale,
   subscribeKeyboardLocale,
 } from "./keyboardLocale.ts";
+import { getSetting, setSetting } from "../../settings.ts";
 import { getMainGroupRows, resolveLabel, type RowItem } from "./keyboardLayout.ts";
 import { getDefaultKeyboardLayoutSync } from "./defaultLayoutPreload.ts";
 import type { KeyboardLocaleId, ModifierSnapshot, NormalizedKeyFace } from "./types.ts";
@@ -217,5 +218,29 @@ Deno.test("setKeyboardLocale notifies subscribers once per change and validates 
     unsubscribe();
   } finally {
     setKeyboardLocale(initial);
+  }
+});
+
+Deno.test("the keyboardLocale setting picks the locale, and null goes back to the launch choice", () => {
+  const launch = getKeyboardLocaleId();
+  const other: KeyboardLocaleId = launch === "fi" ? "us" : "fi";
+  const before = getSetting("keyboardLocale");
+  try {
+    let notifications = 0;
+    const unsubscribe = subscribeKeyboardLocale(() => {
+      notifications += 1;
+    });
+    setSetting("keyboardLocale", other);
+    assertEquals(getKeyboardLocaleId(), other, "the setting wins");
+    assertEquals(getKeyboardLocaleInfo().source, "setting", "the source says so");
+    assertEquals(notifications, 1, "one change, one notification");
+    setSetting("keyboardLocale", "de");
+    assertEquals(getKeyboardLocaleId(), launch, "a locale without a table falls through");
+    setSetting("keyboardLocale", null);
+    assertEquals(getKeyboardLocaleId(), launch, "unset follows the launch choice again");
+    assertEquals(notifications, 2, "only real changes notify");
+    unsubscribe();
+  } finally {
+    setSetting("keyboardLocale", before);
   }
 });

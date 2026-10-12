@@ -18,8 +18,9 @@ None of this is novel. It's the stuff whose absence makes the app feel like a de
 keyboard locale; persisted, unknown keys kept). The `webxr` actor loads it on init and answers
 `GETSETTINGS` / `SETSETTING`. The wrist settings tile opens a Settings page with toggles and the
 Monitors list. The laser toggle hides the beam only: turning the ray pointer off too would leave no
-way to point at the page and undo it. `keyboardLocale` is in the schema but not wired to the
-keyboard yet. Scripted check: `utils/playtest.ts`.
+way to point at the page and undo it. `keyboardLocale` picks the keyboard's key legends: the keyboard's
+own settings have a "Key legends" row (Auto, or one locale), and Auto goes back to the launch
+choice (`--keyboard-locale`, env, host layout). Scripted check: `utils/playtest.ts`.
 
 ## First run
 

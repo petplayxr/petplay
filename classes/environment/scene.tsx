@@ -23,6 +23,7 @@ import {
 import type { DisplayMouseLogicEvent, DisplayMouseSink } from "./displayInstance/mouse.ts";
 import { KeyboardPanel, windowsSystemKeyboardSink } from "./keyboard/keyboard.tsx";
 import type { KeyboardLogicEvent, KeyboardSink } from "./keyboard/types.ts";
+import { KEYBOARD_LOCALES, useKeyboardLocale } from "./keyboard/keyboardLocale.ts";
 import { PostMan } from "../../submodules/stageforge/mod.ts";
 import { SpatialAudioProvider } from "./spatialAudio.tsx";
 import { setSetting, useSetting } from "../settings.ts";
@@ -929,6 +930,29 @@ function TypingSoundSettingsSection() {
   );
 }
 
+/** Key legends: Auto follows `--keyboard-locale` / the host layout, the rest pin a locale. */
+function KeyboardLocaleSettingsSection() {
+  const chosen = useSetting("keyboardLocale");
+  const active = useKeyboardLocale();
+  return (
+    <SpatialSettingsSection label="Key legends">
+      <SpatialSettingsButton
+        label="Auto"
+        selected={chosen == null}
+        onClick={() => setSetting("keyboardLocale", null)}
+      />
+      {Object.values(KEYBOARD_LOCALES).map((locale) => (
+        <SpatialSettingsButton
+          key={locale.id}
+          label={locale.label}
+          selected={chosen != null && active.id === locale.id}
+          onClick={() => setSetting("keyboardLocale", locale.id)}
+        />
+      ))}
+    </SpatialSettingsSection>
+  );
+}
+
 /** Curvature as OpenVR's fraction of a full cylinder; 0.2 on a default display is a ~1.4 m radius. */
 const CURVATURE_STEPS = [0, 0.1, 0.2, 0.3] as const;
 
@@ -1447,6 +1471,7 @@ function KeyboardSpatialNodeView({
                 <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
                 <OpacitySettingsSection node={node} setGraph={setGraph} />
                 <TypingSoundSettingsSection />
+                <KeyboardLocaleSettingsSection />
               </>
             }
           />

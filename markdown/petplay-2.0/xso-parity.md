@@ -67,7 +67,8 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
 
 ## Keyboard
 
-- [~] **Layout loading + locale switching** (`--keyboard-locale`)
+- [x] **Layout loading + locale switching** (`--keyboard-locale`, or "Key legends" in the
+  keyboard's settings, saved as `keyboardLocale`)
 - [~] Sticky / toggle modifiers
 - [~] **Keyboard pin + opacity**: pin is the toolbar Lock; opacity uses the same per-node pills as
   windows (the depth occluder is dropped below 100% so the desktop shows through)
