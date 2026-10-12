@@ -11,6 +11,7 @@ import * as THREE from "three/webgpu";
 import { extend, type ThreeToJSXElements, useFrame } from "@react-three/fiber/webgpu";
 import { Handle } from "@react-three/handle";
 import type { HandleOptions, HandleStore } from "@pmndrs/handle";
+import { pushPullGrab } from "./pushPull.ts";
 import type {
   PointerEvent as PenPointerEvent,
   WheelEvent as PenWheelEvent,
@@ -200,7 +201,7 @@ export const GrabBox = forwardRef<THREE.Group, GrabBoxProps>(function GrabBox(
   const handleWheel = useCallback((event: PenWheelEvent) => {
     const store = handleStoreRef.current;
     const notches = -event.deltaY / 100;
-    if (store?.translateAlongPointerRay(event.pointerId, notches * 0.08) === true) {
+    if (store != null && pushPullGrab(store, event.pointerId, notches * 0.08)) {
       event.stopPropagation();
     }
   }, []);

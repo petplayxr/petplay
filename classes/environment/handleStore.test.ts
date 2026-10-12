@@ -1,5 +1,5 @@
 import "../../submodules/threewebxrwebgpudeno/submodules/xr/packages/pointer-events/src/pointer.ts";
-import { HandleStore, type HandleOptions } from "@pmndrs/handle";
+import { type HandleOptions, HandleStore } from "@pmndrs/handle";
 import * as THREE from "three/webgpu";
 import type { PointerEvent as PenPointerEvent } from "@pmndrs/pointer-events";
 
@@ -71,35 +71,6 @@ function hingeOptions(projectRays = false): HandleOptions<unknown> {
     projectRays,
   };
 }
-
-Deno.test("push/pull is refused on a rotation-only handle", () => {
-  const target = transformedObject();
-  const store = new HandleStore(target, hingeOptions);
-  store.handlers.onPointerDown(pointerEvent(new THREE.Object3D()));
-  const pointer = store.inputState.get(42);
-  assert(pointer != null, "the grab should register its pointer");
-  const before = pointer.initialPointerWorldPoint.clone();
-
-  assert(
-    store.translateAlongPointerRay(42, 0.5) === false,
-    "a handle whose translation is rotation must refuse push/pull",
-  );
-  assert(
-    pointer.initialPointerWorldPoint.equals(before),
-    "refusing push/pull must not shift the pointer baseline the rotation is derived from",
-  );
-});
-
-Deno.test("push/pull still moves a freely translating handle", () => {
-  const target = transformedObject();
-  const store = new HandleStore(target);
-  store.handlers.onPointerDown(pointerEvent(new THREE.Object3D()));
-  assert(
-    store.translateAlongPointerRay(42, 0.5) === true,
-    "a free handle should still accept push/pull",
-  );
-  assert(target.position.length() > 0.1, "the free handle should have moved along the ray");
-});
 
 Deno.test("an absolute axis angle owns the rotation while the hand is moving", () => {
   const handle = new THREE.Object3D();
@@ -219,7 +190,10 @@ Deno.test("one hand scales a hinge by its radius, but only when the grab is at t
     Math.abs(centred.scale - 1.5) < 0.01,
     `pulling to 1.5x the radius should scale by 1.5 (got ${centred.scale})`,
   );
-  assert(Math.abs(centred.turn) < 0.01, `a radial pull must not turn the hinge (got ${centred.turn})`);
+  assert(
+    Math.abs(centred.turn) < 0.01,
+    `a radial pull must not turn the hinge (got ${centred.turn})`,
+  );
 
   const offCentre = scaledFor(0.3, 0);
   assert(
@@ -247,11 +221,18 @@ Deno.test("a second pointer pinch-scales a constrained-rotation handle", () => {
   store.handlers.onPointerDown(pointerEvent(handle, { pointerId: 1, point: [0.2, 0, 0] }));
   store.handlers.onPointerDown(pointerEvent(handle, { pointerId: 2, point: [0.8, 0, 0] }));
   store.update(1, true);
-  assert(Math.abs(target.scale.x - 1) < 0.001, `a two-pointer grab starts at scale 1 (${target.scale.x})`);
+  assert(
+    Math.abs(target.scale.x - 1) < 0.001,
+    `a two-pointer grab starts at scale 1 (${target.scale.x})`,
+  );
 
   // Separation 0.6 -> 1.2: a uniform pinch should double the element.
-  store.handlers.onPointerMove(pointerEvent(handle, { type: "pointermove", pointerId: 1, point: [0.1, 0, 0] }));
-  store.handlers.onPointerMove(pointerEvent(handle, { type: "pointermove", pointerId: 2, point: [1.3, 0, 0] }));
+  store.handlers.onPointerMove(
+    pointerEvent(handle, { type: "pointermove", pointerId: 1, point: [0.1, 0, 0] }),
+  );
+  store.handlers.onPointerMove(
+    pointerEvent(handle, { type: "pointermove", pointerId: 2, point: [1.3, 0, 0] }),
+  );
   store.update(2, true);
   assert(
     Math.abs(target.scale.x - 2) < 0.05,

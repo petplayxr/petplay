@@ -39,6 +39,7 @@ import { subscribeLayoutRecenter, useWindowLayerVisible } from "./windowLayerMod
 import { setGrabboxOutlineVisible, useGrabboxOutlineVisible } from "./grabboxOutlineMode.ts";
 import { useHingedOneHandScaleMaxGrabOffset } from "./spatialManipulationMode.ts";
 import { GrabBox } from "./grabbox.tsx";
+import { pushPullGrab } from "./pushPull.ts";
 import { consumeOneHandScaleEnd, withOneHandScale } from "./oneHandScale.ts";
 import {
   assignWorkspaceOutput,
@@ -472,7 +473,7 @@ function CommonOverlayChords({
         }
         if (axis !== 0) {
           const step = axis * JOYSTICK_PUSH_PULL_METERS_PER_SECOND * delta;
-          closestStore.translateAlongPointerRay(closestPointerId, step);
+          pushPullGrab(closestStore, closestPointerId, step);
         }
         return;
       }
