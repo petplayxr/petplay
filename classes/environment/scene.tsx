@@ -1205,7 +1205,7 @@ function DisplaySpatialNodeView({
         {selectedNodeId === node.id && (
           <SpatialContextToolbar
             title={node.workspaceOutputName ?? `Display ${node.ordinal}`}
-            position={[0, -DEFAULT_DISPLAY_HEIGHT * 0.5 - 0.085, DEFAULT_DISPLAY_DEPTH]}
+            position={[0, -DEFAULT_DISPLAY_HEIGHT * 0.5, DEFAULT_DISPLAY_DEPTH]}
             actions={contextActions}
             settings={
               <>
@@ -1379,7 +1379,7 @@ function KeyboardSpatialNodeView({
         {selectedNodeId === node.id && (
           <SpatialContextToolbar
             title="Keyboard"
-            position={[0, -node.snapSource.size[1] * 0.5 - 0.085, node.snapSource.size[2]]}
+            position={[0, -node.snapSource.size[1] * 0.5, node.snapSource.size[2]]}
             actions={contextActions}
             settings={
               <>

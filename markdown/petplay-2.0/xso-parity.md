@@ -35,7 +35,9 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
   saved; playtested in `--novr`. Not named yet
 - [ ] **Window list with live previews and monitor picker**
 - [ ] Individual app-window capture (not just monitors/workspace crops)
-- [ ] Toolbar follows its window edge; spawn-in animation
+- [x] Toolbar follows its window edge; spawn-in animation. It hangs 15 mm below the bottom edge
+  at a constant world size however far the window is scaled, grows downward when settings
+  open, and pops in over 150 ms.
 - [ ] Capture backend choice (Windows)
 
 ## Wrist

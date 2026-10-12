@@ -12,7 +12,10 @@
  * labels are. That is the rule that keeps an otherwise rigid system from
  * reading as loose.
  */
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
+// @deno-types="@types/three/webgpu"
+import * as THREE from "three/webgpu";
+import { useFrame } from "@react-three/fiber/webgpu";
 import type { AllowedPointerEventsType } from "@pmndrs/pointer-events";
 import { Container } from "../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
 import { Text } from "./ui/text.tsx";
@@ -57,7 +60,9 @@ export type SpatialContextToolbarProps = {
   title: string;
   actions: SpatialContextAction[];
   settings?: React.ReactNode;
+  /** The middle of the node's bottom edge, in the node's space. The card hangs below it. */
   position: [number, number, number];
+  /** World size, independent of how far the node is scaled. */
   scale?: number;
   pointerEventsType?: AllowedPointerEventsType;
 };
@@ -124,6 +129,11 @@ function ActionTile(
   );
 }
 
+/** Metres between the node's bottom edge and the top of the card. */
+const EDGE_GAP = 0.015;
+const SPAWN_SECONDS = 0.15;
+const SPAWN_FROM = 0.8;
+
 export function SpatialContextToolbar({
   title,
   actions,
@@ -140,10 +150,29 @@ export function SpatialContextToolbar({
   const tileCount = actions.length + (settings != null ? 1 : 0);
   const units = Math.max(2, tileCount);
 
+  // The card is a control, not part of the window: it stays the same size and the same distance
+  // below the edge however far the window is scaled, so counter the parent's world scale each
+  // frame. It also pops in, so a selection change reads as the card arriving, not blinking on.
+  const group = useRef<THREE.Group>(null);
+  const scratch = useRef({ parentScale: new THREE.Vector3(), age: 0 });
+  useFrame((_state, delta) => {
+    const node = group.current;
+    if (node?.parent == null) return;
+    const s = scratch.current;
+    s.age += delta;
+    const t = Math.min(1, s.age / SPAWN_SECONDS);
+    const pop = SPAWN_FROM + (1 - SPAWN_FROM) * (1 - (1 - t) ** 3);
+    node.parent.getWorldScale(s.parentScale);
+    const k = scale * pop;
+    node.scale.set(k / s.parentScale.x, k / s.parentScale.y, k / s.parentScale.z);
+    node.position.set(position[0], position[1] - EDGE_GAP / s.parentScale.y, position[2]);
+  });
+
   return (
     <group
+      ref={group}
       position={position}
-      scale={[scale, scale, scale]}
+      scale={[scale * SPAWN_FROM, scale * SPAWN_FROM, scale * SPAWN_FROM]}
       userData={{ spatialContextToolbar: true }}
       {...({ pointerEventsOrder: 20 } as Record<string, unknown>)}
     >
@@ -154,8 +183,10 @@ export function SpatialContextToolbar({
         top-level element on the same terms as the wrist panel's tiles.
       */
       }
+      {/* Top-anchored, so opening settings grows the card down, away from the window. */}
       <Container
         pixelSize={0.001}
+        anchorY="top"
         width={unitSpan(units) + GAP * 2}
         padding={GAP}
         gap={GAP}
