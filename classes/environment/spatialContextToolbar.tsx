@@ -154,8 +154,6 @@ function ActionTile(
 
 /** Metres between the node's edge and the near side of the card. */
 const EDGE_GAP = 0.015;
-const SPAWN_SECONDS = 0.15;
-const SPAWN_FROM = 0.8;
 
 export function SpatialContextToolbar({
   title,
@@ -190,19 +188,16 @@ export function SpatialContextToolbar({
 
   // The card is a control, not part of the window: it stays the same size and the same distance
   // below the edge however far the window is scaled, so counter the parent's world scale each
-  // frame. It also pops in, so a selection change reads as the card arriving, not blinking on.
+  // frame. It appears at full size: a scale-in pop read as motion and was nauseating in VR.
   const group = useRef<THREE.Group>(null);
   const settingsGroup = useRef<THREE.Group>(null);
-  const scratch = useRef({ parentScale: new THREE.Vector3(), age: 0 });
-  useFrame((_state, delta) => {
+  const scratch = useRef({ parentScale: new THREE.Vector3() });
+  useFrame(() => {
     const node = group.current;
     if (node?.parent == null) return;
     const s = scratch.current;
-    s.age += delta;
-    const t = Math.min(1, s.age / SPAWN_SECONDS);
-    const pop = SPAWN_FROM + (1 - SPAWN_FROM) * (1 - (1 - t) ** 3);
     node.parent.getWorldScale(s.parentScale);
-    const k = scale * pop;
+    const k = scale;
     node.scale.set(k / s.parentScale.x, k / s.parentScale.y, k / s.parentScale.z);
     const gap = (side === "above" ? EDGE_GAP : -EDGE_GAP) / s.parentScale.y;
     node.position.set(position[0], position[1] + gap, position[2]);
@@ -233,7 +228,7 @@ export function SpatialContextToolbar({
     <group
       ref={group}
       position={position}
-      scale={[scale * SPAWN_FROM, scale * SPAWN_FROM, scale * SPAWN_FROM]}
+      scale={[scale, scale, scale]}
       userData={{ spatialContextToolbar: true }}
       {...({ pointerEventsOrder: 20 } as Record<string, unknown>)}
     >
