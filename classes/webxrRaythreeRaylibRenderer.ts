@@ -923,11 +923,13 @@ export class WebXRRaythreeRaylibRenderer {
       entry.count += 1;
       rootOrder.set(panel.rootIndex, entry);
     }
-    for (const text of texts) {
-      // A root may legitimately have text and no panels.
-      if (rootOrder.has(text.rootIndex)) continue;
-      rootOrder.set(text.rootIndex, {
-        depth: this.getWorldMatrixViewDepth(text.worldMatrix),
+    // A root may legitimately have text or images and no panels (the display
+    // backplate's logo sits in a transparent container); left out here, it
+    // would never be drawn at all.
+    for (const item of [...texts, ...(ui.images ?? [])]) {
+      if (rootOrder.has(item.rootIndex)) continue;
+      rootOrder.set(item.rootIndex, {
+        depth: this.getWorldMatrixViewDepth(item.worldMatrix),
         count: 1,
       });
     }

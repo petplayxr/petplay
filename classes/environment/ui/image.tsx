@@ -41,8 +41,17 @@ export type UiImageProps = {
 };
 
 export function UiImage(
-  { texture, width, height, radius = 0, fit = "cover", focus = [0.5, 0.5], opacity = 1, positionLeft = 0, positionTop = 0 }:
-    UiImageProps,
+  {
+    texture,
+    width,
+    height,
+    radius = 0,
+    fit = "cover",
+    focus = [0.5, 0.5],
+    opacity = 1,
+    positionLeft = 0,
+    positionTop = 0,
+  }: UiImageProps,
 ) {
   const userData = useMemo(() => {
     const r = clampRadius(radius, width, height);
@@ -55,7 +64,10 @@ export function UiImage(
       focus,
       opacity,
     };
-    return { raythreeUiImage: data };
+    // `bridge: skip` keeps raythree from extracting the quad as a scene mesh:
+    // outside a skipped subtree (the wrist menu has one, the display backplate
+    // does not) it would draw as a plain white square over the image.
+    return { raythreeUiImage: data, bridge: { kind: "skip" } };
   }, [texture, width, height, radius, fit, focus[0], focus[1], opacity]);
 
   // `Content` measures its child's bounding box and scales it to fill the
@@ -65,7 +77,7 @@ export function UiImage(
   // a meaningless scale instead (observed: 120000).
   //
   // Nothing here is drawn by three — the mesh exists to be measured and to
-  // carry the metadata the UI snapshot collects.
+  // carry the metadata the UI snapshot collects, so its material is invisible.
   // Absolutely positioned: a fill covers its parent rather than taking a slot
   // in the parent's flex flow, so siblings lay out as if it were not there.
   return (
@@ -79,6 +91,7 @@ export function UiImage(
     >
       <mesh userData={userData} raycast={() => null}>
         <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial visible={false} />
       </mesh>
     </Content>
   );
