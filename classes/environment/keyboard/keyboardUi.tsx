@@ -62,6 +62,8 @@ const POKER_KEY_PRESS_SPHERE_Z = -0.028;
 const POKER_KEY_PRESS_SPHERE_MIN_RADIUS = 0.018;
 const POKER_KEY_PRESS_SPHERE_RADIUS_FACTOR = 0.36;
 const POKER_KEY_PRESS_OVERLAP_THRESHOLD = 0.005;
+/** `PETPLAY_POKER_DEBUG=1` draws the H key's poke hit volume and press state. */
+const SHOW_POKER_DEBUG = Deno.env.get("PETPLAY_POKER_DEBUG") === "1";
 const POKER_DEBUG_KEY_SCAN_CODE = "23";
 const POKER_DEBUG_RENDER_ORDER = 31000;
 
@@ -80,7 +82,7 @@ type PokerKeyDebugVisuals = {
 };
 
 function keyHasPokerDebug(face: NormalizedKeyFace): boolean {
-  return face.scanCodeHex.toUpperCase() === POKER_DEBUG_KEY_SCAN_CODE;
+  return SHOW_POKER_DEBUG && face.scanCodeHex.toUpperCase() === POKER_DEBUG_KEY_SCAN_CODE;
 }
 
 function setDebugMaterialState(
@@ -332,6 +334,9 @@ export const KeyCapChrome = React.memo(function KeyCapChrome(
       : null;
     if (debugVisuals != null) {
       debugVisuals.group.matrixAutoUpdate = false;
+      // It lives at the scene root and only follows the key from its first
+      // spherecast; until then it would sit at the world origin.
+      debugVisuals.group.visible = false;
       scene.add(debugVisuals.group);
     }
     const inverse = new THREE.Matrix4();
@@ -372,6 +377,7 @@ export const KeyCapChrome = React.memo(function KeyCapChrome(
         debugVisuals.group.matrix.copy(object.matrixWorld);
         debugVisuals.group.matrixWorld.copy(object.matrixWorld);
         debugVisuals.group.matrixWorldNeedsUpdate = true;
+        debugVisuals.group.visible = true;
         setDebugMaterialState(debugVisuals.statusMaterial, pressReady, atThreshold);
         debugVisuals.sphere.visible = true;
         debugVisuals.sphere.position.copy(localCenter);
