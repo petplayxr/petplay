@@ -91,6 +91,7 @@ import { penHandler } from "./penEvents.ts";
 import { ToastOverlay } from "./toastOverlay.tsx";
 import { pushToast } from "./toastStore.ts";
 import { startXsoNotificationReceiver } from "./xsoNotificationReceiver.ts";
+import { startDesktopNotificationFollow } from "./desktopNotifications.ts";
 import { startMediaFollow } from "./mediaStore.ts";
 import {
   getHeadObject,
@@ -1882,6 +1883,7 @@ export function WebXRScene(
   React.useEffect(() => {
     const follow = new AbortController();
     startMediaFollow(follow.signal);
+    startDesktopNotificationFollow(follow.signal);
     return () => follow.abort();
   }, []);
 

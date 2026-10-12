@@ -85,6 +85,10 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
   PetPlay unchanged. `xsoNotificationReceiver.ts`: legacy UDP 42069 and WebSocket 42070
   `SendNotification`, verified with an external sender in `--novr`. Notifications only; no icons
   yet, and none of the API's other commands
+- [x] **Desktop notifications mirrored as toasts** (Linux): `desktopNotifications.ts` watches
+  `Notify` calls with `busctl --user monitor --json`, so the desktop daemon keeps its own popup.
+  Markup is stripped, critical urgency takes the warning tone, updates replace their toast. Off
+  with the `desktopNotifications` setting. Verified in `--novr` with a `gdbus` sender
 
 ## Input / feedback
 

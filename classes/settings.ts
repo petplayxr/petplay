@@ -65,6 +65,11 @@ export const SETTINGS_SCHEMA = {
       "Where the wrist menu was dragged to, relative to its default mount; null is the default",
     valid: (value: unknown): value is WristOffset | null => value === null || isWristOffset(value),
   } satisfies SettingSpec<WristOffset | null>,
+  desktopNotifications: {
+    default: true as boolean,
+    label: "Show desktop notifications in the headset as toasts (Linux)",
+    valid: isBoolean,
+  } satisfies SettingSpec<boolean>,
   typingSounds: {
     default: true as boolean,
     label: "Click sounds from the keyboard, played where the key is",
