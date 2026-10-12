@@ -8,7 +8,7 @@ import React, {
 } from "react";
 // @deno-types="@types/three/webgpu"
 import * as THREE from "three/webgpu";
-import { extend, type ThreeToJSXElements } from "@react-three/fiber/webgpu";
+import { extend, type ThreeToJSXElements, useFrame } from "@react-three/fiber/webgpu";
 import { Handle } from "@react-three/handle";
 import type { HandleOptions, HandleStore } from "@pmndrs/handle";
 import type {
@@ -70,6 +70,29 @@ export type GrabBoxProps = {
 };
 
 /**
+ * Ends a grab whose pointer no longer holds capture of the handle.
+ *
+ * A pointer can drop its capture without emitting `pointerup` or
+ * `pointercancel`: when it is disabled (`CombinedPointer` swapping the grip
+ * sphere and the grab ray, a controller losing its input source), when it
+ * exits, or when the squeeze is released while it is disabled. The
+ * `HandleStore` never hears about it and keeps the pointer as grabbing, and
+ * because it only checks its own bookkeeping, every later hover of that
+ * pointer over the handle moves the object again.
+ *
+ * @returns whether a stale grab was cancelled
+ */
+export function cancelStaleHandleGrab(store: HandleStore<unknown>): boolean {
+  for (const [pointerId, object] of store.capturedObjects) {
+    if (!object.hasPointerCapture(pointerId)) {
+      store.cancel();
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Bar cross-section in meters. The headset sees these bars at full eye
  * resolution, where 2 mm already reads as a clear line; the desktop preview
  * only has 1080p over the same FOV, so it is worth capturing larger to inspect
@@ -88,7 +111,12 @@ export const GRABBOX_CHROME_THICKNESS = 0.002;
  * uikit pass that draws the keys and panels over everything before it.
  */
 function GrabBoxFrame(
-  { width, height, depth, color }: { width: number; height: number; depth: number; color: THREE.Color },
+  { width, height, depth, color }: {
+    width: number;
+    height: number;
+    depth: number;
+    color: THREE.Color;
+  },
 ) {
   const t = GRABBOX_CHROME_THICKNESS;
   const hx = width / 2;
@@ -177,6 +205,10 @@ export const GrabBox = forwardRef<THREE.Group, GrabBoxProps>(function GrabBox(
     }
   }, []);
   const color = useMemo(() => new THREE.Color(lineColor), [lineColor]);
+  useFrame(() => {
+    const store = handleStoreRef.current;
+    if (store != null && store.capturedObjects.size > 0) cancelStaleHandleGrab(store);
+  });
 
   const shellPointerMods = !shellRayPickable
     ? ({

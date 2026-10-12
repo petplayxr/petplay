@@ -2,6 +2,7 @@ import "../../submodules/threewebxrwebgpudeno/submodules/xr/packages/pointer-eve
 import { HandleStore } from "@pmndrs/handle";
 import * as THREE from "three/webgpu";
 import type { PointerEvent as PenPointerEvent } from "@pmndrs/pointer-events";
+import { cancelStaleHandleGrab } from "./grabbox.tsx";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -61,4 +62,21 @@ Deno.test("duplicate grab pointers from one hand cannot create false multitouch"
     "the actual other hand should still enable multitouch",
   );
   store.cancel();
+});
+
+Deno.test("a grab whose pointer silently lost capture is cancelled", () => {
+  const target = new THREE.Object3D();
+  const handle = new THREE.Object3D();
+  let captured = true;
+  handle.hasPointerCapture = () => captured;
+  const store = new HandleStore(target);
+  store.handlers.onPointerDown(pointerEvent("pointerdown", handle));
+  assert(!cancelStaleHandleGrab(store), "a held grab must survive the check");
+  assert(store.inputState.size === 1, "the held grab should still be active");
+
+  // The pointer was disabled mid-grab, so no pointerup will ever reach the store.
+  captured = false;
+  assert(cancelStaleHandleGrab(store), "the stale grab should be detected");
+  assert(Number(store.inputState.size) === 0, "the stale grab should end");
+  assert(Number(store.capturedObjects.size) === 0, "the stale capture should be dropped");
 });
