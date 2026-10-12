@@ -73,7 +73,12 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   drawing blank at a huge misplaced scale; they now come from the icon atlas
   (`resources/fonts/material-icons/add-glyphs.py` adds glyphs to it). The Finnish letters are
   still open: [finnish-keycap-letters-render-blank](../issues/finnish-keycap-letters-render-blank/README.md).
-  `deno task playtest all` runs all four in about 2 minutes.
+- `tests/playtest/toasts.ts`: a desktop notification (fed to the sink as a `busctl` line, so nothing
+  goes on the real session bus) shows below the line of sight, an update replaces its toast, a
+  burst queues past three, long text wraps inside the card, the stack follows the head, a laser
+  grab passes through it to the window behind, and an XSO UDP datagram shows with its tone (sent
+  only when the test server holds the XSO port). Passes in about 20 s (2026-10-12).
+  `deno task playtest all` runs all five in about 2.5 minutes.
 - `--novr` / `dev:desktop` for runs without SteamVR, and the null driver toggle for runs with
   SteamVR but no headset.
 - `utils/headsetCheck.ts`: for what only a person in the headset can judge. `runHeadsetCheck(host)`
