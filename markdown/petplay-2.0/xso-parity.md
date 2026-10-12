@@ -92,7 +92,10 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
 - [~] **Recenter action**: wrist tile moves the whole layout (yaw only) in front of the head;
   verified in `--novr`, not yet in a headset
 - [ ] SteamVR input bindings for our actions, user-rebindable
-- [ ] Tooltips
+- [x] Tooltips: icon-only controls name themselves while hovered, in a place that already holds
+  text. Wrist tiles and media buttons use the footer (in place of the status line), and toolbar
+  actions use the card's title pill. Disabled controls say why ("Recenter (show windows
+  first)"). Checked in `--novr`
 
 ## Misc
 

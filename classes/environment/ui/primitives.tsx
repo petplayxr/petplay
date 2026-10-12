@@ -22,7 +22,7 @@
  * past its pill instead. Pills are sized in whole slots regardless, so the grid
  * still holds; only the ellipsis behaviour is missing.
  */
-import React, { useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { AllowedPointerEventsType } from "@pmndrs/pointer-events";
 import { Container } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
 import { Text } from "./text.tsx";
@@ -59,14 +59,60 @@ import { pulseForPointerEvent } from "../haptics.ts";
 const FULL_ROUND = 999;
 
 /** Hover handlers for a button: highlight state plus a haptic tick on the pointing hand. */
-function hoverHandlers(enabled: boolean, setHovered: (hovered: boolean) => void) {
-  if (!enabled) return { onPointerOver: undefined, onPointerOut: undefined };
+/**
+ * Tooltips. Icon-only controls name themselves in the shell's footer while hovered, in place of
+ * the status line, rather than in a floating label that could land under the other hand's laser.
+ * Each hover takes an owner token, so a control that unmounts while hovered clears only its own.
+ */
+type TooltipStore = {
+  tooltip: string | null;
+  show(owner: object, text: string): void;
+  hide(owner: object): void;
+};
+const TooltipContext = createContext<TooltipStore | null>(null);
+
+function useTooltipStore(): TooltipStore {
+  const [state, setState] = useState<{ owner: object; text: string } | null>(null);
+  return {
+    tooltip: state?.text ?? null,
+    show: (owner, text) => setState({ owner, text }),
+    hide: (owner) => setState((current) => current?.owner === owner ? null : current),
+  };
+}
+
+/**
+ * Pointer handlers for a control: hover highlight and haptic only while `enabled`, the tooltip
+ * always, so a disabled control still says what it is.
+ */
+function useHoverHandlers(
+  enabled: boolean,
+  setHovered: (hovered: boolean) => void,
+  tooltip?: string,
+) {
+  const store = useContext(TooltipContext);
+  const owner = useRef({}).current;
+  const storeRef = useRef(store);
+  storeRef.current = store;
+  const hoveredRef = useRef(false);
+  useEffect(() => () => storeRef.current?.hide(owner), [owner]);
+  // Follows a label that changes while hovered, such as play turning into pause.
+  useEffect(() => {
+    if (hoveredRef.current && tooltip != null) storeRef.current?.show(owner, tooltip);
+  }, [owner, tooltip]);
+  if (!enabled && tooltip == null) return { onPointerOver: undefined, onPointerOut: undefined };
   return {
     onPointerOver: (event: unknown) => {
+      hoveredRef.current = true;
+      if (tooltip != null) store?.show(owner, tooltip);
+      if (!enabled) return;
       setHovered(true);
       pulseForPointerEvent(event, "hover");
     },
-    onPointerOut: () => setHovered(false),
+    onPointerOut: () => {
+      hoveredRef.current = false;
+      store?.hide(owner);
+      setHovered(false);
+    },
   };
 }
 
@@ -106,6 +152,7 @@ export function Pill(
   },
 ) {
   const [hovered, setHovered] = useState(false);
+  const handlers = useHoverHandlers(onClick != null && !disabled, setHovered);
   const width = slotSpan(slots, units);
   const pillHeight = height ?? slotSize(units);
   const filled = tone === "accent" || tone === "danger" || tone === "solid";
@@ -134,7 +181,7 @@ export function Pill(
       borderWidth={filled && !disabled ? 0 : OUTLINE_WIDTH}
       borderColor={disabled ? COLOR.inkDim : hovered && onClick ? COLOR.accent : COLOR.outline}
       borderOpacity={1}
-      {...hoverHandlers(onClick != null && !disabled, setHovered)}
+      {...handlers}
       onClick={disabled ? undefined : withClickHaptic(onClick)}
     >
       <Text color={ink} fontSize={fontSize}>
@@ -150,11 +197,13 @@ export function Pill(
  * absolute size, which is why tiles stay rounded squares and these do not.
  */
 export function Slot(
-  { children, units = 2, active = false, onClick, empty = false, disabled = false }: {
+  { children, units = 2, active = false, onClick, empty = false, disabled = false, tooltip }: {
     children?: React.ReactNode;
     units?: number;
     active?: boolean;
     onClick?: () => void;
+    /** Shown in the shell's footer while hovered. */
+    tooltip?: string;
     /** Renders nothing but still occupies its cell, keeping the grid honest. */
     empty?: boolean;
     /**
@@ -166,6 +215,7 @@ export function Slot(
   },
 ) {
   const [hovered, setHovered] = useState(false);
+  const handlers = useHoverHandlers(onClick != null && !disabled, setHovered, tooltip);
   const size = slotSize(units);
   if (empty) {
     return <Container width={size} height={size} backgroundOpacity={0} />;
@@ -184,7 +234,7 @@ export function Slot(
       borderWidth={active && !disabled ? 0 : OUTLINE_WIDTH}
       borderColor={disabled ? COLOR.inkDim : hovered ? COLOR.accent : COLOR.outline}
       borderOpacity={1}
-      {...hoverHandlers(onClick != null && !disabled, setHovered)}
+      {...handlers}
       onClick={disabled ? undefined : withClickHaptic(onClick)}
     >
       {children}
@@ -198,8 +248,10 @@ export function Slot(
  * pills' own padding instead.
  */
 export function Tile(
-  { children, units = 1, rows = 1, height, active = false, onClick, fill = true }: {
+  { children, units = 1, rows = 1, height, active = false, onClick, fill = true, tooltip }: {
     children?: React.ReactNode;
+    /** Shown in the shell's footer while hovered. */
+    tooltip?: string;
     units?: number;
     rows?: number;
     /** Overrides the derived height, for the squeezed last row. */
@@ -210,6 +262,7 @@ export function Tile(
   },
 ) {
   const [hovered, setHovered] = useState(false);
+  const handlers = useHoverHandlers(onClick != null, setHovered, tooltip);
   return (
     <Container
       width={unitSpan(units)}
@@ -221,7 +274,7 @@ export function Tile(
       gap={INNER_GAP}
       backgroundColor={active ? COLOR.accent : hovered ? COLOR.tileHi : COLOR.tile}
       backgroundOpacity={fill ? 1 : 0}
-      {...hoverHandlers(onClick != null, setHovered)}
+      {...handlers}
       onClick={withClickHaptic(onClick)}
     >
       {children}
@@ -306,6 +359,7 @@ export function Control<T extends string>(
  * inverting the panel so it reads as a separate register from the tiles.
  */
 export function Footer({ children }: { children?: React.ReactNode }) {
+  const tooltip = useContext(TooltipContext)?.tooltip;
   return (
     <Container
       width={GRID_WIDTH}
@@ -317,7 +371,7 @@ export function Footer({ children }: { children?: React.ReactNode }) {
       backgroundColor={COLOR.ink}
       backgroundOpacity={1}
     >
-      <Text color={COLOR.ground} fontSize={14}>{children}</Text>
+      <Text color={COLOR.ground} fontSize={14}>{tooltip ?? children}</Text>
     </Container>
   );
 }
@@ -341,28 +395,31 @@ export function Shell(
     opacity?: number;
   },
 ) {
+  const tooltips = useTooltipStore();
   return (
-    <Container
-      pixelSize={0.001}
-      pointerEventsType={pointerEventsType}
-      opacity={opacity}
-      width={GRID_WIDTH + GAP * 2}
-      padding={GAP}
-      flexDirection="column"
-      alignItems="center"
-      gap={GAP}
-      backgroundColor={COLOR.ground}
-      backgroundOpacity={1}
-      borderTopLeftRadius={RADIUS.shell}
-      borderTopRightRadius={RADIUS.shell}
-      borderBottomLeftRadius={RADIUS.shellBottom}
-      borderBottomRightRadius={RADIUS.shellBottom}
-    >
-      <Container flexDirection="column" gap={GAP} alignItems="flex-start">
-        {children}
+    <TooltipContext.Provider value={tooltips}>
+      <Container
+        pixelSize={0.001}
+        pointerEventsType={pointerEventsType}
+        opacity={opacity}
+        width={GRID_WIDTH + GAP * 2}
+        padding={GAP}
+        flexDirection="column"
+        alignItems="center"
+        gap={GAP}
+        backgroundColor={COLOR.ground}
+        backgroundOpacity={1}
+        borderTopLeftRadius={RADIUS.shell}
+        borderTopRightRadius={RADIUS.shell}
+        borderBottomLeftRadius={RADIUS.shellBottom}
+        borderBottomRightRadius={RADIUS.shellBottom}
+      >
+        <Container flexDirection="column" gap={GAP} alignItems="flex-start">
+          {children}
+        </Container>
+        {footer}
       </Container>
-      {footer}
-    </Container>
+    </TooltipContext.Provider>
   );
 }
 

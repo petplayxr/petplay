@@ -121,6 +121,7 @@ function SlotTile(
         active?: boolean;
         disabled?: boolean;
         value?: string;
+        tooltip?: string;
         onClick?: () => void;
       }
       | null
@@ -146,6 +147,7 @@ function SlotTile(
               units={2}
               active={slot.active}
               disabled={slot.disabled}
+              tooltip={slot.tooltip}
               onClick={slot.onClick}
             >
               <Icon name={slot.icon} size={slot.value ? 16 : 22} color={ink} />
@@ -196,8 +198,9 @@ function NowPlayingRow({ label }: { label: string }) {
 
 /** A 1x1 tile is a rounded square, not a circle — rule 3 is about nesting depth. */
 function GlyphTile(
-  { icon, active, disabled, onClick }: {
+  { icon, tooltip, active, disabled, onClick }: {
     icon: IconName;
+    tooltip: string;
     active?: boolean;
     /** Present but not usable yet — dimmed rather than hidden. */
     disabled?: boolean;
@@ -208,6 +211,7 @@ function GlyphTile(
     <Tile
       units={1}
       active={active && !disabled}
+      tooltip={tooltip}
       onClick={disabled ? undefined : onClick}
     >
       <Icon
@@ -269,13 +273,18 @@ export function WristOverlay(
                 label="MEDIA"
                 labelSlots={3}
                 slots={[
-                  { icon: "skip_previous", onClick: () => onMedia?.("previous") },
+                  {
+                    icon: "skip_previous",
+                    tooltip: "Previous track",
+                    onClick: () => onMedia?.("previous"),
+                  },
                   {
                     icon: nowPlaying.playing ? "pause" : "play_arrow",
+                    tooltip: nowPlaying.playing ? "Pause" : "Play",
                     active: nowPlaying.playing,
                     onClick: () => onMedia?.("play-pause"),
                   },
-                  { icon: "skip_next", onClick: () => onMedia?.("next") },
+                  { icon: "skip_next", tooltip: "Next track", onClick: () => onMedia?.("next") },
                   null,
                 ]}
               />
@@ -330,17 +339,26 @@ export function WristOverlay(
       <TileRow>
         <GlyphTile
           icon="grid_view"
+          tooltip={on("layout") ? "Hide windows" : "Show windows"}
           active={on("layout")}
           onClick={() => onToggle?.("layout")}
         />
         <GlyphTile
           icon="tune"
+          tooltip={on("layout")
+            ? (on("edit") ? "Stop editing layout" : "Edit layout")
+            : "Edit layout (show windows first)"}
           active={on("edit")}
           disabled={!on("layout")}
           onClick={() => onToggle?.("edit")}
         />
-        <GlyphTile icon="settings" onClick={onOpenSettings} />
-        <GlyphTile icon="open_with" disabled={!on("layout")} onClick={onRecenter} />
+        <GlyphTile icon="settings" tooltip="Settings" onClick={onOpenSettings} />
+        <GlyphTile
+          icon="open_with"
+          tooltip={on("layout") ? "Recenter windows" : "Recenter (show windows first)"}
+          disabled={!on("layout")}
+          onClick={onRecenter}
+        />
       </TileRow>
 
       {

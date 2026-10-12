@@ -76,13 +76,21 @@ export type SpatialContextToolbarProps = {
  * children are top-level elements and take the tile shape. A circle would only
  * be right one level further in, sitting on a grey tile.
  *
- * The label survives as the hover title rather than being drawn — an icon-only
- * control still has to say what it is somewhere.
+ * The label is the tooltip: while the tile is hovered it replaces the title in
+ * the card's pill — an icon-only control still has to say what it is somewhere.
  */
 function ActionTile(
-  { action }: { action: SpatialContextAction },
+  { action, onHover }: {
+    action: SpatialContextAction;
+    onHover: (id: string | null) => void;
+  },
 ) {
   const [hovered, setHovered] = useState(false);
+  const hover = (next: boolean) => {
+    // A disabled tile still says what it is; it just doesn't light up.
+    setHovered(next && !action.disabled);
+    onHover(next ? action.id : null);
+  };
   const danger = action.tone === "danger";
   const accent = action.tone === "accent";
   const filled = (danger || accent) && !action.disabled;
@@ -110,16 +118,15 @@ function ActionTile(
       justifyContent="center"
       backgroundColor={filled ? fill : hovered ? COLOR.tileHi : COLOR.tile}
       backgroundOpacity={1}
-      onPointerOver={action.disabled ? undefined : (event: unknown) => {
-        setHovered(true);
-        pulseForPointerEvent(event, "hover");
+      onPointerOver={(event: unknown) => {
+        hover(true);
+        if (!action.disabled) pulseForPointerEvent(event, "hover");
       }}
-      onPointerOut={action.disabled ? undefined : () => setHovered(false)}
+      onPointerOut={() => hover(false)}
       onClick={action.disabled ? undefined : (event: unknown) => {
         pulseForPointerEvent(event, "click");
         action.run();
       }}
-      {...({ title: action.label } as Record<string, unknown>)}
     >
       <Icon
         name={ACTION_ICONS[action.id] ?? FALLBACK_ACTION_ICON}
@@ -144,12 +151,25 @@ export function SpatialContextToolbar({
   pointerEventsType = "all",
 }: SpatialContextToolbarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // By id, so the tooltip follows a label that changes on click (Lock -> "Locked — unlock") and
+  // goes away with a tile that a click removed, which never gets its pointer-out.
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   // Rule 4: the card is sized in whole element units to what it holds — a
   // 3-button menu is a 3-wide card holding 3 buttons. Two is the floor, or the
   // title pill has no room to say anything useful.
   const tileCount = actions.length + (settings != null ? 1 : 0);
   const units = Math.max(2, tileCount);
+  const settingsAction: SpatialContextAction = {
+    id: "settings",
+    label: settingsOpen ? "Hide settings" : "Settings",
+    tone: settingsOpen ? "accent" : "normal",
+    run: () => setSettingsOpen((open) => !open),
+  };
+  const hoverLabel = hoveredId == null
+    ? null
+    : [...actions, ...(settings != null ? [settingsAction] : [])]
+      .find((action) => action.id === hoveredId)?.label ?? null;
 
   // The card is a control, not part of the window: it stays the same size and the same distance
   // below the edge however far the window is scaled, so counter the parent's world scale each
@@ -210,21 +230,14 @@ export function SpatialContextToolbar({
         */
         }
         <Pill slots={units * 2} units={units} fontSize={14}>
-          {title}
+          {hoverLabel ?? title}
         </Pill>
 
         <Container flexDirection="row" gap={GAP}>
-          {actions.map((action) => <ActionTile key={action.id} action={action} />)}
-          {settings != null && (
-            <ActionTile
-              action={{
-                id: "settings",
-                label: settingsOpen ? "Hide settings" : "Settings",
-                tone: settingsOpen ? "accent" : "normal",
-                run: () => setSettingsOpen((open) => !open),
-              }}
-            />
-          )}
+          {actions.map((action) => (
+            <ActionTile key={action.id} action={action} onHover={setHoveredId} />
+          ))}
+          {settings != null && <ActionTile action={settingsAction} onHover={setHoveredId} />}
         </Container>
         {settingsOpen && settings}
       </Container>
