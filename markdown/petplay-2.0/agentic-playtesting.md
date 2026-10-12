@@ -59,6 +59,10 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   two-handed resize, type two keys, open the window's settings from its toolbar, toggle a setting
   on the wrist Settings page. Passes in about 25 s (2026-10-12). Its first run found
   [keys behind a selected window's toolbar ignoring presses](../issues/FIXED-keys-behind-a-selected-windows-toolbar-ignore-presses/README.md).
+- `tests/playtest/layouts.ts`: lock a window from its toolbar (a locked drag doesn't move it), unlock,
+  save the layout to slot 1 and load it back after moving the window, and recenter from the wrist.
+  Passes in about 35 s (2026-10-12). Shared step helpers (hands, laser drag and click, toolbar
+  lookup, `showWindows`) live in `tests/playtest/lib/`, which the runner skips.
 - `--novr` / `dev:desktop` for runs without SteamVR, and the null driver toggle for runs with
   SteamVR but no headset.
 - `utils/headsetCheck.ts`: for what only a person in the headset can judge. `runHeadsetCheck(host)`
