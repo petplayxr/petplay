@@ -88,7 +88,7 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
 - [x] **Desktop notifications mirrored as toasts** (Linux): `desktopNotifications.ts` watches
   `Notify` calls with `busctl --user monitor --json`, so the desktop daemon keeps its own popup.
   Markup is stripped, critical urgency takes the warning tone, updates replace their toast. Off
-  with the `desktopNotifications` setting. Verified in `--novr` with a `gdbus` sender
+  with Settings → Desktop notifications on the wrist. Verified in `--novr` with a `gdbus` sender
 
 ## Input / feedback
 

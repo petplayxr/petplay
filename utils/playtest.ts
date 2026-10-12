@@ -36,15 +36,16 @@ export const WRIST_MAIN = {
   recenter: [201, -66],
 } as const satisfies Record<string, PanelPoint>;
 
-/** Settings page rows' right-hand pills (`classes/environment/wristMenu/ui.tsx`). */
+/** Settings page rows' right-hand pills, and the sub-page row (`classes/environment/wristMenu/ui.tsx`). */
 export const WRIST_SETTINGS = {
-  back: [-197, 234],
-  grabboxOutline: [189, 164],
-  controllerLaser: [189, 86],
-  haptics: [189, 8],
-  wrist: [189, -70],
-  monitors: [189, -148],
-  layouts: [189, -226],
+  back: [-197, 195],
+  grabboxOutline: [189, 125],
+  controllerLaser: [189, 47],
+  haptics: [189, -31],
+  desktopNotifications: [189, -109],
+  wrist: [-158, -187],
+  monitors: [0, -187],
+  layouts: [158, -187],
 } as const satisfies Record<string, PanelPoint>;
 
 /** Settings → Wrist menu page: the right-hand pill of each row. */

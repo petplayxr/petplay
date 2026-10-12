@@ -216,7 +216,10 @@ function LayoutSlotsView(
 function SettingToggleRow(
   { label, setting }: {
     label: string;
-    setting: Extract<SettingKey, "grabboxOutline" | "controllerLaser" | "haptics">;
+    setting: Extract<
+      SettingKey,
+      "grabboxOutline" | "controllerLaser" | "haptics" | "desktopNotifications"
+    >;
   },
 ) {
   const value = useSetting(setting);
@@ -352,9 +355,21 @@ function SettingsView(
       <SettingToggleRow label="Grab-box outlines" setting="grabboxOutline" />
       <SettingToggleRow label="Laser beams" setting="controllerLaser" />
       <SettingToggleRow label="Vibration" setting="haptics" />
-      <PillRow label="Wrist menu" value="OPEN" onClick={onOpenWrist} />
-      <PillRow label="Monitors" value="OPEN" onClick={onOpenMonitors} />
-      <PillRow label="Saved layouts" value="OPEN" onClick={onOpenLayouts} />
+      <SettingToggleRow label="Desktop notifications" setting="desktopNotifications" />
+      {/* The sub-pages share one row, so the toggles above have room inside the square panel. */}
+      <Container
+        flexDirection="row"
+        alignItems="center"
+        justifyContent="space-between"
+        padding={INNER_GAP}
+        borderRadius={RADIUS.tile}
+        backgroundColor={COLOR.tile}
+        backgroundOpacity={1}
+      >
+        <Pill slots={2} units={2} fontSize={13} onClick={onOpenWrist}>WRIST</Pill>
+        <Pill slots={2} units={2} fontSize={13} onClick={onOpenMonitors}>MONITORS</Pill>
+        <Pill slots={2} units={2} fontSize={13} onClick={onOpenLayouts}>LAYOUTS</Pill>
+      </Container>
     </Container>
   );
 }
