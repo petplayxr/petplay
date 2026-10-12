@@ -44,7 +44,9 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
 - [ ] Individual app-window capture (not just monitors/workspace crops)
 - [x] Toolbar follows its window edge; spawn-in animation. It hangs 15 mm below the bottom edge
   at a constant world size however far the window is scaled, grows downward when settings
-  open, and pops in over 150 ms.
+  open, and pops in over 150 ms. With a keyboard attached under the window it sits above the
+  window instead, and settings open as a card beside the top-right corner (playtested in
+  `--novr`; reach and comfort need a headset check).
 - [ ] Capture backend choice (Windows)
 
 ## Wrist
