@@ -18,6 +18,15 @@ targets by order before distance, so the toolbar behind the keys won every ray t
 ## Fix
 
 The keyboard now uses order 20 as well: level with toolbars, the nearer surface wins, and both still
-beat the display ray proxies at 1. The `type` and `window-settings` steps of
-`tests/playtest/smoke.ts` cover both sides: keys in front of the toolbar type, and the toolbar's
-settings button below the keyboard still opens the window's settings.
+beat the display ray proxies at 1. The `type` step of `tests/playtest/smoke.ts` covers the keys.
+
+That left the other half broken: with the nearer surface winning, the window's toolbar buttons sat
+behind the keyboard's bottom rows and could not be pressed. The smoke step that was meant to cover
+them clicked the keyboard's own toolbar instead (the toolbar lookup also searched child nodes), so
+it passed anyway. Once the lookup was scoped to the window, smoke failed.
+
+Second fix (2026-10-12, `scene.tsx`, `spatialContextToolbar.tsx`): when a keyboard is hinged to a
+window's bottom slot, the window's toolbar goes above the window. Its settings open as a separate
+card beside the window's top-right corner: growing them up from the raised toolbar put the last
+rows near 3 m, and hanging them over the window reached down behind the keyboard. The smoke,
+window-settings and lifecycle playtests press the toolbar and every setting through this path.

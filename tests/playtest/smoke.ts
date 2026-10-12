@@ -19,6 +19,7 @@ import {
   laserClick,
   laserDrag,
   LEFT_ORIGIN,
+  openSettings,
   RIGHT_ORIGIN,
   showWindows,
   squeeze,
@@ -101,15 +102,11 @@ export const steps: PlaytestStep[] = [
     // still take the click.
     name: "window-settings",
     run: async (ctx) => {
-      const toolbar = toolbarOf(display(ctx));
-      if (!ctx.expect(toolbar, "the moved window is selected and shows its toolbar")) return;
-      // The settings glyph (Material Symbols "settings").
-      const icon = ctx.textObject(toolbar!, "\ue8b8");
-      if (!ctx.expect(icon, "the toolbar has a settings button")) return;
-      await laserClick(ctx, worldOf(icon!).position);
-      await ctx.waitFor(
-        () => ctx.textObject(display(ctx), "Opacity"),
-        "the toolbar's settings button opens the window's settings",
+      // Typing left the keyboard selected; pointing at the window selects it again.
+      if (!await openSettings(ctx)) return;
+      ctx.expect(
+        ctx.textObject(toolbarOf(display(ctx))!, "Opacity"),
+        "the settings that opened are the window's own, not the keyboard's",
       );
     },
   },

@@ -19,7 +19,15 @@ import {
   parseNotifyLine,
 } from "../../classes/environment/desktopNotifications.ts";
 import { XSO_UDP_PORT } from "../../classes/environment/xsoNotificationReceiver.ts";
-import { display, laserDrag, rootDisplayId, showWindows, toolbarOf, worldOf } from "./lib/steps.ts";
+import {
+  display,
+  laserDrag,
+  rootDisplayId,
+  showWindows,
+  toolbarOf,
+  turnHead,
+  worldOf,
+} from "./lib/steps.ts";
 
 /** One `Notify` call as `busctl monitor --json=short` prints it. */
 function notifyLine(app: string, summary: string, body: string, replacesId = 0): string {
@@ -68,19 +76,6 @@ function overlayText(ctx: PlaytestContext, text: string): THREE.Object3D | null 
 function bounds(object: THREE.Object3D): THREE.Box3 {
   object.updateWorldMatrix(true, true);
   return new THREE.Box3().setFromObject(object);
-}
-
-function head(ctx: PlaytestContext) {
-  return (ctx.host as unknown as {
-    xrDevice: {
-      quaternion: { set(x: number, y: number, z: number, w: number): void };
-    };
-  }).xrDevice;
-}
-
-function turnHead(ctx: PlaytestContext, yaw: number) {
-  const turn = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-  head(ctx).quaternion.set(turn.x, turn.y, turn.z, turn.w);
 }
 
 /** Toasts sit a little below the line of sight; returns the stack's direction from the head. */

@@ -7,7 +7,7 @@
  */
 // @deno-types="@types/three/webgpu"
 import * as THREE from "three/webgpu";
-import type { PlaytestContext, PlaytestStep } from "../../utils/playtest.ts";
+import type { PlaytestStep } from "../../utils/playtest.ts";
 import {
   editSpatialGraph,
   getSpatialGraph,
@@ -15,58 +15,17 @@ import {
 import { commitNodeTransform } from "../../classes/environment/spatialGraph.ts";
 import {
   display,
-  laserClick,
-  laserDrag,
+  openSettings,
+  press,
   rootDisplayId,
   showWindows,
-  toolbarOf,
+  turnHead,
   worldOf,
 } from "./lib/steps.ts";
 
 function node() {
   const id = rootDisplayId();
   return id == null ? undefined : getSpatialGraph()?.nodes[id];
-}
-
-/** Turns the IWER head by `yaw` radians about +y (0 looks down -z). */
-function turnHead(ctx: PlaytestContext, yaw: number) {
-  const device = (ctx.host as unknown as {
-    xrDevice: { quaternion: { set(x: number, y: number, z: number, w: number): void } };
-  }).xrDevice;
-  const turn = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-  device.quaternion.set(turn.x, turn.y, turn.z, turn.w);
-}
-
-/** The pill labelled `label` in the settings section labelled `section`. */
-function pill(ctx: PlaytestContext, section: string, label: string): THREE.Object3D | null {
-  let scope: THREE.Object3D | null = ctx.textObject(display(ctx), section);
-  while (scope != null) {
-    const found = ctx.textObject(scope, label);
-    if (found != null) return found;
-    scope = scope.parent;
-  }
-  return null;
-}
-
-async function press(ctx: PlaytestContext, section: string, label: string) {
-  const target = pill(ctx, section, label);
-  if (!ctx.expect(target, `the ${section} section has a ${label} pill`)) return false;
-  await ctx.clickObject(target!, display(ctx));
-  return true;
-}
-
-async function openSettings(ctx: PlaytestContext) {
-  if (ctx.textObject(display(ctx), "Opacity") != null) return true;
-  if (toolbarOf(display(ctx)) == null) await laserDrag(ctx, 0.05);
-  const toolbar = toolbarOf(display(ctx));
-  if (!ctx.expect(toolbar, "the window is selected and shows its toolbar")) return false;
-  const icon = ctx.textObject(toolbar!, "");
-  if (!ctx.expect(icon, "the toolbar has a settings button")) return false;
-  await laserClick(ctx, worldOf(icon!).position);
-  return await ctx.waitFor(
-    () => ctx.textObject(display(ctx), "Opacity"),
-    "the toolbar's settings button opens the window's settings",
-  );
 }
 
 /** Presses `on`, waits for `check`, then presses `off` and waits for it to clear. */

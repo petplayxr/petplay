@@ -61,8 +61,23 @@ export type SpatialContextToolbarProps = {
   title: string;
   actions: SpatialContextAction[];
   settings?: React.ReactNode;
-  /** The middle of the node's bottom edge, in the node's space. The card hangs below it. */
+  /**
+   * The middle of the node's edge, in the node's space: the bottom edge, which the card hangs
+   * below, or with `side: "above"` the top edge, which it stands on.
+   */
   position: [number, number, number];
+  /**
+   * "above" when something hangs from the node's bottom edge (a hinged keyboard): below, the card
+   * would sit behind it and every button would lose the ray to the keys in front.
+   */
+  side?: "below" | "above";
+  /**
+   * With `side: "above"`, the node-space corner the settings card hangs from by its top-left
+   * corner (a window's top-right corner). Growing up from a raised card would put the settings
+   * far above eye level, and hanging them over the window would reach down behind the keyboard,
+   * so they open beside it.
+   */
+  settingsPosition?: [number, number, number];
   /** World size, independent of how far the node is scaled. */
   scale?: number;
   pointerEventsType?: AllowedPointerEventsType;
@@ -137,7 +152,7 @@ function ActionTile(
   );
 }
 
-/** Metres between the node's bottom edge and the top of the card. */
+/** Metres between the node's edge and the near side of the card. */
 const EDGE_GAP = 0.015;
 const SPAWN_SECONDS = 0.15;
 const SPAWN_FROM = 0.8;
@@ -147,6 +162,8 @@ export function SpatialContextToolbar({
   actions,
   settings,
   position,
+  side = "below",
+  settingsPosition,
   scale = 0.72,
   pointerEventsType = "all",
 }: SpatialContextToolbarProps) {
@@ -175,6 +192,7 @@ export function SpatialContextToolbar({
   // below the edge however far the window is scaled, so counter the parent's world scale each
   // frame. It also pops in, so a selection change reads as the card arriving, not blinking on.
   const group = useRef<THREE.Group>(null);
+  const settingsGroup = useRef<THREE.Group>(null);
   const scratch = useRef({ parentScale: new THREE.Vector3(), age: 0 });
   useFrame((_state, delta) => {
     const node = group.current;
@@ -186,8 +204,30 @@ export function SpatialContextToolbar({
     node.parent.getWorldScale(s.parentScale);
     const k = scale * pop;
     node.scale.set(k / s.parentScale.x, k / s.parentScale.y, k / s.parentScale.z);
-    node.position.set(position[0], position[1] - EDGE_GAP / s.parentScale.y, position[2]);
+    const gap = (side === "above" ? EDGE_GAP : -EDGE_GAP) / s.parentScale.y;
+    node.position.set(position[0], position[1] + gap, position[2]);
+    // Inside the counter-scaled group, a node-space offset d is d * parentScale / k.
+    const card = settingsGroup.current;
+    if (card != null && settingsPosition != null) {
+      card.position.set(
+        (settingsPosition[0] - position[0]) * s.parentScale.x / k + EDGE_GAP / k,
+        (settingsPosition[1] - position[1] - gap) * s.parentScale.y / k,
+        (settingsPosition[2] - position[2]) * s.parentScale.z / k,
+      );
+    }
   });
+  const detachedSettings = side === "above" && settingsPosition != null;
+  const shell = {
+    pixelSize: 0.001,
+    width: unitSpan(units) + GAP * 2,
+    padding: GAP,
+    gap: GAP,
+    alignItems: "stretch",
+    borderRadius: RADIUS.shell,
+    backgroundColor: COLOR.ground,
+    backgroundOpacity: 1,
+    pointerEventsType,
+  } as const;
 
   return (
     <group
@@ -204,19 +244,16 @@ export function SpatialContextToolbar({
         top-level element on the same terms as the wrist panel's tiles.
       */
       }
-      {/* Top-anchored, so opening settings grows the card down, away from the window. */}
+      {
+        /*
+        Anchored on the window's side, so opening settings grows the card away from the window.
+        Above the window it mirrors: the title stays next to the edge.
+      */
+      }
       <Container
-        pixelSize={0.001}
-        anchorY="top"
-        width={unitSpan(units) + GAP * 2}
-        padding={GAP}
-        gap={GAP}
-        flexDirection="column"
-        alignItems="stretch"
-        borderRadius={RADIUS.shell}
-        backgroundColor={COLOR.ground}
-        backgroundOpacity={1}
-        pointerEventsType={pointerEventsType}
+        {...shell}
+        anchorY={side === "above" ? "bottom" : "top"}
+        flexDirection={side === "above" ? "column-reverse" : "column"}
       >
         {
           /*
@@ -239,8 +276,15 @@ export function SpatialContextToolbar({
           ))}
           {settings != null && <ActionTile action={settingsAction} onHover={setHoveredId} />}
         </Container>
-        {settingsOpen && settings}
+        {settingsOpen && !detachedSettings && settings}
       </Container>
+      {settingsOpen && detachedSettings && (
+        <group ref={settingsGroup}>
+          <Container {...shell} anchorX="left" anchorY="top" flexDirection="column">
+            {settings}
+          </Container>
+        </group>
+      )}
     </group>
   );
 }

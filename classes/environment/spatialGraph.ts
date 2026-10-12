@@ -870,6 +870,11 @@ export function hasAvailableDisplayAttachmentSlot(
   );
 }
 
+/** True while a node hangs from the display's bottom slot (the keyboard, by default). */
+export function isDisplayBottomSlotOccupied(graph: SpatialGraph, displayId: SpatialNodeId) {
+  return isAttachmentSlotOccupied(graph, `${displayId}-bottom-slot`);
+}
+
 function isAttachmentSlotOccupied(graph: SpatialGraph, slotId: string): boolean {
   return Object.values(graph.nodes).some((node) =>
     node.constraint?.kind === "hinge" && node.constraint.attachmentSlotId === slotId

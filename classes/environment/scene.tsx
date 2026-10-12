@@ -57,6 +57,7 @@ import {
   type HingeConstraint,
   IDENTITY_SPATIAL_TRANSFORM,
   initializeWorkspaceLayoutOutputs,
+  isDisplayBottomSlotOccupied,
   type KeyboardSpatialNode,
   recenterSpatialRoots,
   reconcileWorkspaceOutputs,
@@ -1236,6 +1237,8 @@ function DisplaySpatialNodeView({
     });
     return actions;
   }, [attachmentRole, graph, node.id, node.parentId, setGraph, workspaceOutputs]);
+  // A keyboard hinged under the window would sit in front of a toolbar hanging below it.
+  const toolbarAbove = isDisplayBottomSlotOccupied(graph, node.id);
   const assignedSide = node.constraint?.kind === "hinge"
     ? node.constraint.attachmentSlotId.match(/-(left|right|top|bottom)-slot$/)?.[1]
     : undefined;
@@ -1288,7 +1291,18 @@ function DisplaySpatialNodeView({
         {selectedNodeId === node.id && (
           <SpatialContextToolbar
             title={node.workspaceOutputName ?? `Display ${node.ordinal}`}
-            position={[0, -DEFAULT_DISPLAY_HEIGHT * 0.5, DEFAULT_DISPLAY_DEPTH]}
+            side={toolbarAbove ? "above" : "below"}
+            position={[
+              0,
+              // Above, clear of the hierarchy badge that also sits over the top edge.
+              toolbarAbove ? DEFAULT_DISPLAY_HEIGHT * 0.5 + 0.08 : -DEFAULT_DISPLAY_HEIGHT * 0.5,
+              DEFAULT_DISPLAY_DEPTH,
+            ]}
+            settingsPosition={[
+              DISPLAY_PANEL_WIDTH * 0.5,
+              DEFAULT_DISPLAY_HEIGHT * 0.5,
+              DEFAULT_DISPLAY_DEPTH,
+            ]}
             actions={contextActions}
             settings={
               <>

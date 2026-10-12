@@ -78,7 +78,12 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   burst queues past three, long text wraps inside the card, the stack follows the head, a laser
   grab passes through it to the window behind, and an XSO UDP datagram shows with its tone (sent
   only when the test server holds the XSO port). Passes in about 20 s (2026-10-12).
-  `deno task playtest all` runs all five in about 2.5 minutes.
+- `tests/playtest/lifecycle.ts`: add a display from a window's toolbar, detach it (it stays put and
+  stops following the window), delete it, and anchor a window to the left hand (a hand slide moves
+  it the same distance). Passes in about 25 s (2026-10-12). Scoping the toolbar lookup to the
+  window for this script showed that a window's own toolbar was unreachable behind its keyboard;
+  with a keyboard attached, the toolbar now sits above the window.
+  `deno task playtest all` runs all six in about 3 minutes.
 - `--novr` / `dev:desktop` for runs without SteamVR, and the null driver toggle for runs with
   SteamVR but no headset.
 - `utils/headsetCheck.ts`: for what only a person in the headset can judge. `runHeadsetCheck(host)`
