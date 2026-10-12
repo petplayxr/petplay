@@ -70,6 +70,11 @@ export function getTrackedOriginWorldMatrix(
     target.copy(head.matrixWorld);
     return true;
   }
+  return getHandOriginWorldMatrix(id, target);
+}
+
+/** World matrix of a controller's grip space; false while that controller isn't registered. */
+export function getHandOriginWorldMatrix(id: HandOriginId, target: THREE.Matrix4): boolean {
   const object = hands.get(id);
   if (object == null) return false;
   // Compose the chain by hand: XR spaces write `matrix` with `matrixAutoUpdate` off and never flag

@@ -1,11 +1,11 @@
 import { Pointer, type RayPointerOptions } from "@pmndrs/pointer-events";
 import {
   CombinedPointer,
-  DefaultXRControllerGrabPointer,
   type DefaultXRControllerOptions,
   type DefaultXRInputSourceGrabPointerOptions,
   type DefaultXRInputSourceRayPointerOptions,
   DefaultXRInputSourceTeleportPointer,
+  useGrabPointer,
   usePointerXRInputSourceEvents,
   useRayPointer,
   useXRInputSourceStateContext,
@@ -25,6 +25,7 @@ import { type ColorRepresentation, type Mesh, MeshBasicMaterial, Object3D } from
 import { HandPoker } from "./handPoker.tsx";
 import { useControllerLaserEnabled } from "./controllerLaserMode.ts";
 import { registerPointerHand } from "./haptics.ts";
+import { isHandGrabbing, registerGrabPointerHand } from "./oneHandScale.ts";
 import { registerHandOrigin } from "./trackedOrigins.ts";
 
 function spreadable<T>(value: true | T | undefined): T | undefined {
@@ -222,6 +223,15 @@ function PetplayDefaultXRInputSourceRayPointer(props: DefaultXRInputSourceRayPoi
     if (handedness !== "left" && handedness !== "right") return;
     return registerPointerHand(pointer.id, handedness);
   }, [pointer, handedness]);
+  // Only the transitions: the root pointer also disables this ray while the session is hidden.
+  const quietForGrab = useRef(false);
+  useFrame(() => {
+    if (handedness !== "left" && handedness !== "right") return;
+    const grabbing = isHandGrabbing(handedness);
+    if (grabbing === quietForGrab.current) return;
+    quietForGrab.current = grabbing;
+    pointer.setEnabled(!grabbing, { timeStamp: performance.now() });
+  });
   const rayModelOptions = props.rayModel;
   const cursorModelOptions = props.cursorModel;
   const rayOpts = spreadable(rayModelOptions);
@@ -240,7 +250,31 @@ function PetplayDefaultXRInputSourceRayPointer(props: DefaultXRInputSourceRayPoi
   );
 }
 
-/** Squeeze + target-ray, `pointerType: "grab"`. Paired with `DefaultXRControllerGrabPointer` in `CombinedPointer`. */
+/** Tells the one-hand resize which hand, and which trigger, a grab pointer belongs to. */
+function useRegisterGrabPointer(pointer: Pointer): void {
+  const state = useXRInputSourceStateContext();
+  const inputSource = state.inputSource;
+  useEffect(() => {
+    const handedness = inputSource.handedness;
+    if (handedness !== "left" && handedness !== "right") return;
+    return registerGrabPointerHand(pointer, handedness, inputSource);
+  }, [pointer, inputSource]);
+}
+
+/**
+ * Squeeze + grip-space sphere, `pointerType: "grab"`. pmndrs' `DefaultXRControllerGrabPointer`
+ * with the hand registered and without the cursor, which PetPlay always turned off.
+ */
+function PetplayGrabSpherePointer(options: DefaultXRInputSourceGrabPointerOptions) {
+  const state = useXRInputSourceStateContext();
+  const ref = useRef<Object3D>(null);
+  const pointer = useGrabPointer(ref, state, options);
+  usePointerXRInputSourceEvents(pointer, state.inputSource, "squeeze", state.events);
+  useRegisterGrabPointer(pointer);
+  return <XRSpace ref={ref} space="grip-space" />;
+}
+
+/** Squeeze + target-ray, `pointerType: "grab"`. Paired with `PetplayGrabSpherePointer` in `CombinedPointer`. */
 function PetplayGrabRayPointer(
   { ...rayOpts }: RayPointerOptions,
 ) {
@@ -248,6 +282,7 @@ function PetplayGrabRayPointer(
   const ref = useRef<Object3D>(null);
   const pointer = useRayPointer(ref, state, rayOpts, "grab");
   usePointerXRInputSourceEvents(pointer, state.inputSource, "squeeze", state.events);
+  useRegisterGrabPointer(pointer);
   return <XRSpace ref={ref} space="target-ray-space" />;
 }
 
@@ -277,10 +312,8 @@ export function PetplayDefaultXRController(props: DefaultXRControllerOptions) {
 
   const rayP = (spreadable(rayPointerOptions) ?? {}) as DefaultXRInputSourceRayPointerOptions;
   const grabO = (spreadable(grabPointerOptions) ?? {}) as DefaultXRInputSourceGrabPointerOptions;
-  const grabPointerProps: DefaultXRInputSourceGrabPointerOptions = {
-    cursorModel: false,
-    ...grabO,
-  };
+  const { cursorModel: _cursorModel, ...grabPointerProps } = grabO;
+  void _cursorModel;
   const minD = rayP.minDistance ?? 0.2;
   const {
     cursorModel: _gcm,
@@ -303,7 +336,7 @@ export function PetplayDefaultXRController(props: DefaultXRControllerOptions) {
       )}
       {grabPointerOptions !== false && (
         <CombinedPointer>
-          <DefaultXRControllerGrabPointer {...grabPointerProps} />
+          <PetplayGrabSpherePointer {...grabPointerProps} />
           <PetplayGrabRayPointer
             {...(grabForRay as RayPointerOptions)}
             minDistance={minD}

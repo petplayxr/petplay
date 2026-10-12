@@ -99,6 +99,17 @@ The measure is geometric on purpose: petplay's laser grab rides the squeeze, so 
 `grab`* like the near-hand one, and its sphere pointer can even fire at arm's length — neither the
 pointer nor the intersection type separates the two.
 
+Any grabbed element, free or hinged, also resizes the way XSOverlay does it (`oneHandScale.ts`,
+after its `Raycaster.Scale()`): with one hand holding it, pulling that hand's trigger freezes the
+element, and the hand's travel since the trigger went down — along the grip's backward axis tilted
+40° up — adds three times its length to the element's width, clamped to 0.05–8 m. Pushing forward
+grows it; pulling back shrinks it. The store is rebased every frame while the trigger is down, so
+the hand moves nothing, and when the trigger comes up the grab carries on from where the element
+is. A hinge restarts its pull-to-detach baseline afterwards, since the hand is no longer where the
+grab began. The trigger only counts once it has been up during the grab, and the hand's select ray
+is disabled while it holds a grab: it sits in the root `CombinedPointer`, which keeps every pointer
+live, so it would otherwise click whatever it points at.
+
 Visual content beneath a spatial element must deny the `grab` pointer type. Spatial controls such as
 buttons are their own GrabBox-backed elements, with logical attachment metadata rather than being
 physically nested inside another element's GrabBox. Their normal grab interaction may be disabled

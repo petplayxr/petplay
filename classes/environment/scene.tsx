@@ -39,6 +39,7 @@ import { subscribeLayoutRecenter, useWindowLayerVisible } from "./windowLayerMod
 import { setGrabboxOutlineVisible, useGrabboxOutlineVisible } from "./grabboxOutlineMode.ts";
 import { useHingedOneHandScaleMaxGrabOffset } from "./spatialManipulationMode.ts";
 import { GrabBox } from "./grabbox.tsx";
+import { consumeOneHandScaleEnd, withOneHandScale } from "./oneHandScale.ts";
 import {
   assignWorkspaceOutput,
   commitHingePose,
@@ -366,6 +367,18 @@ function applyDampedHandleState(
   );
   object.quaternion.slerp(state.current.quaternion as unknown as THREE.Quaternion, rotationAlpha);
   object.scale.set(state.current.scale.x, state.current.scale.y, state.current.scale.z);
+}
+
+/** Grab options with the trigger resize ({@link withOneHandScale}). */
+function withTriggerResize(
+  options: Omit<HandleOptions<unknown>, "filter">,
+  stores: Map<string, HandleStore<unknown>>,
+  baseWidth: number,
+): Omit<HandleOptions<unknown>, "filter"> {
+  const apply = options.apply == null
+    ? undefined
+    : withOneHandScale(options.apply, stores, baseWidth);
+  return { ...options, apply, alwaysUpdate: true };
 }
 
 function CommonOverlayChords({
@@ -1151,6 +1164,9 @@ function DisplaySpatialNodeView({
   const [hovered, setHovered] = React.useState(false);
   const grabOutlineVisible = useGrabboxOutlineVisible();
   const local = localTransformOverride ?? node.localTransform;
+  // A borrowed target (a slot's frame) sits outside this node's own transform; a hinge frame
+  // leaves the node's scale inside it.
+  const innerScale = manipulationTargetRef == null ? 1 : local.scale[0];
 
   const commitFreeTransform = React.useCallback(
     (state: HandleState<unknown>, target: import("three").Object3D) => {
@@ -1172,8 +1188,13 @@ function DisplaySpatialNodeView({
     }
   }, [handleStores, manipulationStoreRef, node.id]);
   const baseOptions = React.useMemo(
-    () => ({ ...(manipulationOptions ?? { apply: commitFreeTransform }), alwaysUpdate: true }),
-    [commitFreeTransform, manipulationOptions],
+    () =>
+      withTriggerResize(
+        manipulationOptions ?? { apply: commitFreeTransform },
+        handleStores,
+        DISPLAY_GRAB_SIZE[0] * innerScale,
+      ),
+    [commitFreeTransform, handleStores, manipulationOptions, innerScale],
   );
   const deletion = useScaleToDelete(node.id, DISPLAY_GRAB_SIZE, baseOptions, setGraph);
   const grabOptions = useLockedGrabOptions(deletion.options, node.locked ?? false);
@@ -1391,6 +1412,9 @@ function KeyboardSpatialNodeView({
 }: SpatialNodeViewProps & { node: KeyboardSpatialNode }) {
   const nodeRef = React.useRef<THREE.Group>(null);
   const local = localTransformOverride ?? node.localTransform;
+  // A borrowed target (a slot's frame) sits outside this node's own transform; a hinge frame
+  // leaves the node's scale inside it.
+  const innerScale = manipulationTargetRef == null ? 1 : local.scale[0];
   const commitFreeTransform = React.useCallback(
     (state: HandleState<unknown>, target: import("three").Object3D) => {
       applyDampedHandleState(state, target);
@@ -1417,8 +1441,13 @@ function KeyboardSpatialNodeView({
     }
   }, [handleStores, manipulationStoreRef, node.id]);
   const baseOptions = React.useMemo(
-    () => ({ ...(manipulationOptions ?? { apply: commitFreeTransform }), alwaysUpdate: true }),
-    [commitFreeTransform, manipulationOptions],
+    () =>
+      withTriggerResize(
+        manipulationOptions ?? { apply: commitFreeTransform },
+        handleStores,
+        node.snapSource.size[0] * innerScale,
+      ),
+    [commitFreeTransform, handleStores, manipulationOptions, node.snapSource.size, innerScale],
   );
   const deletion = useScaleToDelete(node.id, node.snapSource.size, baseOptions, setGraph);
   const grabOptions = useLockedGrabOptions(deletion.options, node.locked ?? false);
@@ -1607,6 +1636,7 @@ function AttachedSpatialNodeView(
         return;
       }
       applyDampedHandleState(state, target);
+      if (consumeOneHandScaleEnd(target)) initialGrabberDistanceRef.current = null;
       const object = target as unknown as THREE.Object3D;
       object.position.set(...hinge.parentPivot);
       // The pinch scale rides on the hinge frame, which scales the panel and its child offset by
