@@ -175,6 +175,13 @@ launch arguments** (so `--novr`, `--webxr-raythree-debug=1`, locale overrides an
 then brings back whichever desktop surface was running. `--no-detach` skips the VR detach. Actor-level
 `POST /reload` remains the cheaper option when only an actor's code changed.
 
+`--watch-webxr` does that reload for you: the server watches every local file the `webxr` actor
+loads (its `deno info` graph) and reloads the actor about 300 ms after a save. A save that does not
+parse, or imports a file that does not exist, is not reloaded. The old actor keeps running, and a
+headset toast names the file, because a worker that fails to load would leave no `webxr` at all.
+A SteamVR-launched server only gets the flag if it was registered with it
+(`deno task steamvr:register -- --watch-webxr`).
+
 ### Self-healing presentation
 
 The XR image can stop being drawn without any error surfacing — the pump keeps uploading into a

@@ -8,6 +8,7 @@ import { multiplyMatrix } from "../classes/matrixutils.ts";
 import { MainStdinHandler } from "../classes/mainStdinHandler.ts";
 import { OverlayRenderMode } from "./webxr.ts";
 import type { api as openVrApi } from "./OpenVR.ts";
+import { startWebXrAutoReload } from "../classes/webxrAutoReload.ts";
 
 const state = actorState({
   name: "main",
@@ -46,6 +47,11 @@ function getDesktopControlEnabled(): boolean {
  */
 function getAgentReplEnabled(): boolean {
   return Deno.args.includes("--agent-repl");
+}
+
+/** Dev loop: reload the `webxr` actor whenever a file it loads changes. */
+function getWatchWebXrEnabled(): boolean {
+  return isEnabledArg("--watch-webxr");
 }
 
 function getScreenCaptureFps(): number {
@@ -194,6 +200,37 @@ async function main() {
   const endTime = performance.now();
   const timeElapsed = Math.round(endTime - startTime);
   LogChannel.log("default", `scene created in ${timeElapsed} ms`);
+  if (getWatchWebXrEnabled()) await watchWebXr();
+}
+
+async function watchWebXr() {
+  await startWebXrAutoReload({
+    entry: new URL("./webxr.ts", import.meta.url).pathname,
+    getTarget: () => clientActors.webxr,
+    reload: async (actorId) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          PostMan.PostMessage({ target: System, type: "RELOAD", payload: { actorId } }, true),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error("timed out after 60s")), 60_000);
+          }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    toast: (title, content, tone) => {
+      const target = clientActors.webxr;
+      if (target == null) return;
+      PostMan.PostMessage({
+        target,
+        type: "TOAST",
+        payload: { title, content, source: "webxr-autoreload", tone, timeoutMs: 4000 },
+      });
+    },
+    log: (message) => console.log(message),
+  });
 }
 
 /**
