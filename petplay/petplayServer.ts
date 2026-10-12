@@ -23,7 +23,7 @@ export async function startPetplayServer(
     Deno.env.set("DENO_GLFW_PATH", "/usr/lib/libglfw.so.3");
   }
   ensuredenodir();
-  createTemp(import.meta.dirname!);
+  createTemp();
   console.log("Press Ctrl-C to close");
 
   function isStageforgeNetworkingEnabled(): boolean {

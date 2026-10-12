@@ -1,5 +1,5 @@
-import { PostMan } from "../submodules/stageforge/mod.ts"
-import { dirname, join, extname } from "jsr:@std/path";
+import { PostMan } from "../submodules/stageforge/mod.ts";
+import { dirname, extname, join } from "jsr:@std/path";
 
 export function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(() => resolve(), ms));
@@ -51,7 +51,7 @@ interface ActorNode {
 
 export async function assignActorHierarchy(
   tree: Record<string, ActorNode>,
-  parent: ActorAddress | null = null
+  parent: ActorAddress | null = null,
 ): Promise<void> {
   for (const node of Object.values(tree)) {
     if (parent && node.assignMessage) {
@@ -68,23 +68,61 @@ export async function assignActorHierarchy(
   }
 }
 
+/**
+ * This process's scratch directory. Every server runs from the repo root, so a
+ * shared `./tmp` would let one server's shutdown delete files another is still
+ * using (SteamVR remembers a binding file it failed to read, and the running
+ * server loses controller input). Workers share the pid, so the webxr actor's
+ * files land here too.
+ */
+const RUN_TEMP_DIR = join("./tmp", `run-${Deno.pid}`);
+
 export function tempFile(filename: string, base: string): string {
-  const basepath = join(base, "../")
-  const file = Deno.readFileSync(join(basepath, filename))
-  const temppath = Deno.makeTempFileSync({ dir: "./tmp", suffix: extname(filename) })
-  Deno.writeFileSync(temppath, file)
-  const path = Deno.realPathSync(temppath)
-  return path
+  const basepath = join(base, "../");
+  const file = Deno.readFileSync(join(basepath, filename));
+  ensureRunTemp();
+  const temppath = Deno.makeTempFileSync({ dir: RUN_TEMP_DIR, suffix: extname(filename) });
+  Deno.writeFileSync(temppath, file);
+  const path = Deno.realPathSync(temppath);
+  return path;
 }
 
-export async function createTemp(base: string) {
-  await Deno.mkdir("./tmp", { recursive: true })
+/**
+ * Creates this process's scratch directory with the controller binding in it.
+ * The action manifest names its binding relative to itself, and SteamVR
+ * remembers a binding it once failed to read, so the binding has to be there
+ * before any manifest is.
+ */
+function ensureRunTemp() {
+  const binding = join(RUN_TEMP_DIR, "bindings_oculus_touch.json");
+  try {
+    Deno.statSync(binding);
+    return;
+  } catch {
+    // Not yet created.
+  }
+  Deno.mkdirSync(RUN_TEMP_DIR, { recursive: true });
+  const resources = join(import.meta.dirname!, "../resources");
+  Deno.writeFileSync(binding, Deno.readFileSync(join(resources, "bindings_oculus_touch.json")));
+}
 
-  //stupid hack
-  const path = join(import.meta.dirname!, "../resources")
-  const file = Deno.readFileSync(join(path, "bindings_oculus_touch.json"))
-  const tmppath = join("./tmp", "bindings_oculus_touch.json")
-  Deno.writeFileSync(tmppath, file)
+export function createTemp() {
+  ensureRunTemp();
+  pruneDeadRunTemps();
+}
+
+/** Removes the scratch directories of servers that exited without cleaning up. */
+function pruneDeadRunTemps() {
+  if (Deno.build.os !== "linux") return;
+  for (const entry of Deno.readDirSync("./tmp")) {
+    const pid = /^run-(\d+)$/.exec(entry.name)?.[1];
+    if (!entry.isDirectory || pid == null || Number(pid) === Deno.pid) continue;
+    try {
+      Deno.statSync(`/proc/${pid}`);
+    } catch {
+      Deno.removeSync(join("./tmp", entry.name), { recursive: true });
+    }
+  }
 }
 
 export function ensuredenodir() {
@@ -93,11 +131,11 @@ export function ensuredenodir() {
 }
 
 export function destroyTemp() {
-  console.log("CLEAN")
+  console.log("CLEAN");
   try {
-    Deno.removeSync("./tmp/", { recursive: true });
+    Deno.removeSync(RUN_TEMP_DIR, { recursive: true });
   } catch (error) {
-    // A shutdown that races or never created `./tmp` has nothing to remove;
+    // A shutdown that races or never created its directory has nothing to remove;
     // only a real failure should surface as a teardown error.
     if (!(error instanceof Deno.errors.NotFound)) throw error;
   }

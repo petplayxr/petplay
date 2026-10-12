@@ -73,9 +73,8 @@ export function isServerProcess(pid: number): boolean {
 /**
  * Waits until `pid` is gone, not just until its REPL stops answering. The REPL
  * dies early in shutdown, while the process still runs its actor teardown,
- * `EXIT_STABILIZE_MS`, and finally `destroyTemp()` — which would delete the
- * `./tmp` a freshly started server has already created. Only the pid going away
- * means its resources (OpenVR, tmp) are released. `true` on non-Linux, where
+ * `EXIT_STABILIZE_MS`, and finally `destroyTemp()`. Only the pid going away
+ * means its resources (OpenVR, its `tmp/run-<pid>`) are released. `true` on non-Linux, where
  * `/proc` is unavailable and nothing can be observed.
  */
 async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
