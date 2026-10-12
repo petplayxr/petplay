@@ -74,6 +74,10 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   (`resources/fonts/material-icons/add-glyphs.py` adds glyphs to it). The Finnish letters
   ([finnish-keycap-letters-render-blank](../issues/FIXED-finnish-keycap-letters-render-blank/README.md))
   draw from the same atlas, and a `finnish-legends` step checks them.
+  The keyboard's own toolbar is covered too: reset pose, lock (a locked keyboard ignores a grab
+  that swings an unlocked one), Typing sounds and Key legends from its settings, and detach (the
+  keyboard stays put while the window moves). Now about 54 s. The reset step found
+  [reset-pose-folds-a-hinged-keyboard-flat](../issues/FIXED-reset-pose-folds-a-hinged-keyboard-flat/README.md).
 - `tests/playtest/toasts.ts`: a desktop notification (fed to the sink as a `busctl` line, so nothing
   goes on the real session bus) shows below the line of sight, an update replaces its toast, a
   burst queues past three, long text wraps inside the card, the stack follows the head, a laser

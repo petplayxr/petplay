@@ -10,9 +10,23 @@ import * as THREE from "three/webgpu";
 import type { PlaytestContext, PlaytestStep } from "../../utils/playtest.ts";
 import { onKeyboardEvent } from "../../classes/environment/keyboard/keyEvents.ts";
 import type { KeyboardLogicEvent } from "../../classes/environment/keyboard/types.ts";
-import { setSetting } from "../../classes/settings.ts";
+import { getSetting, setSetting } from "../../classes/settings.ts";
 import { legendGlyph } from "../../classes/environment/keyboard/keyboardKeyInteraction.tsx";
-import { laserDrag, showWindows, worldOf } from "./lib/steps.ts";
+import {
+  editSpatialGraph,
+  getSpatialGraph,
+} from "../../classes/environment/workspaceLayoutStore.ts";
+import {
+  aim,
+  laserDrag,
+  LEFT_ORIGIN,
+  openSettings,
+  press as pressPill,
+  showWindows,
+  squeeze,
+  toolbarButton,
+  worldOf,
+} from "./lib/steps.ts";
 
 function keyboard(ctx: PlaytestContext): THREE.Object3D {
   const object = ctx.nodeObject("keyboard");
@@ -48,6 +62,51 @@ function legendsFit(ctx: PlaytestContext) {
   const huge = sizes.filter(([, size]) => size > usual * 4).map(([text]) => text);
   ctx.note(`${sizes.length} legends`);
   ctx.expect(huge.length === 0, `every legend is drawn at keycap size (oversized: ${huge})`);
+}
+
+function keyboardNode() {
+  const node = getSpatialGraph()?.nodes.keyboard;
+  if (node?.kind !== "keyboard") throw new Error("the layout has no keyboard");
+  return node;
+}
+
+function hingeAngle(): number | null {
+  const constraint = keyboardNode().constraint;
+  return constraint?.kind === "hinge" ? constraint.angle : null;
+}
+
+/** Laser-grabs the keyboard at its centre and pulls it 0.15 m down; returns how far it swung. */
+async function keyboardDrag(ctx: PlaytestContext) {
+  const angle = hingeAngle() ?? 0;
+  const position = worldOf(keyboard(ctx)).position;
+  const start = worldOf(keyboard(ctx)).position;
+  aim(ctx, "left", LEFT_ORIGIN, start);
+  await ctx.sleep(300);
+  squeeze(ctx, "left", true);
+  await ctx.sleep(200);
+  for (let i = 1; i <= 10; i++) {
+    const down = new THREE.Vector3(0, -0.015 * i, 0);
+    aim(ctx, "left", LEFT_ORIGIN.clone().add(down), start.clone().add(down));
+    await ctx.sleep(50);
+  }
+  await ctx.sleep(200);
+  squeeze(ctx, "left", false);
+  await ctx.sleep(300);
+  ctx.t.parkLeftHand();
+  const swung = Math.abs((hingeAngle() ?? 0) - angle);
+  const moved = worldOf(keyboard(ctx)).position.distanceTo(position);
+  ctx.note(`drag: hinge ${swung.toFixed(4)} rad, ${moved.toFixed(4)} m`);
+  return { swung, moved };
+}
+
+/** Sets the keyboard's hinge angle directly, as a drag would. */
+function setHingeAngle(angle: number) {
+  editSpatialGraph((graph) => {
+    const node = graph.nodes.keyboard;
+    if (node?.kind !== "keyboard" || node.constraint?.kind !== "hinge") return graph;
+    const constraint = { ...node.constraint, angle };
+    return { ...graph, nodes: { ...graph.nodes, keyboard: { ...node, constraint } } };
+  });
 }
 
 const chars = (events: KeyboardLogicEvent[]) =>
@@ -139,6 +198,93 @@ export const steps: PlaytestStep[] = [
       } finally {
         setSetting("keyboardLocale", "us");
       }
+    },
+  },
+  {
+    name: "toolbar-reset",
+    run: async (ctx) => {
+      const resting = hingeAngle();
+      if (!ctx.expect(resting != null, "the keyboard is hinged to the window")) return;
+      setHingeAngle(resting! + 0.5);
+      await ctx.sleep(300);
+      if (!await toolbarButton(ctx, "refresh", keyboard(ctx))) return;
+      await ctx.waitFor(
+        () => Math.abs((hingeAngle() ?? 0) - resting!) < 1e-6,
+        `Reset pose folds the keyboard back to its resting angle (${
+          THREE.MathUtils.radToDeg(resting!).toFixed(0)
+        }°)`,
+      );
+      ctx.note(`hinge after reset: ${THREE.MathUtils.radToDeg(hingeAngle() ?? NaN).toFixed(1)}°`);
+    },
+  },
+  {
+    name: "toolbar-lock",
+    run: async (ctx) => {
+      const resting = hingeAngle();
+      const free = await keyboardDrag(ctx);
+      ctx.expect(free.swung > 0.05 || free.moved > 0.02, "an unlocked keyboard moves when grabbed");
+      if (resting != null) setHingeAngle(resting);
+      await ctx.sleep(300);
+      if (!await toolbarButton(ctx, "lock", keyboard(ctx))) return;
+      if (!await ctx.waitFor(() => keyboardNode().locked === true, "the lock button locks it")) {
+        return;
+      }
+      try {
+        const { swung, moved } = await keyboardDrag(ctx);
+        ctx.expect(swung < 1e-3 && moved < 0.005, "a locked keyboard does not move when grabbed");
+      } finally {
+        await toolbarButton(ctx, "lock", keyboard(ctx));
+        await ctx.waitFor(() => !keyboardNode().locked, "and pressing it again unlocks it");
+      }
+    },
+  },
+  {
+    name: "toolbar-settings",
+    run: async (ctx) => {
+      const root = keyboard(ctx);
+      if (!await openSettings(ctx, root)) return;
+      try {
+        if (!await pressPill(ctx, "Typing sounds", "Off", root)) return;
+        await ctx.waitFor(() => getSetting("typingSounds") === false, "Typing sounds Off");
+        if (!await pressPill(ctx, "Typing sounds", "On", root)) return;
+        await ctx.waitFor(() => getSetting("typingSounds") === true, "and back On");
+        if (!await pressPill(ctx, "Key legends", "Suomi", root)) return;
+        await ctx.waitFor(
+          () => getSetting("keyboardLocale") === "fi" && ctx.textObject(keyboard(ctx), "ö"),
+          "Key legends Suomi puts the Finnish legends up",
+        );
+        if (!await pressPill(ctx, "Key legends", "English (US)", keyboard(ctx))) return;
+        await ctx.waitFor(
+          () => getSetting("keyboardLocale") === "us" && ctx.textObject(keyboard(ctx), "Caps"),
+          "and English (US) puts the US ones back",
+        );
+      } finally {
+        setSetting("typingSounds", true);
+        setSetting("keyboardLocale", "us");
+      }
+    },
+  },
+  {
+    // Last: a detached keyboard stays detached for the rest of the run.
+    name: "toolbar-detach",
+    run: async (ctx) => {
+      const before = worldOf(keyboard(ctx)).position;
+      if (!await toolbarButton(ctx, "link", keyboard(ctx))) return;
+      if (
+        !await ctx.waitFor(() => keyboardNode().parentId == null, "the link button detaches it")
+      ) return;
+      await ctx.sleep(300);
+      const jump = worldOf(keyboard(ctx)).position.distanceTo(before);
+      ctx.note(`detaching moved it ${jump.toFixed(4)} m`);
+      ctx.expect(jump < 0.01, "detaching leaves the keyboard where it was");
+      const at = worldOf(keyboard(ctx)).position;
+      const moved = await laserDrag(ctx, 0.25);
+      const drift = worldOf(keyboard(ctx)).position.distanceTo(at);
+      ctx.note(`window moved ${moved.toFixed(3)} m, keyboard ${drift.toFixed(4)} m`);
+      ctx.expect(
+        moved > 0.1 && drift < 0.01,
+        "a detached keyboard no longer rides with the window",
+      );
     },
   },
 ];

@@ -430,6 +430,21 @@ Deno.test("reset pose returns an attached element to its slot hinge angle", () =
   assert(reset?.constraint?.kind === "hinge" && reset.constraint.angle === 0, "hinge resets");
 });
 
+Deno.test("reset pose leans a hinged keyboard back out to its slot's angle, not flat", () => {
+  let graph = createInitialSpatialGraph();
+  const keyboard = graph.nodes.keyboard;
+  assert(keyboard?.constraint?.kind === "hinge", "keyboard should start hinged");
+  const resting = keyboard.constraint.angle;
+  assert(resting < -0.5, "the keyboard's slot leans it out");
+  graph.nodes.keyboard = { ...keyboard, constraint: { ...keyboard.constraint, angle: 0.1 } };
+  graph = resetSpatialNodeTransform(graph, "keyboard");
+  const reset = graph.nodes.keyboard;
+  assert(
+    reset?.constraint?.kind === "hinge" && reset.constraint.angle === resting,
+    "the keyboard's hinge goes back to the slot's resting angle",
+  );
+});
+
 Deno.test("a hinged display meets its parent's panel edge on every side", () => {
   for (const side of ["left", "right", "top", "bottom"] as const) {
     // The default keyboard occupies the bottom slot; free it so every side can be exercised.

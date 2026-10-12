@@ -1188,8 +1188,16 @@ export function resetSpatialNodeTransform(
   const node = current.nodes[nodeId];
   if (node == null || node.kind === "control") return current;
   const graph = cloneGraph(current);
-  graph.nodes[nodeId] = node.constraint?.kind === "hinge"
-    ? { ...node, constraint: { ...node.constraint, angle: 0 } }
+  // A hinge folds back to its slot's resting angle (a keyboard leans out at -55°), not to 0.
+  const constraint = node.constraint;
+  graph.nodes[nodeId] = constraint?.kind === "hinge"
+    ? {
+      ...node,
+      constraint: {
+        ...constraint,
+        angle: current.hitboxes[constraint.attachmentSlotId]?.attachments[node.kind]?.angle ?? 0,
+      },
+    }
     : {
       ...node,
       localTransform: {
