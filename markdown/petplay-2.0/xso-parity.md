@@ -71,7 +71,10 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
 
 - [x] **Layout loading + locale switching** (`--keyboard-locale`, or "Key legends" in the
   keyboard's settings, saved as `keyboardLocale`)
-- [~] Sticky / toggle modifiers
+- [x] Sticky / toggle modifiers: Shift, Ctrl, Alt and Win latch for the next key and release
+  after it (Ctrl c, Ctrl Shift t); Caps Lock toggles. A quick second tap (under 0.25 s, like XSO)
+  on Shift or Alt holds it down until the next tap, for Shift lock or Alt Tab Tab. Playtested in
+  `--novr`. A held key looks the same as a latched one.
 - [~] **Keyboard pin + opacity**: pin is the toolbar Lock; opacity uses the same per-node pills as
   windows (the depth occluder is dropped below 100% so the desktop shows through)
 - [x] Typing sounds: spatial key clicks through the native raylib audio context (they already

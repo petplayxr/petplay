@@ -8,11 +8,7 @@ import type {
   NormalizedKeyFace,
 } from "./types.ts";
 import { keyFaceToToken } from "./theme.ts";
-import {
-  getKeyboardLocale,
-  keyLegendFromScan,
-  localeKeyFor,
-} from "./keyboardLocale.ts";
+import { getKeyboardLocale, keyLegendFromScan, localeKeyFor } from "./keyboardLocale.ts";
 
 export function isSpacer(
   c: KeyboardJsonKeyCell,
@@ -90,6 +86,7 @@ export function normalizeKeyFace(
       (localeKeyFor(locale, hx)?.letter ?? false),
     toggle: c.toggle ?? false,
     sticky: c.sticky ?? false,
+    doubleTappable: c.isDoubleTappable ?? false,
   };
 }
 
@@ -193,9 +190,7 @@ function navRowsWithArrowsOnly(navRows: RowItem[][]): RowItem[][] {
     clusterStart = i;
   }
   return navRows.map((row, i) =>
-    i < clusterStart
-      ? row.map((): RowItem => ({ spacer: true, width: 1, height: 1 }))
-      : row
+    i < clusterStart ? row.map((): RowItem => ({ spacer: true, width: 1, height: 1 })) : row
   );
 }
 
@@ -259,8 +254,7 @@ export function keyboardContentBoundsUnits(
     return m + 2 * shellPad;
   };
 
-  const colH = (nRows: number) =>
-    nRows * rowH + Math.max(0, nRows - 1) * keyPadding + packH;
+  const colH = (nRows: number) => nRows * rowH + Math.max(0, nRows - 1) * keyPadding + packH;
 
   const wMain = colWidth(mainRows);
   const columns = keyboardColumns(mode, { mainRows, navRows, numpadRows });
@@ -296,6 +290,20 @@ export function keyboardContentBoundsMeters(
   };
 }
 
+/** The modifier a sticky key latches, by set-1 make-code. */
+export const STICKY_SCAN_MODIFIERS: Record<string, StickyModifier> = {
+  "2A": "shift",
+  "36": "shift",
+  "1D": "leftCtrl",
+  "E01D": "rightCtrl",
+  "38": "leftAlt",
+  "E038": "rightAlt",
+  "E05B": "leftMeta",
+  "E05C": "rightMeta",
+};
+
+export type StickyModifier = Exclude<keyof ModifierSnapshot, "caps">;
+
 /**
  * Latched “down” look for [InteractiveKeyCap](keyboardKeyInteraction.tsx): caps, shift, ctrl, alt, meta
  * (matches [handleKey] in `keyboardUi.tsx` scan codes).
@@ -308,12 +316,6 @@ export function isModifierLatchedVisual(
   const hi = face.scanCodeHex.toUpperCase();
   if (face.toggle && hi === "3A") return mods.caps;
   if (!face.sticky) return false;
-  if (hi === "2A" || hi === "36") return mods.shift;
-  if (hi === "1D") return mods.leftCtrl;
-  if (hi === "E01D") return mods.rightCtrl;
-  if (hi === "38") return mods.leftAlt;
-  if (hi === "E038") return mods.rightAlt;
-  if (hi === "E05B") return mods.leftMeta;
-  if (hi === "E05C") return mods.rightMeta;
-  return false;
+  const modifier = STICKY_SCAN_MODIFIERS[hi];
+  return modifier != null && mods[modifier];
 }

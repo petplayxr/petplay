@@ -22,6 +22,8 @@ import {
   keyboardColumns,
   resolveLabel,
   type RowItem,
+  STICKY_SCAN_MODIFIERS,
+  type StickyModifier,
 } from "./keyboardLayout.ts";
 import { stripJsonComments } from "./parseJsonComments.ts";
 import { InteractiveKeyCap } from "./keyboardKeyInteraction.tsx";
@@ -607,6 +609,9 @@ const STICKY_MODIFIER_KEYS = [
   "rightMeta",
 ] as const satisfies readonly (keyof ModifierSnapshot)[];
 
+/** How soon a second tap on a double-tappable modifier holds it down; XSO uses 0.25 s. */
+const DOUBLE_TAP_MS = 250;
+
 const LAYOUT_MODE_ENV_VAR = "PETPLAY_KEYBOARD_LAYOUT_MODE";
 const KEYBOARD_LAYOUT_MODES: Record<string, KeyboardLayoutMode> = {
   compact: "compact",
@@ -697,6 +702,14 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
       [sink],
     );
 
+    /** Modifiers a double tap holds down; the one-shot release skips them. */
+    const holdLocked = useRef(new Set<StickyModifier>());
+    const latchedAt = useRef<Partial<Record<StickyModifier, number>>>({});
+    const setModifier = useCallback((modifier: StickyModifier, active: boolean) => {
+      setMods((m) => ({ ...m, [modifier]: active }));
+      emit({ kind: "modifier", modifier, active });
+    }, [emit]);
+
     const handleKey = useCallback(
       (
         face: NormalizedKeyFace,
@@ -725,63 +738,25 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
           });
           return;
         }
-        if (face.sticky) {
-          if (hi === "2A" || hi === "36") {
-            setMods((m) => {
-              const next = { ...m, shift: !m.shift };
-              emit({ kind: "modifier", modifier: "shift", active: next.shift });
-              return next;
-            });
-            return;
+        const modifier = face.sticky ? STICKY_SCAN_MODIFIERS[hi] : undefined;
+        if (modifier != null) {
+          const now = performance.now();
+          const held = holdLocked.current;
+          if (held.has(modifier)) {
+            held.delete(modifier);
+            setModifier(modifier, false);
+          } else if (!mods[modifier]) {
+            latchedAt.current[modifier] = now;
+            setModifier(modifier, true);
+          } else if (
+            face.doubleTappable && now - (latchedAt.current[modifier] ?? -Infinity) < DOUBLE_TAP_MS
+          ) {
+            // Second tap in quick succession: keep it down across keys (Shift lock, Alt+Tab+Tab).
+            held.add(modifier);
+          } else {
+            setModifier(modifier, false);
           }
-          if (hi === "1D") {
-            setMods((m) => {
-              const next = { ...m, leftCtrl: !m.leftCtrl };
-              emit({ kind: "modifier", modifier: "leftCtrl", active: next.leftCtrl });
-              return next;
-            });
-            return;
-          }
-          if (hi === "E01D") {
-            setMods((m) => {
-              const next = { ...m, rightCtrl: !m.rightCtrl };
-              emit({ kind: "modifier", modifier: "rightCtrl", active: next.rightCtrl });
-              return next;
-            });
-            return;
-          }
-          if (hi === "38") {
-            setMods((m) => {
-              const next = { ...m, leftAlt: !m.leftAlt };
-              emit({ kind: "modifier", modifier: "leftAlt", active: next.leftAlt });
-              return next;
-            });
-            return;
-          }
-          if (hi === "E038") {
-            setMods((m) => {
-              const next = { ...m, rightAlt: !m.rightAlt };
-              emit({ kind: "modifier", modifier: "rightAlt", active: next.rightAlt });
-              return next;
-            });
-            return;
-          }
-          if (hi === "E05B") {
-            setMods((m) => {
-              const next = { ...m, leftMeta: !m.leftMeta };
-              emit({ kind: "modifier", modifier: "leftMeta", active: next.leftMeta });
-              return next;
-            });
-            return;
-          }
-          if (hi === "E05C") {
-            setMods((m) => {
-              const next = { ...m, rightMeta: !m.rightMeta };
-              emit({ kind: "modifier", modifier: "rightMeta", active: next.rightMeta });
-              return next;
-            });
-            return;
-          }
+          return;
         }
         const { main } = keyLegendFromScan(
           locale,
@@ -799,7 +774,9 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
         // release with it, so a chord does not leave Ctrl or Shift held. Caps
         // Lock is the exception — it is `toggle`, and stays latched.
         setMods((m) => {
-          const latched = STICKY_MODIFIER_KEYS.filter((key) => m[key] === true);
+          const latched = STICKY_MODIFIER_KEYS.filter((key) =>
+            m[key] === true && !holdLocked.current.has(key)
+          );
           if (latched.length === 0) {
             return m;
           }
@@ -811,7 +788,7 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
           return next;
         });
       },
-      [emit, mods, spatialAudio, typingSounds, locale],
+      [emit, mods, setModifier, spatialAudio, typingSounds, locale],
     );
 
     // Parsing the layout allocates a fresh face object per key cell. Doing it during render gave

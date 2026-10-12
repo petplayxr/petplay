@@ -76,7 +76,8 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   draw from the same atlas, and a `finnish-legends` step checks them.
   The keyboard's own toolbar is covered too: reset pose, lock (a locked keyboard ignores a grab
   that swings an unlocked one), Typing sounds and Key legends from its settings, and detach (the
-  keyboard stays put while the window moves). Now about 54 s. The reset step found
+  keyboard stays put while the window moves), plus shortcuts (Ctrl c, Ctrl Shift t, Alt Tab) and
+  XSO's double-tap hold on Alt. Now about 70 s. The reset step found
   [reset-pose-folds-a-hinged-keyboard-flat](../issues/FIXED-reset-pose-folds-a-hinged-keyboard-flat/README.md).
 - `tests/playtest/toasts.ts`: a desktop notification (fed to the sink as a `busctl` line, so nothing
   goes on the real session bus) shows below the line of sight, an update replaces its toast, a

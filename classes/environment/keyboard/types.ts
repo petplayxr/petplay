@@ -1,4 +1,3 @@
-
 export type KeyboardJsonKeyCell = {
   keycode?: string;
   keycodes?: string[];
@@ -111,6 +110,8 @@ export type NormalizedKeyFace = {
   respectCapsLock: boolean;
   toggle: boolean;
   sticky: boolean;
+  /** A sticky key a quick second tap holds down until the next tap (XSO's hold lock). */
+  doubleTappable?: boolean;
   useVirtualKeyCode?: boolean;
   virtualName?: string;
 };

@@ -99,6 +99,33 @@ async function keyboardDrag(ctx: PlaytestContext) {
   return { swung, moved };
 }
 
+/** Two quick trigger pulls on the cap labelled `legend`, as a double tap; returns the events. */
+async function doubleTap(ctx: PlaytestContext, legend: string): Promise<KeyboardLogicEvent[]> {
+  const events: KeyboardLogicEvent[] = [];
+  const cap = ctx.textObject(keyboard(ctx), legendGlyph(legend).text);
+  if (!ctx.expect(cap, `the keyboard has a ${legend} key`)) return events;
+  const stop = onKeyboardEvent((event) => events.push(event));
+  try {
+    const point = worldOf(cap!).position;
+    const from = new THREE.Vector3(0, 0, 0.6).applyQuaternion(worldOf(keyboard(ctx)).quaternion)
+      .add(point);
+    aim(ctx, "left", from, point);
+    await ctx.sleep(300);
+    for (let i = 0; i < 2; i++) {
+      ctx.t.input.left.trigger = true;
+      await ctx.sleep(50);
+      ctx.t.input.left.trigger = false;
+      await ctx.sleep(50);
+    }
+    await ctx.sleep(300);
+    ctx.t.parkLeftHand();
+    await ctx.sleep(200);
+  } finally {
+    stop();
+  }
+  return events;
+}
+
 /** Sets the keyboard's hinge angle directly, as a drag would. */
 function setHingeAngle(angle: number) {
   editSpatialGraph((graph) => {
@@ -154,6 +181,65 @@ export const steps: PlaytestStep[] = [
       const codes = events.flatMap((event) => event.kind === "key" ? [event.scanCodeHex] : []);
       ctx.note(`scan codes: ${codes.join(" ")}`);
       ctx.expect(codes.join(" ") === "0E 1C 39", "Backspace, Enter and Space send their keys");
+    },
+  },
+  {
+    name: "shortcuts",
+    run: async (ctx) => {
+      // What the desktop sink sees: modifier down, key, modifier up, in that order.
+      const stream = (events: KeyboardLogicEvent[]) =>
+        events.map((event) =>
+          event.kind === "key" ? event.scanCodeHex : `${event.modifier}${event.active ? "+" : "-"}`
+        ).join(" ");
+      const copy = stream(await press(ctx, "ctrl", "c"));
+      ctx.note(`Ctrl c: ${copy}`);
+      ctx.expect(
+        /^(left|right)Ctrl\+ 2E (left|right)Ctrl-$/.test(copy),
+        "Ctrl then c holds Ctrl over the c and releases it after",
+      );
+      const reopen = stream(await press(ctx, "ctrl", "Shift", "T"));
+      ctx.note(`Ctrl Shift t: ${reopen}`);
+      ctx.expect(
+        /^(left|right)Ctrl\+ shift\+ 14 shift- (left|right)Ctrl-$/.test(reopen),
+        "Ctrl and Shift both latch for a three-key chord and both release after it",
+      );
+      const alt = await press(ctx, "alt");
+      ctx.expect(alt.some((event) => event.kind === "modifier" && event.active), "Alt latches");
+      const tab = stream(await press(ctx, "Tab"));
+      ctx.note(`then Tab: ${tab}`);
+      ctx.expect(/^0F (left|right)Alt-$/.test(tab), "and applies to the next key, Tab");
+    },
+  },
+  {
+    name: "double-tap-holds",
+    run: async (ctx) => {
+      // XSO's hold lock: a quick second tap on Alt keeps it down, so Tab can cycle windows.
+      const tapped = await doubleTap(ctx, "alt");
+      ctx.expect(
+        tapped.length === 1 && tapped[0].kind === "modifier" && tapped[0].active,
+        `a double tap on Alt latches it once and does not unlatch (${tapped.length} events)`,
+      );
+      const tabs = await press(ctx, "Tab", "Tab");
+      const codes = tabs.map((event) => event.kind === "key" ? event.scanCodeHex : "mod");
+      ctx.note(`Tab Tab with Alt held: ${codes.join(" ")}`);
+      ctx.expect(codes.join(" ") === "0F 0F", "Alt stays down across both Tabs");
+      const release = await press(ctx, "alt");
+      ctx.expect(
+        release.some((event) => event.kind === "modifier" && !event.active),
+        "one more tap lets Alt go",
+      );
+      const plain = await press(ctx, "Tab");
+      ctx.expect(
+        plain.length === 1 && plain[0].kind === "key",
+        "and the next key goes out without it",
+      );
+      // A slow second tap is just a second tap: it unlatches.
+      await press(ctx, "alt");
+      const slow = await press(ctx, "alt");
+      ctx.expect(
+        slow.some((event) => event.kind === "modifier" && !event.active),
+        "a slow second tap unlatches instead of holding",
+      );
     },
   },
   {
