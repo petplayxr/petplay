@@ -17,6 +17,7 @@ import { pushToast, toastQueue } from "../classes/environment/toastStore.ts";
 import { editSpatialGraph, getSpatialGraph } from "../classes/environment/workspaceLayoutStore.ts";
 import {
   getSpatialRootId,
+  setSpatialNodeAutoHide,
   setSpatialNodeCurvature,
   setSpatialNodeMouseBlocked,
   setSpatialNodeOpacity,
@@ -242,6 +243,18 @@ export function headsetSteps(host: CheckHost, displayId: string): CheckStep[] {
         return withGraph(
           (g) => setSpatialNodeMouseBlocked(g, displayId, true),
           (g) => setSpatialNodeMouseBlocked(g, displayId, before),
+        );
+      },
+    },
+    {
+      id: "auto-hide",
+      question:
+        "Turn your head well away from the display, then back. Does it fade out, then back in?",
+      setup: () => {
+        const before = node()?.autoHide ?? false;
+        return withGraph(
+          (g) => setSpatialNodeAutoHide(g, displayId, true),
+          (g) => setSpatialNodeAutoHide(g, displayId, before),
         );
       },
     },

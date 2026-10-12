@@ -47,6 +47,8 @@ type SpatialNodeBase = {
    * desktop mouse. For a window you watch rather than use, so a stray laser can't pause a video.
    */
   mouseBlocked?: boolean;
+  /** Displays: fade out while the head is turned away from it (XSO's auto-hide). */
+  autoHide?: boolean;
   /** 0..1, unset means opaque. Only the node itself: children keep their own. */
   opacity?: number;
   /** Displays: OpenVR overlay curvature, 0 < c <= `MAX_DISPLAY_CURVATURE`; unset means flat. */
@@ -755,6 +757,19 @@ export function setSpatialNodeMouseBlocked(
   const graph = cloneGraph(current);
   const { mouseBlocked: _previous, ...rest } = node;
   graph.nodes[nodeId] = (mouseBlocked ? { ...rest, mouseBlocked } : rest) as SpatialNode;
+  return graph;
+}
+
+export function setSpatialNodeAutoHide(
+  current: SpatialGraph,
+  nodeId: SpatialNodeId,
+  autoHide: boolean,
+): SpatialGraph {
+  const node = current.nodes[nodeId];
+  if (!node || (node.autoHide ?? false) === autoHide) return current;
+  const graph = cloneGraph(current);
+  const { autoHide: _previous, ...rest } = node;
+  graph.nodes[nodeId] = (autoHide ? { ...rest, autoHide } : rest) as SpatialNode;
   return graph;
 }
 

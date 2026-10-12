@@ -18,6 +18,7 @@ import {
   reconcileWorkspaceOutputs,
   releaseHinge,
   resetSpatialNodeTransform,
+  setSpatialNodeAutoHide,
   setSpatialNodeCurvature,
   setSpatialNodeLocked,
   setSpatialNodeMouseBlocked,
@@ -582,6 +583,16 @@ Deno.test("mouse block sets the flag, and unblocking clears it", () => {
   assert(graph.nodes["display-1"].mouseBlocked === undefined, "original graph untouched");
   const cleared = setSpatialNodeMouseBlocked(blocked, "display-1", false);
   assert(!("mouseBlocked" in cleared.nodes["display-1"]), "unblocking removes the field");
+});
+
+Deno.test("auto-hide is a flag that clears when off", () => {
+  const graph = createInitialSpatialGraph();
+  assert(setSpatialNodeAutoHide(graph, "display-1", false) === graph, "already off");
+  const on = setSpatialNodeAutoHide(graph, "display-1", true);
+  assert(on.nodes["display-1"].autoHide === true, "flag set");
+  assert(graph.nodes["display-1"].autoHide === undefined, "original graph untouched");
+  const off = setSpatialNodeAutoHide(on, "display-1", false);
+  assert(!("autoHide" in off.nodes["display-1"]), "turning it off removes the field");
 });
 
 Deno.test("opacity is clamped, and full opacity clears the field", () => {

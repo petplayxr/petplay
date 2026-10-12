@@ -63,6 +63,7 @@ import {
   resetSpatialNodeTransform,
   SCENE_ORIGIN_ID,
   setHingeAngle,
+  setSpatialNodeAutoHide,
   setSpatialNodeCurvature,
   setSpatialNodeLocked,
   setSpatialNodeMouseBlocked,
@@ -893,6 +894,23 @@ function MouseSettingsSection(
   );
 }
 
+function AutoHideSettingsSection(
+  { node, setGraph }: {
+    node: SpatialNode;
+    setGraph: React.Dispatch<React.SetStateAction<SpatialGraph>>;
+  },
+) {
+  const on = node.autoHide ?? false;
+  const set = (next: boolean) =>
+    setGraph((latest) => setSpatialNodeAutoHide(latest, node.id, next));
+  return (
+    <SpatialSettingsSection label="Hide when looking away">
+      <SpatialSettingsButton label="On" selected={on} onClick={() => set(true)} />
+      <SpatialSettingsButton label="Off" selected={!on} onClick={() => set(false)} />
+    </SpatialSettingsSection>
+  );
+}
+
 function TypingSoundSettingsSection() {
   const on = useSetting("typingSounds");
   return (
@@ -1225,6 +1243,7 @@ function DisplaySpatialNodeView({
         workspaceCrop={workspaceCrop}
         opacity={node.opacity}
         curvature={node.curvature}
+        autoHide={node.autoHide}
         onMouse={activeDisplayOverlayHostActor != null && !node.mouseBlocked
           ? croppedMouseSink
           : undefined}
@@ -1265,6 +1284,7 @@ function DisplaySpatialNodeView({
                 <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
                 <OpacitySettingsSection node={node} setGraph={setGraph} />
                 <MouseSettingsSection node={node} setGraph={setGraph} />
+                <AutoHideSettingsSection node={node} setGraph={setGraph} />
                 <CurvatureSettingsSection node={node} setGraph={setGraph} />
                 <SpatialSettingsSection
                   label={assignedSide == null

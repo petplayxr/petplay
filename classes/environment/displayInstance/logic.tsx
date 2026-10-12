@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 // @deno-types="@types/three/webgpu"
 import * as THREE from "three/webgpu";
 import {
@@ -10,15 +10,11 @@ import {
 import type { HandleOptions, HandleStore } from "@pmndrs/handle";
 import { PostMan } from "../../../submodules/stageforge/mod.ts";
 import { hmd34FromColumnMajor4x4 } from "../../openvrTransform.ts";
-import {
-  DisplayInstanceFrame,
-  type DisplayInstanceFrameProps,
-} from "./ui.tsx";
-import {
-  DEFAULT_DISPLAY_HEIGHT,
-  DISPLAY_ASPECT_WIDTH_OVER_HEIGHT,
-} from "../displayMetrics.ts";
+import { DisplayInstanceFrame, type DisplayInstanceFrameProps } from "./ui.tsx";
+import { DEFAULT_DISPLAY_HEIGHT, DISPLAY_ASPECT_WIDTH_OVER_HEIGHT } from "../displayMetrics.ts";
 import type { WorkspaceRect } from "../workspaceDisplays.ts";
+import { getHeadObject } from "../trackedOrigins.ts";
+import { angleBetweenDeg, nextAutoHidden, stepAutoHideFade } from "./autoHide.ts";
 
 // deno-lint-ignore no-explicit-any
 extend(THREE as any);
@@ -39,6 +35,8 @@ export type DisplayInstanceProps = DisplayInstanceFrameProps & {
   opacity?: number;
   /** Overlay curvature (OpenVR `SetOverlayCurvature`), 0 = flat. */
   curvature?: number;
+  /** Fade out, and stop taking rays, while the head is turned away (see `autoHide.ts`). */
+  autoHide?: boolean;
   /** Transform target for this display's GrabBox; defaults to the display itself. */
   manipulationTargetRef?: React.RefObject<THREE.Object3D | null>;
   /** Optional constraint/apply policy for the Handle targeting this display. */
@@ -86,6 +84,7 @@ export function DisplayInstance(
     virtualDisplayName,
     opacity = 1,
     curvature = 0,
+    autoHide = false,
     manipulationTargetRef,
     manipulationOptions,
     manipulationStoreRef,
@@ -108,6 +107,13 @@ export function DisplayInstance(
   const lastSentCurvature = useRef<number | null>(null);
   /** Last crop sent to the overlay host, compared field-wise to avoid a per-frame JSON.stringify. */
   const lastSentCrop = useRef<WorkspaceRect | null>(null);
+  /** Auto-hide: 1 shown, 0 faded out; multiplies the opacity sent to the overlay. */
+  const autoHideFactor = useRef(1);
+  const autoHidden = useRef(false);
+  const autoHideHead = useRef(new THREE.Vector3());
+  const autoHideFacing = useRef(new THREE.Vector3());
+  /** Mirrors `autoHidden` for rendering; only changes when the window hides or comes back. */
+  const [raysOff, setRaysOff] = useState(false);
 
   const height = frameProps.height ?? DEFAULT_DISPLAY_HEIGHT;
   const localHalfW = 0.5 * height * DISPLAY_ASPECT_WIDTH_OVER_HEIGHT;
@@ -138,6 +144,29 @@ export function DisplayInstance(
       }
     };
   }, [displayOverlayHostActor, virtualDisplayId]);
+
+  useFrame((state, delta) => {
+    const obj = handleRef.current;
+    let hidden = false;
+    if (autoHide && obj != null) {
+      const head = getHeadObject(state.gl, state.camera as THREE.Camera);
+      head.updateWorldMatrix(true, false);
+      obj.updateWorldMatrix(true, false);
+      // Both look down -Z: the head where it looks, the window away from its viewer.
+      autoHideHead.current.set(0, 0, -1).transformDirection(head.matrixWorld);
+      autoHideFacing.current.set(0, 0, -1).transformDirection(obj.matrixWorld);
+      hidden = nextAutoHidden(
+        autoHidden.current,
+        angleBetweenDeg(autoHideHead.current, autoHideFacing.current),
+      );
+    }
+    autoHideFactor.current = stepAutoHideFade(autoHideFactor.current, hidden, delta);
+    if (obj != null) obj.userData.autoHideFactor = autoHideFactor.current;
+    if (hidden !== autoHidden.current) {
+      autoHidden.current = hidden;
+      setRaysOff(hidden);
+    }
+  });
 
   useFrame(() => {
     if (displayOverlayHostActor == null) {
@@ -189,11 +218,12 @@ export function DisplayInstance(
       lastCrop.y === workspaceCrop.y &&
       lastCrop.width === workspaceCrop.width &&
       lastCrop.height === workspaceCrop.height;
+    const sentOpacity = opacity * autoHideFactor.current;
     if (lastSentHmd.current && lastSentWidth.current !== null) {
       if (
         hmd34ApproxEqual(hmd, lastSentHmd.current) &&
         Math.abs(lastSentWidth.current - widthMeters) < 0.0001 &&
-        lastSentOpacity.current === opacity &&
+        lastSentOpacity.current === sentOpacity &&
         lastSentCurvature.current === curvature &&
         cropUnchanged
       ) {
@@ -202,7 +232,7 @@ export function DisplayInstance(
     }
     lastSentHmd.current = hmd;
     lastSentWidth.current = widthMeters;
-    lastSentOpacity.current = opacity;
+    lastSentOpacity.current = sentOpacity;
     lastSentCurvature.current = curvature;
     lastSentCrop.current = workspaceCrop ? { ...workspaceCrop } : null;
     try {
@@ -217,14 +247,14 @@ export function DisplayInstance(
               crop: workspaceCrop,
               hmd,
               widthMeters,
-              opacity,
+              opacity: sentOpacity,
               curvature,
             },
           }
           : {
             target: targetActor,
             type: "SYNCDISPLAYPOSE",
-            payload: { hmd, widthMeters, opacity, curvature },
+            payload: { hmd, widthMeters, opacity: sentOpacity, curvature },
           },
       );
     } catch {
@@ -245,6 +275,7 @@ export function DisplayInstance(
       <DisplayInstanceFrame
         ref={handleRef}
         {...frameProps}
+        {...(raysOff ? { rayHitSurface: false, shellRayPickable: false, onMouse: undefined } : {})}
         curvature={curvature}
         manipulationTargetRef={manipulationTargetRef}
         manipulationOptions={manipulationOptions}

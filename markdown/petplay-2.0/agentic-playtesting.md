@@ -51,7 +51,7 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   SteamVR but no headset.
 - `utils/headsetCheck.ts`: for what only a person in the headset can judge. `runHeadsetCheck(host)`
   from `/eval` works through the unverified features one at a time (curve direction and pointer,
-  opacity, mouse block, anchoring to head and hand, wrist hand, size and grab-to-move, haptics,
+  opacity, mouse block, auto-hide, anchoring to head and hand, wrist hand, size and grab-to-move, haptics,
   battery). Each step changes the display in view, asks a yes/no question as a toast, and undoes
   the change once answered.
   Answers go on the left stick (up yes, down no, left skip) and land in

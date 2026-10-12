@@ -32,7 +32,11 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
 - [~] Mouse-block and auto-hide per window. Mouse-block: "Laser drives mouse" On/Off in a
   display's settings (per-node `mouseBlocked`, persisted). The laser still lands on the window
   and grabs it, but sends no moves, clicks or stick scroll. Toggled through the UI in `--novr`;
-  the desktop cursor staying put needs a headset check. No auto-hide yet
+  the desktop cursor staying put needs a headset check. Auto-hide: "Hide when looking away"
+  On/Off (per-node `autoHide`). Like XSO's vision clipping, the window fades out over 0.2 s once
+  the head turns 60° from where it faces, comes back under 55°, and takes no rays while hidden
+  (`displayInstance/autoHide.ts`). Fade factor checked in `--novr` by turning the emulated head;
+  the overlay fading needs a headset check
 - [~] **Named layouts: save/load**: three slots on the wrist (Settings → Saved layouts), files in
   `layouts/slot-N.json` beside the live layout, each showing its display count and when it was
   saved; playtested in `--novr`. Not named yet
