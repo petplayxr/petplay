@@ -67,7 +67,9 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
 - [~] Sticky / toggle modifiers
 - [~] **Keyboard pin + opacity**: pin is the toolbar Lock; opacity uses the same per-node pills as
   windows (the depth occluder is dropped below 100% so the desktop shows through)
-- [ ] Typing sounds
+- [x] Typing sounds: spatial key clicks through the native raylib audio context (they already
+  existed), with an On/Off `typingSounds` setting in the keyboard's own settings panel. The
+  toggle is checked in `--novr`; whether the clicks sound right needs a headset
 
 ## Settings
 

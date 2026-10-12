@@ -25,6 +25,7 @@ import { KeyboardPanel, windowsSystemKeyboardSink } from "./keyboard/keyboard.ts
 import type { KeyboardLogicEvent, KeyboardSink } from "./keyboard/types.ts";
 import { PostMan } from "../../submodules/stageforge/mod.ts";
 import { SpatialAudioProvider } from "./spatialAudio.tsx";
+import { setSetting, useSetting } from "../settings.ts";
 import { getPointerById } from "../../submodules/threewebxrwebgpudeno/submodules/xr/packages/pointer-events/src/pointer.ts";
 import type { PointerEvent as PenPointerEvent } from "@pmndrs/pointer-events";
 import {
@@ -891,6 +892,24 @@ function MouseSettingsSection(
   );
 }
 
+function TypingSoundSettingsSection() {
+  const on = useSetting("typingSounds");
+  return (
+    <SpatialSettingsSection label="Typing sounds">
+      <SpatialSettingsButton
+        label="On"
+        selected={on}
+        onClick={() => setSetting("typingSounds", true)}
+      />
+      <SpatialSettingsButton
+        label="Off"
+        selected={!on}
+        onClick={() => setSetting("typingSounds", false)}
+      />
+    </SpatialSettingsSection>
+  );
+}
+
 /** Curvature as OpenVR's fraction of a full cylinder; 0.2 on a default display is a ~1.4 m radius. */
 const CURVATURE_STEPS = [0, 0.1, 0.2, 0.3] as const;
 
@@ -1406,6 +1425,7 @@ function KeyboardSpatialNodeView({
               <>
                 <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
                 <OpacitySettingsSection node={node} setGraph={setGraph} />
+                <TypingSoundSettingsSection />
               </>
             }
           />

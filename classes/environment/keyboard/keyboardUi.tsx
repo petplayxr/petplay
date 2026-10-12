@@ -26,6 +26,7 @@ import {
 import { stripJsonComments } from "./parseJsonComments.ts";
 import { InteractiveKeyCap } from "./keyboardKeyInteraction.tsx";
 import { useSpatialAudio } from "../spatialAudio.tsx";
+import { useSetting } from "../../settings.ts";
 import {
   keyboardFormatFor,
   keyLegendFromScan,
@@ -685,6 +686,7 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
       [onKey],
     );
     const spatialAudio = useSpatialAudio();
+    const typingSounds = useSetting("typingSounds");
 
     const emit = useCallback(
       (ev: KeyboardLogicEvent) => {
@@ -699,7 +701,7 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
         source: THREE.Object3D | null,
         worldPoint?: readonly [number, number, number],
       ) => {
-        spatialAudio?.playAtObject(face.audio ?? "key", source, worldPoint);
+        if (typingSounds) spatialAudio?.playAtObject(face.audio ?? "key", source, worldPoint);
         if (face.useVirtualKeyCode) {
           const s = face.displayMain;
           emit({
@@ -807,7 +809,7 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
           return next;
         });
       },
-      [emit, mods, spatialAudio, locale],
+      [emit, mods, spatialAudio, typingSounds, locale],
     );
 
     // Parsing the layout allocates a fresh face object per key cell. Doing it during render gave
@@ -875,14 +877,16 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
             minHeight={keyPadding}
             minWidth={1}
             alignSelf="stretch"
-            // Row gaps are dead space otherwise: a ray that falls between two
-            // rows types the first key of the row it lands in.
-            {...(below == null ? {} : {
-              onPointerDown: (event: { pointerType?: string }) => {
-                if (event.pointerType === "grab") return;
-                activateFace(below);
-              },
-            })}
+            {
+              // Row gaps are dead space otherwise: a ray that falls between two
+              // rows types the first key of the row it lands in.
+              ...(below == null ? {} : {
+                onPointerDown: (event: { pointerType?: string }) => {
+                  if (event.pointerType === "grab") return;
+                  activateFace(below);
+                },
+              })
+            }
             {...LAYOUT_CHROME}
           />,
           rowView,
