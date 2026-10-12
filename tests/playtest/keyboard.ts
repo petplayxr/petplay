@@ -1,7 +1,7 @@
 /**
  * Keyboard playtest: one-shot Shift, Caps Lock, the special keys, and the keyboard riding along
  * when the window it hangs from moves. Legends are pinned to the US locale so the script finds
- * the same caps on any host layout.
+ * the same caps on any host layout, then switched to Finnish to check its letters are drawn.
  *
  * Run with `deno task playtest keyboard`.
  */
@@ -35,6 +35,19 @@ async function press(ctx: PlaytestContext, ...legends: string[]): Promise<Keyboa
     stop();
   }
   return events;
+}
+
+/** A legend with no glyphs in its font measures as nothing and gets blown up to fill the cap. */
+function legendsFit(ctx: PlaytestContext) {
+  const sizes: [string, number][] = [];
+  keyboard(ctx).traverse((object) => {
+    const text = object.userData?.raythreeUiText?.text;
+    if (typeof text === "string") sizes.push([text, worldOf(object).scale.x]);
+  });
+  const usual = sizes.map(([, size]) => size).sort((a, b) => a - b)[sizes.length >> 1];
+  const huge = sizes.filter(([, size]) => size > usual * 4).map(([text]) => text);
+  ctx.note(`${sizes.length} legends`);
+  ctx.expect(huge.length === 0, `every legend is drawn at keycap size (oversized: ${huge})`);
 }
 
 const chars = (events: KeyboardLogicEvent[]) =>
@@ -87,18 +100,7 @@ export const steps: PlaytestStep[] = [
   {
     name: "legends-fit",
     run: (ctx) => {
-      // A legend with no glyphs in its font measures as nothing and gets blown up to fill the cap.
-      const board = keyboard(ctx);
-      const scale = (object: THREE.Object3D) => worldOf(object).scale.x;
-      const sizes: [string, number][] = [];
-      board.traverse((object) => {
-        const text = object.userData?.raythreeUiText?.text;
-        if (typeof text === "string") sizes.push([text, scale(object)]);
-      });
-      const usual = sizes.map(([, size]) => size).sort((a, b) => a - b)[sizes.length >> 1];
-      const huge = sizes.filter(([, size]) => size > usual * 4).map(([text]) => text);
-      ctx.note(`${sizes.length} legends`);
-      ctx.expect(huge.length === 0, `every legend is drawn at keycap size (oversized: ${huge})`);
+      legendsFit(ctx);
       return Promise.resolve();
     },
   },
@@ -113,6 +115,30 @@ export const steps: PlaytestStep[] = [
         Math.abs(followed - moved) < 0.02,
         "the hinged keyboard moves with its window",
       );
+    },
+  },
+  {
+    name: "finnish-legends",
+    run: async (ctx) => {
+      setSetting("keyboardLocale", "fi");
+      try {
+        if (
+          !await ctx.waitFor(() => ctx.textObject(keyboard(ctx), "ö"), "the Finnish legends are up")
+        ) return;
+        await ctx.sleep(300);
+        legendsFit(ctx);
+        for (const legend of ["ö", "ä", "å", "§", "´", "¨"]) {
+          ctx.expect(
+            legendGlyph(legend).font === "material-icons",
+            `${legend} comes from the atlas that has it`,
+          );
+        }
+        const typed = chars(await press(ctx, "ö", "ä"));
+        ctx.note(`typed: ${typed.join(" ")}`);
+        ctx.expect(typed.join("") === "öä", `the Finnish letters type (got ${typed.join("")})`);
+      } finally {
+        setSetting("keyboardLocale", "us");
+      }
     },
   },
 ];

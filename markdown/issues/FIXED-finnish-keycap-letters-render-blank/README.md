@@ -1,6 +1,6 @@
 # Finnish keycap letters render blank
 
-Status: open
+Status: fixed 2026-10-12 (icon atlas plus `legendGlyph`, no submodule change)
 Track: XSO parity (keyboard)
 
 ## What happens
@@ -25,6 +25,19 @@ Every legend in `usLayout.ts` and `fiLayout.ts` is drawn.
 - A cap whose legend once measured empty kept its broken transform after relabelling. After a
   switch from `fi` to `us`, the `` ` = [ ; ' `` legends floated metres tall above the keyboard.
   The legend `Text` is now remounted per label.
+
+## Fix (2026-10-12)
+
+A third route that leaves the submodule alone: the PetPlay-owned icon atlas also carries Roboto's
+Latin-1 (U+00A1–U+00FF) and €. Material Icons lives in the Private Use Area, so nothing collides.
+`add-glyphs.py` gained `--ttf` and `--base`, and `--base 64` reproduces the Roboto atlas's own
+glyph offsets exactly (checked on A, o, g and |). `legendGlyph` sends any legend outside printable
+ASCII to that atlas, and the secondary (AltGr) legend now goes through it too: € was the last
+oversized legend. The `finnish-legends` step of `tests/playtest/keyboard.ts` switches to `fi`,
+checks that every legend fits, and types ö and ä. A close capture shows ö ä å § ¨ drawn at
+letter size.
+
+The options below were the earlier proposals, left for the record.
 
 ## Fix options
 

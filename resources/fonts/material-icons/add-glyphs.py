@@ -2,6 +2,12 @@
 """Append glyphs from MaterialIcons-Regular.ttf to the icon atlas.
 
     python3 resources/fonts/material-icons/add-glyphs.py e14a e31b ...
+    python3 resources/fonts/material-icons/add-glyphs.py --ttf Roboto-Regular.ttf --base 64 e4 f6
+
+`--ttf` takes glyphs from another font. Keycap legends use this for letters the Roboto text atlas
+lacks (it lives in the threewebxrwebgpudeno submodule): Material Icons sits in the Private Use
+Area, so Latin-1 codepoints don't collide. `--base` sets the baseline those glyphs are placed
+against; 64 reproduces the Roboto atlas's own glyph offsets exactly.
 
 The original atlas came from msdf-bmfont; this adds glyphs without it (no npm tooling), using
 only fontTools, numpy and Pillow. New glyphs are plain signed distance fields written to R, G and
@@ -93,7 +99,7 @@ def render_sdf(contours, width, height, to_font, distance_range):
     return distance, inside
 
 
-def main(codes):
+def main(codes, ttf_path=TTF, base=None):
     font = json.loads(FNT.read_text())
     have = {char["id"] for char in font["chars"]}
     wanted = [code for code in codes if code not in have]
@@ -101,7 +107,7 @@ def main(codes):
         print("nothing to add")
         return
 
-    ttf = TTFont(str(TTF))
+    ttf = TTFont(str(ttf_path))
     cmap = ttf.getBestCmap()
     glyph_set = ttf.getGlyphSet()
     order = ttf.getGlyphOrder()
@@ -109,7 +115,7 @@ def main(codes):
     size = font["info"]["size"]
     pad = font["info"]["padding"][0]
     distance_range = font["distanceField"]["distanceRange"]
-    base = font["common"]["base"]
+    base = font["common"]["base"] if base is None else base
     scale = size / units
     ascent = units * base / size
 
@@ -119,9 +125,12 @@ def main(codes):
     for code in wanted:
         name = cmap.get(code)
         if name is None:
-            sys.exit(f"U+{code:04X} is not in {TTF.name}")
+            sys.exit(f"U+{code:04X} is not in {Path(ttf_path).name}")
         pen = FlattenPen(glyph_set)
         glyph_set[name].draw(pen)
+        if not pen.contours:
+            print(f"skipping U+{code:04X}: no outline")
+            continue
         xs = [x for c in pen.contours for x, _ in c]
         ys = [y for c in pen.contours for _, y in c]
         x_min, x_max, y_min, y_max = min(xs), max(xs), min(ys), max(ys)
@@ -190,4 +199,13 @@ def main(codes):
 
 
 if __name__ == "__main__":
-    main([int(arg, 16) for arg in sys.argv[1:]])
+    args = sys.argv[1:]
+    options = {}
+    while args and args[0].startswith("--"):
+        options[args[0][2:]] = args[1]
+        args = args[2:]
+    main(
+        [int(arg, 16) for arg in args],
+        ttf_path=options.get("ttf", TTF),
+        base=int(options["base"]) if "base" in options else None,
+    )

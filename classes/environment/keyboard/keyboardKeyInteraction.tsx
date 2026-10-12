@@ -42,12 +42,19 @@ const LEGEND_ICONS: Record<string, IconName> = {
   "→": "arrow_forward",
 };
 
+/**
+ * Roboto's atlas stops at ASCII (plus a few Latin-1 signs). The icon atlas also carries Roboto's
+ * Latin-1 letters and €, added with `add-glyphs.py --ttf`, for legends such as ö ä å § ´ ¨ ½.
+ */
+const BEYOND_TEXT_ATLAS = /[^\x20-\x7e]/;
+
 /** The text and font a legend is drawn with. */
 export function legendGlyph(label: string): { text: string; font?: "material-icons" } {
   const icon = LEGEND_ICONS[label];
-  return icon == null
-    ? { text: label }
-    : { text: String.fromCodePoint(ICON_CODEPOINTS[icon]), font: "material-icons" };
+  if (icon != null) {
+    return { text: String.fromCodePoint(ICON_CODEPOINTS[icon]), font: "material-icons" };
+  }
+  return BEYOND_TEXT_ATLAS.test(label) ? { text: label, font: "material-icons" } : { text: label };
 }
 /** Hold this long before a key starts repeating, then repeat this often. */
 const KEY_REPEAT_DELAY_MS = 420;
@@ -362,14 +369,16 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
         {face.hasSecondary && face.displayAlt
           ? (
             <Text
+              key={face.displayAlt}
               ref={(mesh: TextMeshRef | null) => syncTextRef(secondaryTextRef, mesh)}
               color={tc}
               fontSize={font * KEY_SECONDARY_LABEL_SCALE}
+              font={legendGlyph(face.displayAlt).font}
               pixelSize={pixelSize}
               textAlign="center"
               {...KEYCAP_FRONT_RENDER_PROPS}
             >
-              {face.displayAlt}
+              {legendGlyph(face.displayAlt).text}
             </Text>
           )
           : null}

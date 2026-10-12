@@ -71,8 +71,9 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   / Space send the right scan codes, no legend is drawn oversized, and the keyboard rides with its
   window. Passes in about 28 s (2026-10-12). Its first run found the special keys (⌫ ↵ arrows)
   drawing blank at a huge misplaced scale; they now come from the icon atlas
-  (`resources/fonts/material-icons/add-glyphs.py` adds glyphs to it). The Finnish letters are
-  still open: [finnish-keycap-letters-render-blank](../issues/finnish-keycap-letters-render-blank/README.md).
+  (`resources/fonts/material-icons/add-glyphs.py` adds glyphs to it). The Finnish letters
+  ([finnish-keycap-letters-render-blank](../issues/FIXED-finnish-keycap-letters-render-blank/README.md))
+  draw from the same atlas, and a `finnish-legends` step checks them.
 - `tests/playtest/toasts.ts`: a desktop notification (fed to the sink as a `busctl` line, so nothing
   goes on the real session bus) shows below the line of sight, an update replaces its toast, a
   burst queues past three, long text wraps inside the card, the stack follows the head, a laser
