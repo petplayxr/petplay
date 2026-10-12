@@ -63,6 +63,11 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   save the layout to slot 1 and load it back after moving the window, and recenter from the wrist.
   Passes in about 35 s (2026-10-12). Shared step helpers (hands, laser drag and click, toolbar
   lookup, `showWindows`) live in `tests/playtest/lib/`, which the runner skips.
+- `tests/playtest/window-settings.ts`: opens a window's settings from its toolbar and presses each
+  control: opacity, curve, laser drives mouse, hide when looking away (turns the IWER head away
+  and back and watches the fade), reset pose, and anchoring to the head (the window follows a head
+  turn). Passes in about 30 s (2026-10-12). `deno task playtest all` runs all three in under 2
+  minutes.
 - `--novr` / `dev:desktop` for runs without SteamVR, and the null driver toggle for runs with
   SteamVR but no headset.
 - `utils/headsetCheck.ts`: for what only a person in the headset can judge. `runHeadsetCheck(host)`
