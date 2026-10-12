@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // @deno-types="@types/three/webgpu"
 import * as THREE from "three/webgpu";
 import { extend, ThreeToJSXElements } from "@react-three/fiber/webgpu";
@@ -23,7 +23,9 @@ import {
 } from "../workspaceLayoutStore.ts";
 import { GrabBox } from "../grabbox.tsx";
 import { isPointerBlockedByHost } from "./pointerFilter.ts";
-import { useSetting } from "../../settings.ts";
+import { setSetting, useSetting } from "../../settings.ts";
+import { defaultApply, type HandleOptions, type HandleState } from "@pmndrs/handle";
+import { wristOffsetForHand } from "./offset.ts";
 
 // deno-lint-ignore no-explicit-any
 extend(THREE as any);
@@ -239,6 +241,30 @@ export function WristMenuPanel(
   const [now, setNow] = useState(() => Date.now());
   const workspaceLayout = useWorkspaceLayoutSnapshot();
   const opacity = useSetting("wristMenuOpacity");
+  const savedOffset = useSetting("wristMenuOffset");
+  const offsetHand = hostHandedness ?? "right";
+  const offset = savedOffset == null ? null : wristOffsetForHand(savedOffset, offsetHand);
+  const offsetRef = useRef<THREE.Group>(null);
+  // Grabbing the panel with the other hand moves it (and its occluder) within the mount; letting
+  // go saves where it ended up. Size has its own setting, so the grab doesn't scale. The desktop
+  // HUD isn't on a wrist and keeps the default grab.
+  const grabOptions = useMemo((): Omit<HandleOptions<unknown>, "filter"> | undefined =>
+    attached
+      ? {
+        scale: false,
+        apply: (state: HandleState<unknown>, target: import("three").Object3D) => {
+          defaultApply(state, target);
+          if (!state.last) return;
+          setSetting(
+            "wristMenuOffset",
+            wristOffsetForHand({
+              position: target.position.toArray() as [number, number, number],
+              rotation: target.quaternion.toArray() as [number, number, number, number],
+            }, offsetHand),
+          );
+        },
+      }
+      : undefined, [attached, offsetHand]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -307,65 +333,73 @@ export function WristMenuPanel(
       scale={scale}
       {...({ pointerEventsOrder: WRIST_MENU_POINTER_EVENTS_ORDER } as Record<string, unknown>)}
     >
-      <group userData={{ bridge: { kind: "skip" }, wristMenuActor: actorId ?? null }}>
-        <GrabBox
-          width={WRIST_UI_WIDTH}
-          height={WRIST_UI_HEIGHT}
-          depth={WRIST_UI_DEPTH}
-          visibleChrome={false}
-          shellRayPickable={false}
-          interactionHullFilter={(_id, pointerType, pointerState) =>
-            !isPointerBlockedByHost(pointerType, pointerState, hostHandedness, attached)}
-          grabFilter={(e: PenPointerEvent) =>
-            e.pointerType !== "poker" &&
-            !isPointerEventFromHostHand(e, hostHandedness, attached)}
-        >
-          <WristMenuUi
-            clock={clockLabel}
-            dateLabel={dateLabel}
-            elapsed={elapsedLabel}
-            layoutActive={buttonState.layoutActive}
-            editActive={buttonState.editActive}
-            onToggle={handleToggle}
-            onRecenter={requestLayoutRecenter}
-            workspaceLayout={workspaceLayout}
-            onAssignOutput={assignWorkspaceLayoutOutput}
-            onAddOutput={addWorkspaceLayoutOutput}
-            onSaveLayout={saveLayoutSlot}
-            onLoadLayout={loadLayoutSlot}
-            pointerEventsType={menuPointerType}
-          />
-        </GrabBox>
+      <group
+        ref={offsetRef}
+        position={offset?.position ?? [0, 0, 0]}
+        quaternion={offset?.rotation ?? [0, 0, 0, 1]}
+      >
+        <group userData={{ bridge: { kind: "skip" }, wristMenuActor: actorId ?? null }}>
+          <GrabBox
+            manipulationTargetRef={attached ? offsetRef : undefined}
+            manipulationOptions={grabOptions}
+            width={WRIST_UI_WIDTH}
+            height={WRIST_UI_HEIGHT}
+            depth={WRIST_UI_DEPTH}
+            visibleChrome={false}
+            shellRayPickable={false}
+            interactionHullFilter={(_id, pointerType, pointerState) =>
+              !isPointerBlockedByHost(pointerType, pointerState, hostHandedness, attached)}
+            grabFilter={(e: PenPointerEvent) =>
+              e.pointerType !== "poker" &&
+              !isPointerEventFromHostHand(e, hostHandedness, attached)}
+          >
+            <WristMenuUi
+              clock={clockLabel}
+              dateLabel={dateLabel}
+              elapsed={elapsedLabel}
+              layoutActive={buttonState.layoutActive}
+              editActive={buttonState.editActive}
+              onToggle={handleToggle}
+              onRecenter={requestLayoutRecenter}
+              workspaceLayout={workspaceLayout}
+              onAssignOutput={assignWorkspaceLayoutOutput}
+              onAddOutput={addWorkspaceLayoutOutput}
+              onSaveLayout={saveLayoutSlot}
+              onLoadLayout={loadLayoutSlot}
+              pointerEventsType={menuPointerType}
+            />
+          </GrabBox>
+        </group>
+        {
+          /*
+           * Depth-only occluder, the pattern displays and the keyboard use: it paints depth and no
+           * colour, drawn first, so whatever is depth-tested behind the wrist panel — the controller
+           * model, a hand, another object's chrome — is hidden by it. Not pickable: the menu's own
+           * surfaces own pointer input.
+           *
+           * Deliberately a sibling of the `bridge: { kind: "skip" }` group rather than a child of it:
+           * that flag skips an entire subtree from the raylib IR (the menu's visuals travel in the
+           * uikit payload instead), so an occluder inside it would never reach the overlay.
+           *
+           * Left out when the menu is faded, or it would hide what should show through.
+           */
+        }
+        {opacity >= 1 && (
+          <mesh
+            position={[0, 0, -WRIST_UI_DEPTH / 2]}
+            renderOrder={-100}
+            {...({ pointerEvents: "none" } as Record<string, unknown>)}
+          >
+            <planeGeometry args={[WRIST_UI_WIDTH, WRIST_UI_HEIGHT]} />
+            <meshBasicMaterial
+              depthTest
+              depthWrite
+              colorWrite={false}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+        )}
       </group>
-      {
-        /*
-         * Depth-only occluder, the pattern displays and the keyboard use: it paints depth and no
-         * colour, drawn first, so whatever is depth-tested behind the wrist panel — the controller
-         * model, a hand, another object's chrome — is hidden by it. Not pickable: the menu's own
-         * surfaces own pointer input.
-         *
-         * Deliberately a sibling of the `bridge: { kind: "skip" }` group rather than a child of it:
-         * that flag skips an entire subtree from the raylib IR (the menu's visuals travel in the
-         * uikit payload instead), so an occluder inside it would never reach the overlay.
-         *
-         * Left out when the menu is faded, or it would hide what should show through.
-         */
-      }
-      {opacity >= 1 && (
-        <mesh
-          position={[0, 0, -WRIST_UI_DEPTH / 2]}
-          renderOrder={-100}
-          {...({ pointerEvents: "none" } as Record<string, unknown>)}
-        >
-          <planeGeometry args={[WRIST_UI_WIDTH, WRIST_UI_HEIGHT]} />
-          <meshBasicMaterial
-            depthTest
-            depthWrite
-            colorWrite={false}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
-      )}
     </group>
   );
 }

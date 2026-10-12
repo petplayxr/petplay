@@ -257,6 +257,15 @@ export function headsetSteps(host: CheckHost, displayId: string): CheckStep[] {
       setup: setting("wristMenuScale", 1.25),
     },
     {
+      id: "wrist-move",
+      question:
+        "Grab the wrist menu with your other hand, move it, let go. Does it stay where you left it?",
+      setup: () => {
+        const before = getSetting("wristMenuOffset");
+        return () => setSetting("wristMenuOffset", before);
+      },
+    },
+    {
       id: "haptics",
       question: "Sweep your laser over the wrist menu buttons. Does the controller buzz on each?",
     },

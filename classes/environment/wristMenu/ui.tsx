@@ -244,15 +244,16 @@ function SettingToggleRow(
   );
 }
 
-/** Size steps the wrist "Wrist menu" row cycles through. */
-const WRIST_SCALE_STEPS = [0.75, 1, 1.25, 1.5];
-
-/** Which hand wears the menu, and its size. The hand pill stays rightmost like the other rows. */
-function WristHandRow() {
-  const hand = useSetting("wristMenuHand");
-  const scale = useSetting("wristMenuScale");
-  const step = WRIST_SCALE_STEPS.indexOf(scale);
-  const nextScale = WRIST_SCALE_STEPS[(step + 1) % WRIST_SCALE_STEPS.length];
+/** A settings row: label on the left, one pill on the right. */
+function PillRow(
+  { label, value, dim = false, disabled = false, onClick }: {
+    label: string;
+    value: string;
+    dim?: boolean;
+    disabled?: boolean;
+    onClick?: () => void;
+  },
+) {
   return (
     <Container
       flexDirection="row"
@@ -262,64 +263,80 @@ function WristHandRow() {
       borderRadius={RADIUS.tile}
       backgroundColor={COLOR.tile}
       backgroundOpacity={1}
+      onClick={disabled ? undefined : onClick}
     >
-      <Text color={COLOR.ink} fontSize={14}>Wrist menu</Text>
-      <Container flexDirection="row" gap={INNER_GAP}>
-        <Pill
-          slots={1}
-          units={2}
-          fontSize={13}
-          onClick={() => setSetting("wristMenuScale", nextScale)}
-        >
-          {`${Math.round(scale * 100)}%`}
-        </Pill>
-        <Pill
-          slots={1}
-          units={2}
-          fontSize={13}
-          onClick={() => setSetting("wristMenuHand", hand === "right" ? "left" : "right")}
-        >
-          {hand === "right" ? "RIGHT" : "LEFT"}
-        </Pill>
-      </Container>
-    </Container>
-  );
-}
-
-/** Opacity steps the "Wrist opacity" row cycles through. */
-const WRIST_OPACITY_STEPS = [1, 0.75, 0.5];
-
-function WristOpacityRow() {
-  const opacity = useSetting("wristMenuOpacity");
-  const step = WRIST_OPACITY_STEPS.indexOf(opacity);
-  const next = WRIST_OPACITY_STEPS[(step + 1) % WRIST_OPACITY_STEPS.length];
-  return (
-    <Container
-      flexDirection="row"
-      alignItems="center"
-      justifyContent="space-between"
-      padding={INNER_GAP}
-      borderRadius={RADIUS.tile}
-      backgroundColor={COLOR.tile}
-      backgroundOpacity={1}
-    >
-      <Text color={COLOR.ink} fontSize={14}>Wrist opacity</Text>
+      <Text color={dim ? COLOR.inkDim : COLOR.ink} fontSize={14}>{label}</Text>
       <Pill
         slots={1}
         units={2}
         fontSize={13}
-        onClick={() => setSetting("wristMenuOpacity", next)}
+        disabled={disabled}
+        onClick={disabled ? undefined : onClick}
       >
-        {`${Math.round(opacity * 100)}%`}
+        {value}
       </Pill>
+    </Container>
+  );
+}
+
+/** Steps the wrist size and opacity pills cycle through. */
+const WRIST_SCALE_STEPS = [0.75, 1, 1.25, 1.5];
+const WRIST_OPACITY_STEPS = [1, 0.75, 0.5];
+
+const nextStep = (steps: readonly number[], current: number) =>
+  steps[(steps.indexOf(current) + 1) % steps.length];
+
+const percent = (value: number) => `${Math.round(value * 100)}%`;
+
+/**
+ * The wrist menu's own page: which hand wears it, its size and opacity, and putting it back after
+ * it was grabbed somewhere else with the other hand. Its own page so Settings stays inside the
+ * square panel.
+ */
+function WristSettingsView({ onBack }: { onBack: () => void }) {
+  const hand = useSetting("wristMenuHand");
+  const scale = useSetting("wristMenuScale");
+  const opacity = useSetting("wristMenuOpacity");
+  const moved = useSetting("wristMenuOffset") != null;
+  return (
+    <Container flexDirection="column" gap={INNER_GAP} width={448}>
+      <Container flexDirection="row" alignItems="center" gap={INNER_GAP}>
+        <Button paddingX={0} paddingY={0} backgroundOpacity={0} onClick={onBack}>
+          <Pill slots={1} units={2} fontSize={14}>BACK</Pill>
+        </Button>
+        <Pill slots={3} units={2} tone="accent" fontSize={14}>WRIST MENU</Pill>
+      </Container>
+      <PillRow
+        label="Hand"
+        value={hand === "right" ? "RIGHT" : "LEFT"}
+        onClick={() => setSetting("wristMenuHand", hand === "right" ? "left" : "right")}
+      />
+      <PillRow
+        label="Size"
+        value={percent(scale)}
+        onClick={() => setSetting("wristMenuScale", nextStep(WRIST_SCALE_STEPS, scale))}
+      />
+      <PillRow
+        label="Opacity"
+        value={percent(opacity)}
+        onClick={() => setSetting("wristMenuOpacity", nextStep(WRIST_OPACITY_STEPS, opacity))}
+      />
+      <PillRow
+        label={moved ? "Position: moved" : "Position: grab it to move"}
+        value="RESET"
+        dim={!moved}
+        disabled={!moved}
+        onClick={() => setSetting("wristMenuOffset", null)}
+      />
     </Container>
   );
 }
 
 /** Settings reachable from the wrist; every row here is persisted by `classes/settings.ts`. */
 function SettingsView(
-  { onBack, onOpenMonitors, onOpenLayouts }: {
+  { onBack, onOpenWrist, onOpenMonitors, onOpenLayouts }: {
     onBack: () => void;
+    onOpenWrist: () => void;
     onOpenMonitors: () => void;
     onOpenLayouts: () => void;
   },
@@ -335,34 +352,9 @@ function SettingsView(
       <SettingToggleRow label="Grab-box outlines" setting="grabboxOutline" />
       <SettingToggleRow label="Laser beams" setting="controllerLaser" />
       <SettingToggleRow label="Vibration" setting="haptics" />
-      <WristHandRow />
-      <WristOpacityRow />
-      <Container
-        flexDirection="row"
-        alignItems="center"
-        justifyContent="space-between"
-        padding={INNER_GAP}
-        borderRadius={RADIUS.tile}
-        backgroundColor={COLOR.tile}
-        backgroundOpacity={1}
-        onClick={onOpenMonitors}
-      >
-        <Text color={COLOR.ink} fontSize={14}>Monitors</Text>
-        <Pill slots={1} units={2} fontSize={13} onClick={onOpenMonitors}>OPEN</Pill>
-      </Container>
-      <Container
-        flexDirection="row"
-        alignItems="center"
-        justifyContent="space-between"
-        padding={INNER_GAP}
-        borderRadius={RADIUS.tile}
-        backgroundColor={COLOR.tile}
-        backgroundOpacity={1}
-        onClick={onOpenLayouts}
-      >
-        <Text color={COLOR.ink} fontSize={14}>Saved layouts</Text>
-        <Pill slots={1} units={2} fontSize={13} onClick={onOpenLayouts}>OPEN</Pill>
-      </Container>
+      <PillRow label="Wrist menu" value="OPEN" onClick={onOpenWrist} />
+      <PillRow label="Monitors" value="OPEN" onClick={onOpenMonitors} />
+      <PillRow label="Saved layouts" value="OPEN" onClick={onOpenLayouts} />
     </Container>
   );
 }
@@ -386,7 +378,9 @@ export function WristMenuUi(
   }: WristMenuUiProps,
 ) {
   const pe: AllowedPointerEventsType = pointerEventsType ?? "all";
-  const [view, setView] = useState<"main" | "settings" | "monitors" | "layouts">("main");
+  const [view, setView] = useState<"main" | "settings" | "wrist" | "monitors" | "layouts">(
+    "main",
+  );
   const batteries = useBatteryReadings();
   const nowPlaying = useNowPlaying();
   const opacity = useSetting("wristMenuOpacity");
@@ -396,9 +390,18 @@ export function WristMenuUi(
       <Shell pointerEventsType={pe} opacity={opacity}>
         <SettingsView
           onBack={() => setView("main")}
+          onOpenWrist={() => setView("wrist")}
           onOpenMonitors={() => setView("monitors")}
           onOpenLayouts={() => setView("layouts")}
         />
+      </Shell>
+    );
+  }
+
+  if (view === "wrist") {
+    return (
+      <Shell pointerEventsType={pe} opacity={opacity}>
+        <WristSettingsView onBack={() => setView("settings")} />
       </Shell>
     );
   }

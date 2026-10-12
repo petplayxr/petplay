@@ -49,10 +49,12 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
   player runs, the top-right tile becomes MEDIA (previous, play/pause, next, sent to that player)
   and the bottom row shows "Artist · Title" cut to fit. Checked in `--novr` against a fake MPRIS
   player; not yet in the headset or against a real player.
-- [~] Wrist offset/rotation/scale/opacity settings, dominant hand. The "Wrist menu" row (Settings
-  page) picks the hand (the mount is mirrored on the left grip; the other controller gets the ray)
-  and the size (75–150%), and "Wrist opacity" fades it (100/75/50%; the depth occluder is dropped
-  below 100% so the controller shows through); verified in `--novr`. Offset/rotation still to do
+- [~] **Wrist offset/rotation/scale/opacity settings, dominant hand**: Settings → Wrist menu
+  picks the hand (the mount is mirrored on the left grip; the other controller gets the ray), the
+  size (75–150%) and the opacity (100/75/50%; the depth occluder is dropped below 100% so the
+  controller shows through). Grabbing the panel with the other hand moves and turns it, and
+  letting go saves where it is (mirrored when switching hands); RESET puts it back. Verified in
+  `--novr`, not yet in the headset
 
 ## Keyboard
 

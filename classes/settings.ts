@@ -8,6 +8,7 @@
  */
 import { dirname, join } from "@std/path";
 import { useSyncExternalStore } from "react";
+import { isWristOffset, type WristOffset } from "./environment/wristMenu/offset.ts";
 
 export const SETTINGS_FILENAME = "settings.json";
 
@@ -58,6 +59,12 @@ export const SETTINGS_SCHEMA = {
     label: "Wrist menu opacity (0.2 to 1); below 1 the controller shows through it",
     valid: isWristOpacity,
   } satisfies SettingSpec<number>,
+  wristMenuOffset: {
+    default: null as WristOffset | null,
+    label:
+      "Where the wrist menu was dragged to, relative to its default mount; null is the default",
+    valid: (value: unknown): value is WristOffset | null => value === null || isWristOffset(value),
+  } satisfies SettingSpec<WristOffset | null>,
   keyboardLocale: {
     default: null as string | null,
     label: "Keyboard legend locale; null follows --keyboard-locale / the host layout",

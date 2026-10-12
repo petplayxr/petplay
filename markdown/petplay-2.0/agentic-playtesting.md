@@ -45,13 +45,15 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   `webxr` worker.
 - `utils/playtest.ts`: wrist-menu playtesting on top of that input. `faceWristMenu` holds the
   right wrist so the panel faces the head; `clickWristMenu`/`hoverWristMenu` take panel points
-  (`WRIST_MAIN`, `WRIST_SETTINGS`). Load it via `/eval`, then `client.ts capture` to look.
+  (`WRIST_MAIN`, `WRIST_SETTINGS`, `WRIST_WRIST`). Load it via `/eval`, then `client.ts capture`
+  to look.
 - `--novr` / `dev:desktop` for runs without SteamVR, and the null driver toggle for runs with
   SteamVR but no headset.
 - `utils/headsetCheck.ts`: for what only a person in the headset can judge. `runHeadsetCheck(host)`
   from `/eval` works through the unverified features one at a time (curve direction and pointer,
-  opacity, anchoring to head and hand, wrist hand and size, haptics, battery). Each step changes
-  the display in view, asks a yes/no question as a toast, and undoes the change once answered.
+  opacity, anchoring to head and hand, wrist hand, size and grab-to-move, haptics, battery). Each
+  step changes the display in view, asks a yes/no question as a toast, and undoes the change once
+  answered.
   Answers go on the left stick (up yes, down no, left skip) and land in
   `logs/headset-check-<time>.json`. In `--novr`, drive it with `leftBuffers.joystick` on the
   synthetic input. If the process dies mid-step, that step's change has already been saved to
