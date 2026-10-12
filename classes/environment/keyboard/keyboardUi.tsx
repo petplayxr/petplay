@@ -27,6 +27,7 @@ import { stripJsonComments } from "./parseJsonComments.ts";
 import { InteractiveKeyCap } from "./keyboardKeyInteraction.tsx";
 import { useSpatialAudio } from "../spatialAudio.tsx";
 import { useSetting } from "../../settings.ts";
+import { emitKeyboardEvent } from "./keyEvents.ts";
 import {
   keyboardFormatFor,
   keyLegendFromScan,
@@ -691,6 +692,7 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
     const emit = useCallback(
       (ev: KeyboardLogicEvent) => {
         sink(ev);
+        emitKeyboardEvent(ev);
       },
       [sink],
     );

@@ -47,6 +47,18 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   right wrist so the panel faces the head; `clickWristMenu`/`hoverWristMenu` take panel points
   (`WRIST_MAIN`, `WRIST_SETTINGS`, `WRIST_WRIST`). Load it via `/eval`, then `client.ts capture`
   to look.
+- `deno task playtest <name|all>` (`utils/playtest-run.ts`): launches a `--novr` server on its own
+  port with scratch layout and settings, runs `tests/playtest/<name>.ts` one step at a time inside
+  the `webxr` actor (`runPlaytestStep` in `utils/playtest.ts`), captures the view after each step,
+  and writes `logs/playtest/<time>-<name>/` (`result.json`, a PNG per step, `server.log`). Exit code
+  is the verdict; `--file-issue` writes `markdown/issues/playtest-<name>-<step>-fails/` on failure,
+  and `--keep` leaves the server up to poke at. Steps assert on scene state (`expect`, `waitFor`).
+  Key presses are watched through `keyboard/keyEvents.ts`; in `--novr` the keyboard sink types
+  nowhere, which is why the runner never attaches to a running session.
+- `tests/playtest/smoke.ts`: show windows from the wrist, laser-grab a window and move it,
+  two-handed resize, type two keys, open the window's settings from its toolbar, toggle a setting
+  on the wrist Settings page. Passes in about 25 s (2026-10-12). Its first run found
+  [keys behind a selected window's toolbar ignoring presses](../issues/FIXED-keys-behind-a-selected-windows-toolbar-ignore-presses/README.md).
 - `--novr` / `dev:desktop` for runs without SteamVR, and the null driver toggle for runs with
   SteamVR but no headset.
 - `utils/headsetCheck.ts`: for what only a person in the headset can judge. `runHeadsetCheck(host)`
@@ -61,9 +73,8 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
 
 ## Gaps
 
-- Scenarios live in the perf harness and are tied to it. They aren't a general playtest DSL.
-- No assertions on scene state: "did the display move", "is the keyboard open", "is the toolbar
-  under the pointer". Checks are eyeballed from captures.
+- The perf scenarios still live in the perf harness; playtest steps share its synthetic input
+  but not its scenario code.
 - `/eval` is a footgun: native FFI or GL calls from it segfault the process (see the REPL notes).
   The fix isn't a separate agent API (no MCP: too rigid and too complex). It's the OS itself:
   reusable logic is written as an actor and loaded with `/create`, and the interface is that
@@ -71,7 +82,7 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   twice becomes an actor.
 - Desktop capture is disabled in `--novr` mode (it's backed by an OpenVR overlay), so the most
   important surface can't be tested headless.
-- No run record: inputs, captures, status samples and logs aren't bundled anywhere.
+- Run records have captures, the server log and step results, but no status samples yet.
 
 ## Plan
 
@@ -105,3 +116,7 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
 no desktop session). It covers launch, grab+move a display, resize, open the keyboard, type,
 open settings and change a value. It runs unattended in under 2 minutes and files an issue folder
 on failure.
+
+**Status (2026-10-12):** met with a desktop session: the smoke run covers all of the above in
+about 25 s without SteamVR, and `--file-issue` files the issue folder (opt-in, so repeated runs
+don't pile up duplicates). Still open: the virtual display for runs with no desktop session.

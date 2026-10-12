@@ -59,6 +59,7 @@
     "desktop": "deno run -A petplay/client.ts desktop",
     "client": "deno run -A petplay/client.ts ",
     "overlay:perf": "deno run -A utils/overlay-perf.ts --launch",
+    "playtest": "deno run -A utils/playtest-run.ts",
     "keyb": "deno run -A petplay/keyboardViewer.tsx ",
     "keyb:reset": "deno run -A petplay/resetKeyboard.ts",
     "build": {

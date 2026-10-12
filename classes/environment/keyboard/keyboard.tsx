@@ -3,15 +3,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three/webgpu";
 import { extend, type ThreeToJSXElements } from "@react-three/fiber/webgpu";
 import type { HandleOptions, HandleStore } from "@pmndrs/handle";
-import { GRABBOX_CHROME_THICKNESS, GrabBox } from "../grabbox.tsx";
+import { GrabBox, GRABBOX_CHROME_THICKNESS } from "../grabbox.tsx";
 import {
   getDefaultKeyboardLayoutSync,
   isDefaultKeyboardLayoutUrl,
 } from "./defaultLayoutPreload.ts";
 import {
   DEFAULT_KEYBOARD_JSON_URL,
-  getKeyboardLayoutMode,
   DEFAULT_KEYBOARD_PIXEL_SIZE,
+  getKeyboardLayoutMode,
   KeyboardFromJson,
 } from "./keyboardUi.tsx";
 import { keyboardContentBoundsUnits } from "./keyboardLayout.ts";
@@ -33,8 +33,8 @@ export const DEFAULT_KEYBOARD_SCALE: [number, number, number] = [0.38, 0.38, 0.3
 
 export {
   DEFAULT_KEYBOARD_JSON_URL,
-  getKeyboardLayoutMode,
   DEFAULT_KEYBOARD_PIXEL_SIZE,
+  getKeyboardLayoutMode,
 } from "./keyboardUi.tsx";
 
 const FALLBACK_GRAB: readonly [number, number, number] = [0.5, 0.2, 0.04];
@@ -136,7 +136,10 @@ export function KeyboardPanel(
       {...({
         // Display ray-hit proxies use order 1. Keep the entire keyboard ahead
         // of them for interaction even when its surface is physically farther away.
-        pointerEventsOrder: 2,
+        // Level with context toolbars (20), so the nearer one wins: a selected
+        // display's toolbar hangs through its hinged keyboard, and at a lower
+        // order it took every press on the keys in front of it.
+        pointerEventsOrder: 20,
       } as Record<string, unknown>)}
     >
       {layoutReady != null

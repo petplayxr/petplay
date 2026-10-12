@@ -17,6 +17,10 @@
  *
  * Wrist-menu coordinates are panel pixels from the panel centre, y up (the uikit root is 528px
  * square at 0.001 m/px before the wrist scale).
+ *
+ * Scripted runs (`deno task playtest <name>`, `utils/playtest-run.ts`) go through
+ * `runPlaytestStep`: a script in `tests/playtest/<name>.ts` exports `steps`, and the runner calls
+ * them one at a time, capturing the view after each.
  */
 import * as THREE from "three";
 import {
@@ -184,4 +188,120 @@ export function startPlaytest(host: PlaytestHost): PlaytestSession {
   };
   (globalThis as Record<string, unknown>)[SESSION_KEY] = session;
   return session;
+}
+
+/** Everything a playtest step gets: the input session, scene lookups and the expectation log. */
+export type PlaytestContext = {
+  host: PlaytestHost;
+  t: PlaytestSession;
+  scene: () => THREE.Object3D;
+  /** The scene object drawing a spatial node, or null when it is not in the scene. */
+  nodeObject: (id: string) => THREE.Object3D | null;
+  /** The first object under `root` drawing `text`. */
+  textObject: (root: THREE.Object3D, text: string) => THREE.Object3D | null;
+  /** Points the left ray at `target` from `distance` m in front of `face`, and pulls the trigger. */
+  clickObject: (target: THREE.Object3D, face?: THREE.Object3D, distance?: number) => Promise<void>;
+  /** Records a failure when `condition` is falsy; the step carries on. */
+  expect: (condition: unknown, message: string) => boolean;
+  note: (message: string) => void;
+  sleep: (ms: number) => Promise<void>;
+  /** Polls until `check` is truthy; a timeout is a failed expectation. */
+  waitFor: (check: () => unknown, message: string, timeoutMs?: number) => Promise<boolean>;
+  /** Kept across steps, for values a later step compares against. */
+  memo: Record<string, unknown>;
+};
+
+export type PlaytestStep = {
+  name: string;
+  run: (ctx: PlaytestContext) => Promise<void>;
+};
+
+export type PlaytestStepResult = {
+  name: string;
+  ok: boolean;
+  ms: number;
+  notes: string[];
+  failures: string[];
+};
+
+const MEMO_KEY = "__petplayPlaytestMemo";
+
+/**
+ * Runs step `index` of the script at `scriptUrl`. A throw counts as a failure, so the runner always
+ * gets a result back and can still capture the view.
+ */
+export async function runPlaytestStep(
+  host: PlaytestHost,
+  scriptUrl: string,
+  index: number,
+): Promise<PlaytestStepResult> {
+  const { steps } = await import(scriptUrl) as { steps: PlaytestStep[] };
+  const step = steps[index];
+  if (step == null) throw new Error(`playtest: no step ${index} in ${scriptUrl}`);
+  const notes: string[] = [];
+  const failures: string[] = [];
+  const memo = ((globalThis as Record<string, unknown>)[MEMO_KEY] ??= {}) as Record<
+    string,
+    unknown
+  >;
+  const t = startPlaytest(host);
+  const scene = () => host.rootStore.getState().scene;
+  const findObject = (root: THREE.Object3D, match: (object: THREE.Object3D) => boolean) => {
+    root.updateMatrixWorld(true);
+    let found: THREE.Object3D | null = null;
+    root.traverse((object) => {
+      if (found == null && match(object)) found = object;
+    });
+    return found as THREE.Object3D | null;
+  };
+  const expect = (condition: unknown, message: string) => {
+    if (!condition) failures.push(message);
+    return Boolean(condition);
+  };
+  const ctx: PlaytestContext = {
+    host,
+    t,
+    scene,
+    nodeObject: (id) => findObject(scene(), (object) => object.userData?.spatialElementId === id),
+    textObject: (root, text) =>
+      findObject(root, (object) => object.userData?.raythreeUiText?.text === text),
+    clickObject: async (target, face = target, distance = 0.6) => {
+      const point = target.getWorldPosition(new THREE.Vector3());
+      const facing = face.getWorldQuaternion(new THREE.Quaternion());
+      const from = new THREE.Vector3(0, 0, distance).applyQuaternion(facing).add(point);
+      aimAt(t.input, "left", [from.x, from.y, from.z], [point.x, point.y, point.z]);
+      await sleep(SETTLE_MS);
+      t.input.left.trigger = true;
+      await sleep(150);
+      t.input.left.trigger = false;
+      await sleep(SETTLE_MS);
+      t.parkLeftHand();
+      await sleep(SETTLE_MS);
+    },
+    expect,
+    note: (message) => notes.push(message),
+    sleep,
+    waitFor: async (check, message, timeoutMs = 3000) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        if (check()) return true;
+        await sleep(50);
+      }
+      return expect(check(), message);
+    },
+    memo,
+  };
+  const started = performance.now();
+  try {
+    await step.run(ctx);
+  } catch (error) {
+    failures.push(`threw: ${error instanceof Error ? error.stack ?? error.message : error}`);
+  }
+  return {
+    name: step.name,
+    ok: failures.length === 0,
+    ms: Math.round(performance.now() - started),
+    notes,
+    failures,
+  };
 }
