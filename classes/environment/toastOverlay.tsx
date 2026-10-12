@@ -6,7 +6,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three/webgpu";
 import { useFrame, useThree } from "@react-three/fiber/webgpu";
-import { Container, Text } from "../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { Container } from "../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { Text } from "./ui/text.tsx";
 import { measureMsdfText } from "../../submodules/threewebxrwebgpudeno/msdf-text.tsx";
 import { COLOR, OUTLINE_WIDTH } from "./ui/tokens.ts";
 import { type Toast, toastQueue, useVisibleToasts } from "./toastStore.ts";
@@ -63,9 +64,8 @@ function ToastCard({ toast }: { toast: Toast }) {
       borderOpacity={toast.tone === "info" ? 0.35 : 1}
     >
       <Text color={COLOR.inkDim} fontSize={14}>{toast.source}</Text>
-      {/* Keyed on the text, which changes once wrapped: see `NowPlayingRow` in `ui/wristOverlay.tsx`. */}
-      <Text key={title} color={COLOR.ink} fontSize={22}>{title}</Text>
-      {content !== "" && <Text key={content} color={COLOR.ink} fontSize={17}>{content}</Text>}
+      <Text color={COLOR.ink} fontSize={22}>{title}</Text>
+      {content !== "" && <Text color={COLOR.ink} fontSize={17}>{content}</Text>}
     </Container>
   );
 }

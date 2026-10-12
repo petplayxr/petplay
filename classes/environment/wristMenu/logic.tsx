@@ -238,6 +238,7 @@ export function WristMenuPanel(
   const [buttonState, setButtonState] = useState(() => toStateSnapshot(initialState));
   const [now, setNow] = useState(() => Date.now());
   const workspaceLayout = useWorkspaceLayoutSnapshot();
+  const opacity = useSetting("wristMenuOpacity");
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -346,21 +347,25 @@ export function WristMenuPanel(
          * Deliberately a sibling of the `bridge: { kind: "skip" }` group rather than a child of it:
          * that flag skips an entire subtree from the raylib IR (the menu's visuals travel in the
          * uikit payload instead), so an occluder inside it would never reach the overlay.
+         *
+         * Left out when the menu is faded, or it would hide what should show through.
          */
       }
-      <mesh
-        position={[0, 0, -WRIST_UI_DEPTH / 2]}
-        renderOrder={-100}
-        {...({ pointerEvents: "none" } as Record<string, unknown>)}
-      >
-        <planeGeometry args={[WRIST_UI_WIDTH, WRIST_UI_HEIGHT]} />
-        <meshBasicMaterial
-          depthTest
-          depthWrite
-          colorWrite={false}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
+      {opacity >= 1 && (
+        <mesh
+          position={[0, 0, -WRIST_UI_DEPTH / 2]}
+          renderOrder={-100}
+          {...({ pointerEvents: "none" } as Record<string, unknown>)}
+        >
+          <planeGeometry args={[WRIST_UI_WIDTH, WRIST_UI_HEIGHT]} />
+          <meshBasicMaterial
+            depthTest
+            depthWrite
+            colorWrite={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
     </group>
   );
 }

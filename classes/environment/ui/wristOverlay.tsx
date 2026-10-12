@@ -26,7 +26,8 @@
  */
 import React, { useEffect, useState } from "react";
 import type { AllowedPointerEventsType } from "@pmndrs/pointer-events";
-import { Container, Text } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { Container } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { Text } from "./text.tsx";
 import { measureMsdfText } from "../../../submodules/threewebxrwebgpudeno/msdf-text.tsx";
 import { Icon, type IconName } from "./icons.tsx";
 import { UiImage } from "./image.tsx";
@@ -62,6 +63,7 @@ export type WristOverlayProps = {
   /** The active media player, if any: swaps the displays readout for transport controls. */
   nowPlaying?: NowPlaying | null;
   onMedia?: (command: MediaCommand) => void;
+  opacity?: number;
   pointerEventsType?: AllowedPointerEventsType;
 };
 
@@ -187,14 +189,7 @@ function NowPlayingRow({ label }: { label: string }) {
   }, [label]);
   return (
     <Tile units={4} height={LAST_ROW_HEIGHT}>
-      {
-        /*
-        Keyed on the text: uikit's Content keeps the bounding box of its first
-        glyph mesh, so new text in place is laid out at the old text's aspect
-        and stretched to fit.
-      */
-      }
-      <Text key={fitted} color={COLOR.ink} fontSize={NOW_PLAYING_FONT_SIZE}>{fitted}</Text>
+      <Text color={COLOR.ink} fontSize={NOW_PLAYING_FONT_SIZE}>{fitted}</Text>
     </Tile>
   );
 }
@@ -237,13 +232,18 @@ export function WristOverlay(
     batteries = {},
     nowPlaying = null,
     onMedia,
+    opacity,
     pointerEventsType,
   }: WristOverlayProps,
 ) {
   const on = (id: WristOverlayToggleId) => active[id] ?? false;
 
   return (
-    <Shell pointerEventsType={pointerEventsType} footer={<Footer>{status}</Footer>}>
+    <Shell
+      pointerEventsType={pointerEventsType}
+      opacity={opacity}
+      footer={<Footer>{status}</Footer>}
+    >
       {/* Rows 1-2: the 2x2 clock beside a stack of two 2x1 tiles. */}
       <Container flexDirection="row" gap={GAP} alignItems="flex-start">
         <ClockTile clock={clock} dateLabel={dateLabel} />

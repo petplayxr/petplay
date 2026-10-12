@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import type { AllowedPointerEventsType } from "@pmndrs/pointer-events";
-import { Button, Container, Text } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { Button, Container } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { Text } from "../ui/text.tsx";
 import { Pill, Shell } from "../ui/primitives.tsx";
 import { COLOR, INNER_GAP, OUTLINE_WIDTH, RADIUS } from "../ui/tokens.ts";
 import { WristOverlay } from "../ui/wristOverlay.tsx";
@@ -243,7 +244,6 @@ function SettingToggleRow(
   );
 }
 
-/** Which controller wears the wrist menu: pressing the pill moves it to the other hand. */
 /** Size steps the wrist "Wrist menu" row cycles through. */
 const WRIST_SCALE_STEPS = [0.75, 1, 1.25, 1.5];
 
@@ -286,6 +286,36 @@ function WristHandRow() {
   );
 }
 
+/** Opacity steps the "Wrist opacity" row cycles through. */
+const WRIST_OPACITY_STEPS = [1, 0.75, 0.5];
+
+function WristOpacityRow() {
+  const opacity = useSetting("wristMenuOpacity");
+  const step = WRIST_OPACITY_STEPS.indexOf(opacity);
+  const next = WRIST_OPACITY_STEPS[(step + 1) % WRIST_OPACITY_STEPS.length];
+  return (
+    <Container
+      flexDirection="row"
+      alignItems="center"
+      justifyContent="space-between"
+      padding={INNER_GAP}
+      borderRadius={RADIUS.tile}
+      backgroundColor={COLOR.tile}
+      backgroundOpacity={1}
+    >
+      <Text color={COLOR.ink} fontSize={14}>Wrist opacity</Text>
+      <Pill
+        slots={1}
+        units={2}
+        fontSize={13}
+        onClick={() => setSetting("wristMenuOpacity", next)}
+      >
+        {`${Math.round(opacity * 100)}%`}
+      </Pill>
+    </Container>
+  );
+}
+
 /** Settings reachable from the wrist; every row here is persisted by `classes/settings.ts`. */
 function SettingsView(
   { onBack, onOpenMonitors, onOpenLayouts }: {
@@ -306,6 +336,7 @@ function SettingsView(
       <SettingToggleRow label="Laser beams" setting="controllerLaser" />
       <SettingToggleRow label="Vibration" setting="haptics" />
       <WristHandRow />
+      <WristOpacityRow />
       <Container
         flexDirection="row"
         alignItems="center"
@@ -358,10 +389,11 @@ export function WristMenuUi(
   const [view, setView] = useState<"main" | "settings" | "monitors" | "layouts">("main");
   const batteries = useBatteryReadings();
   const nowPlaying = useNowPlaying();
+  const opacity = useSetting("wristMenuOpacity");
 
   if (view === "settings") {
     return (
-      <Shell pointerEventsType={pe}>
+      <Shell pointerEventsType={pe} opacity={opacity}>
         <SettingsView
           onBack={() => setView("main")}
           onOpenMonitors={() => setView("monitors")}
@@ -373,7 +405,7 @@ export function WristMenuUi(
 
   if (view === "layouts") {
     return (
-      <Shell pointerEventsType={pe}>
+      <Shell pointerEventsType={pe} opacity={opacity}>
         <LayoutSlotsView
           slots={workspaceLayout.layoutSlots ?? []}
           onSave={onSaveLayout}
@@ -386,7 +418,7 @@ export function WristMenuUi(
 
   if (view === "monitors") {
     return (
-      <Shell pointerEventsType={pe}>
+      <Shell pointerEventsType={pe} opacity={opacity}>
         <MonitorAssignments
           workspaceLayout={workspaceLayout}
           onAssignOutput={onAssignOutput}
@@ -407,6 +439,7 @@ export function WristMenuUi(
       batteries={batteries}
       nowPlaying={nowPlaying}
       onMedia={sendMediaCommand}
+      opacity={opacity}
       active={{ layout: layoutActive, edit: editActive }}
       onToggle={onToggle}
       onOpenSettings={() => setView("settings")}

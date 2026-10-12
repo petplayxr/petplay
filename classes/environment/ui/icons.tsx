@@ -18,7 +18,7 @@
  * here, not all 1507 glyphs. See `resources/fonts/material-icons/`.
  */
 import React from "react";
-import { Text } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { Text } from "./text.tsx";
 
 /** Icon name -> codepoint, for every glyph baked into the atlas. */
 export const ICON_CODEPOINTS = {

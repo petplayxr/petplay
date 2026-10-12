@@ -24,7 +24,8 @@
  */
 import React, { useState } from "react";
 import type { AllowedPointerEventsType } from "@pmndrs/pointer-events";
-import { Container, Text } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { Container } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { Text } from "./text.tsx";
 import {
   clampRadius,
   COLOR,
@@ -332,16 +333,19 @@ export function Footer({ children }: { children?: React.ReactNode }) {
  * size is the free one — here the footer height is load-bearing elsewhere.
  */
 export function Shell(
-  { children, footer, pointerEventsType }: {
+  { children, footer, pointerEventsType, opacity = 1 }: {
     children?: React.ReactNode;
     footer?: React.ReactNode;
     pointerEventsType?: AllowedPointerEventsType;
+    /** Whole-panel opacity; uikit's `opacity` is inherited by everything inside. */
+    opacity?: number;
   },
 ) {
   return (
     <Container
       pixelSize={0.001}
       pointerEventsType={pointerEventsType}
+      opacity={opacity}
       width={GRID_WIDTH + GAP * 2}
       padding={GAP}
       flexDirection="column"

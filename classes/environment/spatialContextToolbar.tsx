@@ -14,7 +14,8 @@
  */
 import React, { useState } from "react";
 import type { AllowedPointerEventsType } from "@pmndrs/pointer-events";
-import { Container, Text } from "../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { Container } from "../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { Text } from "./ui/text.tsx";
 import { Pill } from "./ui/primitives.tsx";
 import { Icon, type IconName } from "./ui/icons.tsx";
 import { COLOR, GAP, INNER_GAP, OUTLINE_WIDTH, RADIUS, UNIT, unitSpan } from "./ui/tokens.ts";

@@ -51,7 +51,8 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
   player; not yet in the headset or against a real player.
 - [~] Wrist offset/rotation/scale/opacity settings, dominant hand. The "Wrist menu" row (Settings
   page) picks the hand (the mount is mirrored on the left grip; the other controller gets the ray)
-  and the size (75–150%); verified in `--novr`. Offset/rotation/opacity still to do
+  and the size (75–150%), and "Wrist opacity" fades it (100/75/50%; the depth occluder is dropped
+  below 100% so the controller shows through); verified in `--novr`. Offset/rotation still to do
 
 ## Keyboard
 

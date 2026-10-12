@@ -22,6 +22,8 @@ const isBoolean = (value: unknown): value is boolean => typeof value === "boolea
 const isHand = (value: unknown): value is "left" | "right" => value === "left" || value === "right";
 const isWristScale = (value: unknown): value is number =>
   typeof value === "number" && value >= 0.5 && value <= 2;
+const isWristOpacity = (value: unknown): value is number =>
+  typeof value === "number" && value >= 0.2 && value <= 1;
 const isLocaleOrNull = (value: unknown): value is string | null =>
   value === null || (typeof value === "string" && /^[a-z]{2,3}$/.test(value));
 
@@ -50,6 +52,11 @@ export const SETTINGS_SCHEMA = {
     default: 1 as number,
     label: "Wrist menu size, relative to the default watch-face size (0.5 to 2)",
     valid: isWristScale,
+  } satisfies SettingSpec<number>,
+  wristMenuOpacity: {
+    default: 1 as number,
+    label: "Wrist menu opacity (0.2 to 1); below 1 the controller shows through it",
+    valid: isWristOpacity,
   } satisfies SettingSpec<number>,
   keyboardLocale: {
     default: null as string | null,
