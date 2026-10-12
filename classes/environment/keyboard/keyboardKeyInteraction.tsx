@@ -6,6 +6,7 @@ import { Container } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit
 import { KEYCAP_FRONT_RENDER_PROPS, KeyCapChrome } from "./keyboardUi.tsx";
 import type { NormalizedKeyFace } from "./types.ts";
 import { keyTextColor, tokenBackground, tokenBorderColor } from "./theme.ts";
+import { ICON_CODEPOINTS, type IconName } from "../ui/icons.tsx";
 
 const requestAnimFrame: (c: (t: number) => void) => number = (c) =>
   (globalThis as unknown as { requestAnimationFrame: (c: (t: number) => void) => number })
@@ -25,6 +26,29 @@ const KEY_DEPRESS_Z = -32;
 const KEY_RELEASE_EASE_MS = 200;
 const KEY_PRIMARY_LABEL_SCALE = 1.15;
 const KEY_SECONDARY_LABEL_SCALE = 0.72;
+
+/**
+ * Legends drawn from the icon font. Roboto's atlas has no glyph for these, and a run with no
+ * glyphs measures as infinitely small, which uikit then scales up to fill the cap: the legend
+ * came out metres tall, floating above the keyboard (found by `tests/playtest/keyboard.ts`).
+ */
+const LEGEND_ICONS: Record<string, IconName> = {
+  "⌫": "backspace",
+  "↵": "keyboard_return",
+  "☰": "menu",
+  "↑": "arrow_upward",
+  "↓": "arrow_downward",
+  "←": "arrow_back",
+  "→": "arrow_forward",
+};
+
+/** The text and font a legend is drawn with. */
+export function legendGlyph(label: string): { text: string; font?: "material-icons" } {
+  const icon = LEGEND_ICONS[label];
+  return icon == null
+    ? { text: label }
+    : { text: String.fromCodePoint(ICON_CODEPOINTS[icon]), font: "material-icons" };
+}
 /** Hold this long before a key starts repeating, then repeat this often. */
 const KEY_REPEAT_DELAY_MS = 420;
 const KEY_REPEAT_INTERVAL_MS = 45;
@@ -154,6 +178,7 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
   const litSurface = latched;
   const tc = keyTextColor(face.colorToken, litSurface);
   const font = Math.max(10, face.fontSize);
+  const legend = legendGlyph(currentLabel);
 
   const cancelReleaseRaf = () => {
     if (releaseRafRef.current != null) {
@@ -286,7 +311,11 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
           repeatDelayRef.current = setTimeout(() => {
             repeatDelayRef.current = null;
             repeatIntervalRef.current = setInterval(() => {
-              onActivate(face, (e.object as unknown as THREE.Object3D | undefined) ?? null, worldPoint);
+              onActivate(
+                face,
+                (e.object as unknown as THREE.Object3D | undefined) ?? null,
+                worldPoint,
+              );
             }, KEY_REPEAT_INTERVAL_MS) as unknown as number;
           }, KEY_REPEAT_DELAY_MS) as unknown as number;
         }
@@ -316,14 +345,19 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
         borderWidth={0}
       >
         <Text
+          // Remounted per legend: a run that once measured empty (a glyph missing from the
+          // atlas) keeps its broken transform after relabelling, so a locale switch away from
+          // it would leave the cap's legend floating metres off the keyboard.
+          key={legend.text}
           ref={(mesh: TextMeshRef | null) => syncTextRef(primaryTextRef, mesh)}
           color={tc}
           fontSize={font * KEY_PRIMARY_LABEL_SCALE}
+          font={legend.font}
           pixelSize={pixelSize}
           textAlign="center"
           {...KEYCAP_FRONT_RENDER_PROPS}
         >
-          {currentLabel}
+          {legend.text}
         </Text>
         {face.hasSecondary && face.displayAlt
           ? (

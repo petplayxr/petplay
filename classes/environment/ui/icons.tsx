@@ -14,8 +14,9 @@
  * codepoint that reaches the same glyph id) rather than transcribed, so it is
  * accurate for this exact font file.
  *
- * Adding an icon means regenerating the atlas — it holds only the subset listed
- * here, not all 1507 glyphs. See `resources/fonts/material-icons/`.
+ * Adding an icon means adding it to the atlas — it holds only the subset listed
+ * here, not all 1507 glyphs. `resources/fonts/material-icons/add-glyphs.py <hex>`
+ * appends one without the original msdf-bmfont tooling.
  */
 import React from "react";
 import { Text } from "./text.tsx";
@@ -66,6 +67,14 @@ export const ICON_CODEPOINTS = {
   drag_indicator: 0xe945,
   keyboard: 0xe312,
   monitor: 0xef5b,
+
+  // Keycap legends Roboto's atlas has no glyph for (see `keyboard/keyboardKeyInteraction.tsx`).
+  backspace: 0xe14a,
+  keyboard_return: 0xe31b,
+  menu: 0xe5d2,
+  arrow_upward: 0xe5d8,
+  arrow_downward: 0xe5db,
+  arrow_forward: 0xe5c8,
 } as const;
 
 export type IconName = keyof typeof ICON_CODEPOINTS;

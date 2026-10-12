@@ -66,8 +66,14 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
 - `tests/playtest/window-settings.ts`: opens a window's settings from its toolbar and presses each
   control: opacity, curve, laser drives mouse, hide when looking away (turns the IWER head away
   and back and watches the fade), reset pose, and anchoring to the head (the window follows a head
-  turn). Passes in about 30 s (2026-10-12). `deno task playtest all` runs all three in under 2
-  minutes.
+  turn). Passes in about 30 s (2026-10-12).
+- `tests/playtest/keyboard.ts`: US legends, Shift is one-shot, Caps Lock latches, Backspace / Enter
+  / Space send the right scan codes, no legend is drawn oversized, and the keyboard rides with its
+  window. Passes in about 28 s (2026-10-12). Its first run found the special keys (⌫ ↵ arrows)
+  drawing blank at a huge misplaced scale; they now come from the icon atlas
+  (`resources/fonts/material-icons/add-glyphs.py` adds glyphs to it). The Finnish letters are
+  still open: [finnish-keycap-letters-render-blank](../issues/finnish-keycap-letters-render-blank/README.md).
+  `deno task playtest all` runs all four in about 2 minutes.
 - `--novr` / `dev:desktop` for runs without SteamVR, and the null driver toggle for runs with
   SteamVR but no headset.
 - `utils/headsetCheck.ts`: for what only a person in the headset can judge. `runHeadsetCheck(host)`
