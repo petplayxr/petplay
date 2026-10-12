@@ -12,26 +12,29 @@
  *
  *   +-----------+-----------+
  *   |           |   media   |    clock spans 2x2; the right column stacks two
- *   |   clock   +-----------+    2x1 tiles to the same height
- *   |           |  battery  |
+ *   |   clock   +-----------+    2x1 tiles to the same height (media, or the
+ *   |           |  battery  |    display count when nothing is playing)
  *   +--+--+--+--+--+--+--+--+
  *   | 1| 1| 1| 1|              four 1x1 toggles
  *   +-----+-----+-----+-----+
- *   |  settings |   exit    |   squeezed row, one sub-unit tall
- *   +-----------+-----------+
+ *   |  artist · title       |   squeezed row, one sub-unit tall
+ *   +-----------------------+
  *
  * uikit has no grid, so the "spanning" tile is expressed as a row of two
  * columns. The heights still add up to a square panel — asserted in
  * `tokens.test.ts`.
  */
-import React from "react";
+import React, { useEffect, useState } from "react";
 import type { AllowedPointerEventsType } from "@pmndrs/pointer-events";
 import { Container, Text } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { measureMsdfText } from "../../../submodules/threewebxrwebgpudeno/msdf-text.tsx";
 import { Icon, type IconName } from "./icons.tsx";
 import { UiImage } from "./image.tsx";
 import { Footer, Pill, Shell, Slot, SlotRow, Tile, TileRow } from "./primitives.tsx";
 import { COLOR, GAP, LAST_ROW_HEIGHT, RADIUS, unitSpan } from "./tokens.ts";
 import type { BatteryReading, BatteryReadings } from "../batteryStore.ts";
+import { type MediaCommand, type NowPlaying, nowPlayingLabel } from "../mediaStore.ts";
+import { truncateText } from "./wrapText.ts";
 
 /** Glyph ink: dark on an accent fill, light at rest. One fixed pairing. */
 function glyphInk(active: boolean): string {
@@ -56,6 +59,9 @@ export type WristOverlayProps = {
   /** Displays currently in the spatial graph, for the readout. */
   displayCount?: number;
   batteries?: BatteryReadings;
+  /** The active media player, if any: swaps the displays readout for transport controls. */
+  nowPlaying?: NowPlaying | null;
+  onMedia?: (command: MediaCommand) => void;
   pointerEventsType?: AllowedPointerEventsType;
 };
 
@@ -160,6 +166,39 @@ function batteryReadout(
   return { icon, active: reading.charging, value: prefix ? `${prefix} ${percent}` : percent };
 }
 
+const NOW_PLAYING_FONT_SIZE = 16;
+
+/** The squeezed last row: what's playing, cut to one line. */
+function NowPlayingRow({ label }: { label: string }) {
+  const [fitted, setFitted] = useState(label);
+  useEffect(() => {
+    let cancelled = false;
+    const maxWidth = unitSpan(4) - 2 * GAP;
+    truncateText(
+      label,
+      maxWidth,
+      async (line) => (await measureMsdfText(line, NOW_PLAYING_FONT_SIZE)).width,
+    ).then((next) => {
+      if (!cancelled) setFitted(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [label]);
+  return (
+    <Tile units={4} height={LAST_ROW_HEIGHT}>
+      {
+        /*
+        Keyed on the text: uikit's Content keeps the bounding box of its first
+        glyph mesh, so new text in place is laid out at the old text's aspect
+        and stretched to fit.
+      */
+      }
+      <Text key={fitted} color={COLOR.ink} fontSize={NOW_PLAYING_FONT_SIZE}>{fitted}</Text>
+    </Tile>
+  );
+}
+
 /** A 1x1 tile is a rounded square, not a circle — rule 3 is about nesting depth. */
 function GlyphTile(
   { icon, active, disabled, onClick }: {
@@ -196,6 +235,8 @@ export function WristOverlay(
     status = "Native module active",
     displayCount = 0,
     batteries = {},
+    nowPlaying = null,
+    onMedia,
     pointerEventsType,
   }: WristOverlayProps,
 ) {
@@ -214,16 +255,43 @@ export function WristOverlay(
             easier to hit with a pointer from the other hand.
           */
           }
-          <SlotTile
-            label="DISPLAYS"
-            labelSlots={3}
-            slots={[
-              { icon: "desktop_windows", value: String(displayCount) },
-              null,
-              null,
-              null,
-            ]}
-          />
+          {
+            /*
+            Media takes the top slot while a player is running: skipping a
+            track is a wrist job, the display count is not. Transport buttons
+            are small for actions, but they sit where the panel was designed
+            to hold them.
+          */
+          }
+          {nowPlaying != null
+            ? (
+              <SlotTile
+                label="MEDIA"
+                labelSlots={3}
+                slots={[
+                  { icon: "skip_previous", onClick: () => onMedia?.("previous") },
+                  {
+                    icon: nowPlaying.playing ? "pause" : "play_arrow",
+                    active: nowPlaying.playing,
+                    onClick: () => onMedia?.("play-pause"),
+                  },
+                  { icon: "skip_next", onClick: () => onMedia?.("next") },
+                  null,
+                ]}
+              />
+            )
+            : (
+              <SlotTile
+                label="DISPLAYS"
+                labelSlots={3}
+                slots={[
+                  { icon: "desktop_windows", value: String(displayCount) },
+                  null,
+                  null,
+                  null,
+                ]}
+              />
+            )}
           {
             /*
             Battery: left, right, headset, from OpenVR. Charging takes the
@@ -277,14 +345,17 @@ export function WristOverlay(
 
       {
         /*
-        Row 4 is squeezed to one sub-unit so the panel comes out square, and is
-        currently empty. It held SETTINGS (now a tile above) and EXIT, which was
-        removed: the only shutdown path in the tree is a `Deno.exit(1)` in the
-        desktop child's error handler, so the button did nothing.
+        Row 4 is squeezed to one sub-unit so the panel comes out square. It
+        shows what's playing, and is empty otherwise. It held SETTINGS (now a
+        tile above) and EXIT, which was removed: the only shutdown path in the
+        tree is a `Deno.exit(1)` in the desktop child's error handler, so the
+        button did nothing.
       */
       }
       <TileRow>
-        <Tile units={4} height={LAST_ROW_HEIGHT} />
+        {nowPlaying != null
+          ? <NowPlayingRow label={nowPlayingLabel(nowPlaying)} />
+          : <Tile units={4} height={LAST_ROW_HEIGHT} />}
       </TileRow>
     </Shell>
   );

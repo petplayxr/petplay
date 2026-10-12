@@ -5,6 +5,7 @@ import { Pill, Shell } from "../ui/primitives.tsx";
 import { COLOR, INNER_GAP, OUTLINE_WIDTH, RADIUS } from "../ui/tokens.ts";
 import { WristOverlay } from "../ui/wristOverlay.tsx";
 import { useBatteryReadings } from "../batteryStore.ts";
+import { sendMediaCommand, useNowPlaying } from "../mediaStore.ts";
 import type { WristMenuButtonId } from "./types.ts";
 import type { WorkspaceLayoutSnapshot } from "../workspaceLayoutStore.ts";
 import type { LayoutSlotSummary } from "../spatialLayoutPersistence.ts";
@@ -356,6 +357,7 @@ export function WristMenuUi(
   const pe: AllowedPointerEventsType = pointerEventsType ?? "all";
   const [view, setView] = useState<"main" | "settings" | "monitors" | "layouts">("main");
   const batteries = useBatteryReadings();
+  const nowPlaying = useNowPlaying();
 
   if (view === "settings") {
     return (
@@ -403,6 +405,8 @@ export function WristMenuUi(
       status={statusLabel}
       displayCount={workspaceLayout.displays.length}
       batteries={batteries}
+      nowPlaying={nowPlaying}
+      onMedia={sendMediaCommand}
       active={{ layout: layoutActive, edit: editActive }}
       onToggle={onToggle}
       onOpenSettings={() => setView("settings")}

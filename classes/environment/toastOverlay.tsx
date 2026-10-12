@@ -63,8 +63,9 @@ function ToastCard({ toast }: { toast: Toast }) {
       borderOpacity={toast.tone === "info" ? 0.35 : 1}
     >
       <Text color={COLOR.inkDim} fontSize={14}>{toast.source}</Text>
-      <Text color={COLOR.ink} fontSize={22}>{title}</Text>
-      {content !== "" && <Text color={COLOR.ink} fontSize={17}>{content}</Text>}
+      {/* Keyed on the text, which changes once wrapped: see `NowPlayingRow` in `ui/wristOverlay.tsx`. */}
+      <Text key={title} color={COLOR.ink} fontSize={22}>{title}</Text>
+      {content !== "" && <Text key={content} color={COLOR.ink} fontSize={17}>{content}</Text>}
     </Container>
   );
 }

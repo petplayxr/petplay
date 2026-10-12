@@ -45,7 +45,10 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
 - [~] **Battery for HMD/controllers/trackers**: wrist tile shows L/R controller and HMD from OpenVR
   (30 s poll), low-battery toast under 15%; verified in `--novr` with fake readings, not yet on
   hardware. No trackers
-- [ ] Media now-playing row
+- [~] **Media now-playing row**: MPRIS through `playerctl --follow` (`mediaStore.ts`). While a
+  player runs, the top-right tile becomes MEDIA (previous, play/pause, next, sent to that player)
+  and the bottom row shows "Artist · Title" cut to fit. Checked in `--novr` against a fake MPRIS
+  player; not yet in the headset or against a real player.
 - [~] Wrist offset/rotation/scale/opacity settings, dominant hand. The "Wrist menu" row (Settings
   page) picks the hand (the mount is mirrored on the left grip; the other controller gets the ray)
   and the size (75–150%); verified in `--novr`. Offset/rotation/opacity still to do

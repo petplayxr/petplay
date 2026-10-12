@@ -89,6 +89,7 @@ import { penHandler } from "./penEvents.ts";
 import { ToastOverlay } from "./toastOverlay.tsx";
 import { pushToast } from "./toastStore.ts";
 import { startXsoNotificationReceiver } from "./xsoNotificationReceiver.ts";
+import { startMediaFollow } from "./mediaStore.ts";
 import {
   getHeadObject,
   getTrackedOriginWorldMatrix,
@@ -1835,6 +1836,12 @@ export function WebXRScene(
   React.useEffect(() => {
     const receiver = startXsoNotificationReceiver();
     return receiver.close;
+  }, []);
+
+  React.useEffect(() => {
+    const follow = new AbortController();
+    startMediaFollow(follow.signal);
+    return () => follow.abort();
   }, []);
 
   return (
