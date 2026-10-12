@@ -7,6 +7,7 @@ import { KEYCAP_FRONT_RENDER_PROPS, KeyCapChrome } from "./keyboardUi.tsx";
 import type { NormalizedKeyFace } from "./types.ts";
 import { keyTextColor, tokenBackground, tokenBorderColor } from "./theme.ts";
 import { ICON_CODEPOINTS, type IconName } from "../ui/icons.tsx";
+import { COLOR } from "../ui/tokens.ts";
 
 const requestAnimFrame: (c: (t: number) => void) => number = (c) =>
   (globalThis as unknown as { requestAnimationFrame: (c: (t: number) => void) => number })
@@ -58,6 +59,8 @@ export function legendGlyph(label: string): { text: string; font?: "material-ico
 }
 /** Hold this long before a key starts repeating, then repeat this often. */
 const KEY_REPEAT_DELAY_MS = 420;
+/** A double-tap-held modifier's white ring around the latched fill, to tell it from a one-shot latch. */
+const HELD_BORDER_WIDTH = 5;
 const KEY_REPEAT_INTERVAL_MS = 45;
 
 type ImperativeUIKitRef = {
@@ -137,6 +140,8 @@ export type InteractiveKeyCapProps = {
   onTestPointerDown?: (face: NormalizedKeyFace) => void;
   /** Latched modifier (caps/shift/ctrl/alt/meta) — same visual as held. */
   latched?: boolean;
+  /** Held down by a double tap until the next tap: latched, plus a thick white ring. */
+  held?: boolean;
 };
 
 /**
@@ -155,6 +160,7 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
     onActivate,
     onTestPointerDown,
     latched = false,
+    held = false,
   }: InteractiveKeyCapProps,
 ) {
   const visualRef = useRef<ImperativeUIKitRef | null>(null);
@@ -229,9 +235,9 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
     [],
   );
 
-  const baseBorderWidth = litSurface ? 2 : 1;
+  const baseBorderWidth = held ? HELD_BORDER_WIDTH : litSurface ? 2 : 1;
   const baseBackgroundColor = tokenBackground(face.colorToken, litSurface);
-  const baseBorderColor = tokenBorderColor(face.colorToken, litSurface);
+  const baseBorderColor = held ? COLOR.outline : tokenBorderColor(face.colorToken, litSurface);
 
   const isVisualLit = (value: number): boolean => latched || hoveredRef.current || value > 0;
 
@@ -239,8 +245,8 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
     const pressed = isVisualLit(value);
     return {
       backgroundColor: tokenBackground(face.colorToken, pressed),
-      borderColor: tokenBorderColor(face.colorToken, pressed),
-      borderWidth: pressed ? 2 : 1,
+      borderColor: held ? COLOR.outline : tokenBorderColor(face.colorToken, pressed),
+      borderWidth: held ? HELD_BORDER_WIDTH : pressed ? 2 : 1,
       transformScaleX: value > 0 ? 1 + (KEY_CLICK_SCALE - 1) * value : undefined,
       transformScaleY: value > 0 ? 1 + (KEY_CLICK_SCALE - 1) * value : undefined,
       transformTranslateZ: value > 0 ? KEY_DEPRESS_Z * value : undefined,

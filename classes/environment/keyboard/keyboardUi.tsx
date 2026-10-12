@@ -704,6 +704,8 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
 
     /** Modifiers a double tap holds down; the one-shot release skips them. */
     const holdLocked = useRef(new Set<StickyModifier>());
+    // Mirrors `holdLocked` for rendering: held caps draw a white ring.
+    const [held, setHeld] = useState<ReadonlySet<StickyModifier>>(() => new Set());
     const latchedAt = useRef<Partial<Record<StickyModifier, number>>>({});
     const setModifier = useCallback((modifier: StickyModifier, active: boolean) => {
       setMods((m) => ({ ...m, [modifier]: active }));
@@ -744,6 +746,7 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
           const held = holdLocked.current;
           if (held.has(modifier)) {
             held.delete(modifier);
+            setHeld(new Set(held));
             setModifier(modifier, false);
           } else if (!mods[modifier]) {
             latchedAt.current[modifier] = now;
@@ -753,6 +756,7 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
           ) {
             // Second tap in quick succession: keep it down across keys (Shift lock, Alt+Tab+Tab).
             held.add(modifier);
+            setHeld(new Set(held));
           } else {
             setModifier(modifier, false);
           }
@@ -833,6 +837,8 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
                 pixelSize={pixelSize}
                 currentLabel={resolveLabel(face, mods, locale)}
                 latched={isModifierLatchedVisual(face, mods)}
+                held={face.sticky &&
+                  held.has(STICKY_SCAN_MODIFIERS[face.scanCodeHex.toUpperCase()])}
                 onActivate={handleKey}
               />
             )}

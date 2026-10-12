@@ -100,7 +100,7 @@ async function keyboardDrag(ctx: PlaytestContext) {
 }
 
 /** Two quick trigger pulls on the cap labelled `legend`, as a double tap; returns the events. */
-async function doubleTap(ctx: PlaytestContext, legend: string): Promise<KeyboardLogicEvent[]> {
+export async function doubleTap(ctx: PlaytestContext, legend: string): Promise<KeyboardLogicEvent[]> {
   const events: KeyboardLogicEvent[] = [];
   const cap = ctx.textObject(keyboard(ctx), legendGlyph(legend).text);
   if (!ctx.expect(cap, `the keyboard has a ${legend} key`)) return events;
