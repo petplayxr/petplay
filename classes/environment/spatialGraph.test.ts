@@ -20,6 +20,7 @@ import {
   resetSpatialNodeTransform,
   setSpatialNodeCurvature,
   setSpatialNodeLocked,
+  setSpatialNodeMouseBlocked,
   setSpatialNodeOpacity,
   setSpatialRootOrigin,
   type SpatialGraph,
@@ -573,6 +574,16 @@ Deno.test("locking a node is a no-op when unchanged and survives a clone", () =>
   assert(moved.nodes["display-1"].locked === true, "lock kept across later edits");
 });
 
+Deno.test("mouse block sets the flag, and unblocking clears it", () => {
+  const graph = createInitialSpatialGraph();
+  assert(setSpatialNodeMouseBlocked(graph, "display-1", false) === graph, "already unblocked");
+  const blocked = setSpatialNodeMouseBlocked(graph, "display-1", true);
+  assert(blocked.nodes["display-1"].mouseBlocked === true, "flag set");
+  assert(graph.nodes["display-1"].mouseBlocked === undefined, "original graph untouched");
+  const cleared = setSpatialNodeMouseBlocked(blocked, "display-1", false);
+  assert(!("mouseBlocked" in cleared.nodes["display-1"]), "unblocking removes the field");
+});
+
 Deno.test("opacity is clamped, and full opacity clears the field", () => {
   const graph = createInitialSpatialGraph();
   assert(setSpatialNodeOpacity(graph, "display-1", 1) === graph, "opaque is already the default");
@@ -636,7 +647,13 @@ Deno.test("curvature is clamped, and flat clears the field", () => {
   const curved = setSpatialNodeCurvature(graph, "display-1", 0.2);
   assert(curved.nodes["display-1"].curvature === 0.2, "curvature set");
   assert(graph.nodes["display-1"].curvature === undefined, "original graph untouched");
-  assert(setSpatialNodeCurvature(curved, "display-1", 3).nodes["display-1"].curvature === 0.5, "cap");
+  assert(
+    setSpatialNodeCurvature(curved, "display-1", 3).nodes["display-1"].curvature === 0.5,
+    "cap",
+  );
   assert(setSpatialNodeCurvature(curved, "display-1", NaN) === curved, "NaN ignored");
-  assert(!("curvature" in setSpatialNodeCurvature(curved, "display-1", -1).nodes["display-1"]), "flat");
+  assert(
+    !("curvature" in setSpatialNodeCurvature(curved, "display-1", -1).nodes["display-1"]),
+    "flat",
+  );
 });

@@ -42,6 +42,7 @@ const ACTION_ICONS: Record<string, IconName> = {
   // icon names the state, the accent says it is on, and pressing it ends it.
   detach: "link",
   delete: "delete",
+  lock: "lock",
   reset: "refresh",
   settings: "settings",
 };

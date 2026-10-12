@@ -64,6 +64,7 @@ import {
   setHingeAngle,
   setSpatialNodeCurvature,
   setSpatialNodeLocked,
+  setSpatialNodeMouseBlocked,
   setSpatialNodeOpacity,
   setSpatialRootOrigin,
   type SpatialGraph,
@@ -472,7 +473,7 @@ function CommonOverlayChords({
       displayObject = displayObject.parent;
     }
     const pointedId = displayObject?.userData.spatialElementId as string | undefined;
-    if (!hit?.uv || !pointedId) return;
+    if (!hit?.uv || !pointedId || graph.nodes[pointedId]?.mouseBlocked) return;
     scrollAccumulator.current += Math.abs(axis) * JOYSTICK_SCROLL_CLICKS_PER_SECOND * delta;
     const clicks = Math.floor(scrollAccumulator.current);
     if (clicks === 0) return;
@@ -873,6 +874,23 @@ function OpacitySettingsSection(
   );
 }
 
+function MouseSettingsSection(
+  { node, setGraph }: {
+    node: SpatialNode;
+    setGraph: React.Dispatch<React.SetStateAction<SpatialGraph>>;
+  },
+) {
+  const blocked = node.mouseBlocked ?? false;
+  const set = (next: boolean) =>
+    setGraph((latest) => setSpatialNodeMouseBlocked(latest, node.id, next));
+  return (
+    <SpatialSettingsSection label="Laser drives mouse">
+      <SpatialSettingsButton label="On" selected={!blocked} onClick={() => set(false)} />
+      <SpatialSettingsButton label="Off" selected={blocked} onClick={() => set(true)} />
+    </SpatialSettingsSection>
+  );
+}
+
 /** Curvature as OpenVR's fraction of a full cylinder; 0.2 on a default display is a ~1.4 m radius. */
 const CURVATURE_STEPS = [0, 0.1, 0.2, 0.3] as const;
 
@@ -1187,7 +1205,9 @@ function DisplaySpatialNodeView({
         workspaceCrop={workspaceCrop}
         opacity={node.opacity}
         curvature={node.curvature}
-        onMouse={activeDisplayOverlayHostActor != null ? croppedMouseSink : undefined}
+        onMouse={activeDisplayOverlayHostActor != null && !node.mouseBlocked
+          ? croppedMouseSink
+          : undefined}
         mouseButtonForPointer={mouseButtonForPointer}
         rayHitSurface={activeDisplayOverlayHostActor != null}
         shellRayPickable={activeDisplayOverlayHostActor == null}
@@ -1224,6 +1244,7 @@ function DisplaySpatialNodeView({
                 </SpatialSettingsSection>
                 <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
                 <OpacitySettingsSection node={node} setGraph={setGraph} />
+                <MouseSettingsSection node={node} setGraph={setGraph} />
                 <CurvatureSettingsSection node={node} setGraph={setGraph} />
                 <SpatialSettingsSection
                   label={assignedSide == null

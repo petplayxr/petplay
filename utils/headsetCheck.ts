@@ -18,6 +18,7 @@ import { editSpatialGraph, getSpatialGraph } from "../classes/environment/worksp
 import {
   getSpatialRootId,
   setSpatialNodeCurvature,
+  setSpatialNodeMouseBlocked,
   setSpatialNodeOpacity,
   setSpatialRootOrigin,
   type SpatialGraph,
@@ -229,6 +230,18 @@ export function headsetSteps(host: CheckHost, displayId: string): CheckStep[] {
         return withGraph(
           (g) => setSpatialNodeOpacity(g, displayId, 0.5),
           (g) => setSpatialNodeOpacity(g, displayId, before),
+        );
+      },
+    },
+    {
+      id: "mouse-block",
+      question:
+        "Sweep your laser across the display and pull the trigger. Does the mouse stay still?",
+      setup: () => {
+        const before = node()?.mouseBlocked ?? false;
+        return withGraph(
+          (g) => setSpatialNodeMouseBlocked(g, displayId, true),
+          (g) => setSpatialNodeMouseBlocked(g, displayId, before),
         );
       },
     },

@@ -42,6 +42,11 @@ type SpatialNodeBase = {
   onParentDelete: ParentDeleteBehavior;
   /** Pinned in place: grabs do not move, turn or scale it. Recenter still moves the layout. */
   locked?: boolean;
+  /**
+   * Displays: the laser still lands on it and can grab it, but no longer moves or clicks the
+   * desktop mouse. For a window you watch rather than use, so a stray laser can't pause a video.
+   */
+  mouseBlocked?: boolean;
   /** 0..1, unset means opaque. Only the node itself: children keep their own. */
   opacity?: number;
   /** Displays: OpenVR overlay curvature, 0 < c <= `MAX_DISPLAY_CURVATURE`; unset means flat. */
@@ -737,6 +742,19 @@ export function setSpatialNodeLocked(
   if (!node || (node.locked ?? false) === locked) return current;
   const graph = cloneGraph(current);
   graph.nodes[nodeId] = { ...node, locked };
+  return graph;
+}
+
+export function setSpatialNodeMouseBlocked(
+  current: SpatialGraph,
+  nodeId: SpatialNodeId,
+  mouseBlocked: boolean,
+): SpatialGraph {
+  const node = current.nodes[nodeId];
+  if (!node || (node.mouseBlocked ?? false) === mouseBlocked) return current;
+  const graph = cloneGraph(current);
+  const { mouseBlocked: _previous, ...rest } = node;
+  graph.nodes[nodeId] = (mouseBlocked ? { ...rest, mouseBlocked } : rest) as SpatialNode;
   return graph;
 }
 

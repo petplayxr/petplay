@@ -29,7 +29,10 @@ sitting (see [agentic-playtesting](agentic-playtesting.md)).
 - [~] **Pin / lock window**: per-node `locked` (toolbar Lock action) freezes grabs, persisted;
   verified in `--novr` through the UI (toolbar click toggles it; a locked display doesn't move under
   a grab, an unlocked one does)
-- [ ] Mouse-block and auto-hide per window
+- [~] Mouse-block and auto-hide per window. Mouse-block: "Laser drives mouse" On/Off in a
+  display's settings (per-node `mouseBlocked`, persisted). The laser still lands on the window
+  and grabs it, but sends no moves, clicks or stick scroll. Toggled through the UI in `--novr`;
+  the desktop cursor staying put needs a headset check. No auto-hide yet
 - [~] **Named layouts: save/load**: three slots on the wrist (Settings → Saved layouts), files in
   `layouts/slot-N.json` beside the live layout, each showing its display count and when it was
   saved; playtested in `--novr`. Not named yet
