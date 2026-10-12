@@ -27,6 +27,8 @@ const KEY_DEPRESS_Z = -32;
 const KEY_RELEASE_EASE_MS = 200;
 const KEY_PRIMARY_LABEL_SCALE = 1.15;
 const KEY_SECONDARY_LABEL_SCALE = 0.72;
+/** The AltGr legend's inset from the cap's bottom-right corner, as a fraction of the cap. */
+const SECONDARY_LEGEND_INSET = 0.08;
 
 /**
  * Legends drawn from the icon font. Roboto's atlas has no glyph for these, and a run with no
@@ -372,23 +374,28 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
         >
           {legend.text}
         </Text>
-        {face.hasSecondary && face.displayAlt
-          ? (
-            <Text
-              key={face.displayAlt}
-              ref={(mesh: TextMeshRef | null) => syncTextRef(secondaryTextRef, mesh)}
-              color={tc}
-              fontSize={font * KEY_SECONDARY_LABEL_SCALE}
-              font={legendGlyph(face.displayAlt).font}
-              pixelSize={pixelSize}
-              textAlign="center"
-              {...KEYCAP_FRONT_RENDER_PROPS}
-            >
-              {legendGlyph(face.displayAlt).text}
-            </Text>
-          )
-          : null}
       </Container>
+      {face.hasSecondary && face.displayAlt
+        ? (
+          <Text
+            key={face.displayAlt}
+            ref={(mesh: TextMeshRef | null) => syncTextRef(secondaryTextRef, mesh)}
+            color={tc}
+            fontSize={font * KEY_SECONDARY_LABEL_SCALE}
+            font={legendGlyph(face.displayAlt).font}
+            pixelSize={pixelSize}
+            textAlign="right"
+            // The AltGr legend sits in the cap's bottom-right corner, as on a printed Finnish
+            // keycap; stacked under the main legend the two ran together.
+            positionType="absolute"
+            positionRight={SECONDARY_LEGEND_INSET * minWidth}
+            positionBottom={SECONDARY_LEGEND_INSET * minHeight}
+            {...KEYCAP_FRONT_RENDER_PROPS}
+          >
+            {legendGlyph(face.displayAlt).text}
+          </Text>
+        )
+        : null}
     </KeyCapChrome>
   );
 });
