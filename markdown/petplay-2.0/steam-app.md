@@ -10,13 +10,30 @@ Two separate goals that often get conflated:
 
 ## Today
 
-- `openVrRuntime.ts` (`identifyApplication`) writes a **temp** `.vrmanifest` on every start,
-  registers it as temporary (`AddApplicationManifest(path, true)`) and calls
-  `IdentifyApplication`. That makes SteamVR know who we are while running, but it can't
-  auto-launch something it only learns about after launch.
-- Linux auto-start currently comes from `deno task install:dev`: a systemd user unit running
-  `utils/steamvr-watch.ts`, which watches for `vrserver`. It works, but it's dev-only and
-  Linux-only.
+- **Part A, step 1 is done for dev checkouts.** `deno task steamvr:register` writes
+  `petplay.vrmanifest`, `launch-petplay.sh` and `petplay.png` into
+  `$XDG_DATA_HOME/petplay/steamvr/`, registers the manifest permanently and turns auto-launch on.
+  `steamvr:unregister` undoes it and `steamvr:status` reports it. Code: `classes/steamVrManifest.ts`
+  (pure, unit-tested) and `utils/steamvr-app.ts`.
+  - With SteamVR running it goes through `IVRApplications` as a background app, which never
+    starts SteamVR. With SteamVR stopped it edits `appconfig.json` and
+    `vrappconfig/petplay.overlay.vrappconfig` directly, the same files SteamVR writes.
+  - The manifest is `is_dashboard_overlay`, so PetPlay is listed under *Startup / Shutdown →
+    Choose startup overlay apps*. Its binary and image paths are relative to the manifest, so a
+    packaged build can ship the same three files next to its executable.
+  - The launcher leaves SteamVR's pressure-vessel container with `steam-runtime-launch-client
+    --alongside-steam` (as WayVR's does), logs to `~/.local/state/petplay/steamvr-launch.log`
+    and runs `utils/steamvr-watch.ts --once`. That reuses a running server or starts one with
+    `--openvr-attach-only`, stops the server it started when SteamVR exits, then exits itself.
+  - Not yet tried against a real SteamVR. That needs checking at home: the app shows up in the
+    startup list, the launch log shows the container escape, the server comes up, and SteamVR's
+    quit stops it.
+- `openVrRuntime.ts` (`identifyApplication`) still writes a **temp** `.vrmanifest` for the
+  display overlay host (`petplay.display-overlay-host`). The main overlay doesn't identify itself
+  as `petplay.overlay` yet, so SteamVR doesn't tie the running overlay to the registered app.
+- The systemd dev install (`deno task install:dev`, `utils/steamvr-watch.ts` without `--once`)
+  still works. It and the registration can both be installed without starting two servers, but
+  one is enough. It also stays the way to get the "start at login" lifetime later.
 - `deno task build` produces a single compiled binary that still expects a `.env` next to it and
   an `resources/` layout.
 
@@ -24,7 +41,8 @@ Two separate goals that often get conflated:
 
 ### A. SteamVR app (early, M1)
 
-1. Ship a **persistent** `petplay.vrmanifest` next to the build output with `app_key`,
+1. ~~Ship a **persistent** `petplay.vrmanifest`~~ Done for checkouts (see Today); a build ships
+   the same files. Original note: ship a **persistent** `petplay.vrmanifest` next to the build output with `app_key`,
    `launch_type: binary`, `binary_path_linux`/`binary_path_windows`, `is_dashboard_overlay: true`,
    image and strings. Register it permanently (`temporary = false`) from an installer step or the
    first run.

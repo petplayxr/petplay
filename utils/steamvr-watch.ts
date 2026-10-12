@@ -23,7 +23,13 @@
  * deno run -A --env-file utils/steamvr-watch.ts                 # follow SteamVR
  * deno run -A --env-file utils/steamvr-watch.ts --desktop       # + desktop control
  * deno run -A --env-file utils/steamvr-watch.ts --poll-ms=500   # tighter watch
+ * deno run -A --env-file utils/steamvr-watch.ts --once          # one SteamVR session
  * ```
+ *
+ * `--once` is what SteamVR's own auto-launch runs (`deno task steamvr:register`):
+ * follow the SteamVR session that launched it, then exit with it instead of
+ * waiting for the next one. If SteamVR never shows up it gives up after
+ * [ONCE_STARTUP_GRACE_MS].
  *
  * Arguments it does not recognise are forwarded to the server, so every server
  * flag (`--novr`, `--desktop`, `--keyboard-locale=fi`, `--agent-repl-port=…`)
@@ -46,12 +52,16 @@ const LOG_PREFIX = "[steamvr-watch]";
 
 /** The runtime server; SteamVR is up while it runs and gone when it exits. */
 const DEFAULT_POLL_MS = 2_000;
+/** How long `--once` waits for SteamVR before deciding it was not launched by it. */
+const ONCE_STARTUP_GRACE_MS = 60_000;
 
 type Options = {
   /** How often the process table is scanned, in milliseconds. */
   pollMs: number;
   /** Process names that mean "SteamVR is up". */
   processes: string[];
+  /** Follow one SteamVR session, then exit. */
+  once: boolean;
   /** Everything else, forwarded to the server. */
   serverArgs: string[];
 };
@@ -60,12 +70,17 @@ function parseArgs(args: readonly string[]): Options {
   const options: Options = {
     pollMs: DEFAULT_POLL_MS,
     processes: [...DEFAULT_STEAMVR_PROCESS_NAMES],
+    once: false,
     serverArgs: [],
   };
   for (const arg of args) {
     const poll = arg.match(/^--poll-ms=(\d+)$/);
     if (poll != null) {
       options.pollMs = Math.max(1, Number(poll[1]));
+      continue;
+    }
+    if (arg === "--once") {
+      options.once = true;
       continue;
     }
     const process = arg.match(/^--steamvr-process=(.+)$/);
@@ -90,10 +105,11 @@ function help(): string {
     "steamvr-watch — run PetPlay for exactly as long as SteamVR runs",
     "",
     "usage: deno run -A --env-file utils/steamvr-watch.ts [--poll-ms=<n>]",
-    "       [--steamvr-process=<name>[,<name>…]] [<server args…>]",
+    "       [--steamvr-process=<name>[,<name>…]] [--once] [<server args…>]",
     "",
     "  --poll-ms=<n>          scan interval, default 2000",
     "  --steamvr-process=     process names that mean SteamVR is up, default vrserver",
+    "  --once                 exit when SteamVR does (what SteamVR's auto-launch runs)",
     "",
     "Any other argument goes to the server (`--novr`, `--desktop`,",
     "`--keyboard-locale=fi`, `--agent-repl-port=<n>`, …). A server already",
@@ -132,14 +148,23 @@ class SteamVrFollower {
       } every ${this.#options.pollMs}ms` +
         (this.#options.serverArgs.length > 0
           ? `; server args=[${this.#options.serverArgs.join(" ")}]`
-          : ""),
+          : "") +
+        (this.#options.once ? "; once" : ""),
     );
+    const startedAt = performance.now();
     while (true) {
       const steamVrUp = steamVrRunning(this.#options.processes);
       if (steamVrUp && !this.#steamVrUp) {
         await this.start();
       } else if (!steamVrUp && this.#steamVrUp) {
         await this.stop("SteamVR exited");
+        if (this.#options.once) return;
+        this.#stopping = false;
+      } else if (!steamVrUp && this.#options.once) {
+        if (performance.now() - startedAt > ONCE_STARTUP_GRACE_MS) {
+          console.warn(`${LOG_PREFIX} SteamVR did not come up within ${ONCE_STARTUP_GRACE_MS}ms`);
+          return;
+        }
       } else if (steamVrUp) {
         this.reapExitedServer();
       }
@@ -217,3 +242,5 @@ if (Deno.build.os !== "linux") {
 }
 
 await new SteamVrFollower(parseArgs(Deno.args)).run();
+// Only `--once` returns; the signal listeners would otherwise keep the process alive.
+Deno.exit(0);

@@ -96,6 +96,9 @@
     "uninstall:dev": "deno run -A utils/dev-install.ts uninstall",
     "dev:status": "deno run -A utils/dev-install.ts status",
     "dev:steamvr": "deno run -A --env-file utils/steamvr-watch.ts",
+    "steamvr:register": "deno run -A utils/steamvr-app.ts register",
+    "steamvr:unregister": "deno run -A utils/steamvr-app.ts unregister",
+    "steamvr:status": "deno run -A utils/steamvr-app.ts status",
     "dev:desktop": {
       "command": "deno run -A --unstable-webgpu --env-file --no-check petplay/petplay.ts dev --novr --desktop",
       "dependencies": [
