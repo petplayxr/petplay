@@ -226,6 +226,10 @@ async function requestDesktopActor<T>(
   return body.result as T;
 }
 
+/** How far a grab on the wrist panel has to move before it counts as a drag rather than a press. */
+const WRIST_DRAG_SLOP_METERS = 0.01;
+const WRIST_DRAG_SLOP_RADIANS = 0.05;
+
 export function WristMenuPanel(
   { hostHandedness, transform, actorId, initialState, attachedToController }: WristMenuPanelProps,
 ) {
@@ -245,14 +249,26 @@ export function WristMenuPanel(
   const offsetHand = hostHandedness ?? "right";
   const offset = savedOffset == null ? null : wristOffsetForHand(savedOffset, offsetHand);
   const offsetRef = useRef<THREE.Group>(null);
+  const dragging = useRef(false);
   // Grabbing the panel with the other hand moves it (and its occluder) within the mount; letting
   // go saves where it ended up. Size has its own setting, so the grab doesn't scale. The desktop
   // HUD isn't on a wrist and keeps the default grab.
+  //
+  // Every trigger click on a wrist button also reaches the handle as a grab that barely moves.
+  // Until the grab passes a small slop the panel stays put, so a press neither nudges the menu by
+  // the hand's jitter nor saves an offset (which would read "Position: moved").
   const grabOptions = useMemo((): Omit<HandleOptions<unknown>, "filter"> | undefined =>
     attached
       ? {
         scale: false,
         apply: (state: HandleState<unknown>, target: import("three").Object3D) => {
+          if (state.first) dragging.current = false;
+          if (!dragging.current) {
+            const moved = state.initial.position.distanceTo(state.current.position);
+            const turned = state.initial.quaternion.angleTo(state.current.quaternion);
+            if (moved < WRIST_DRAG_SLOP_METERS && turned < WRIST_DRAG_SLOP_RADIANS) return;
+            dragging.current = true;
+          }
           defaultApply(state, target);
           if (!state.last) return;
           setSetting(

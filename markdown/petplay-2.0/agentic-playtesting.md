@@ -84,7 +84,12 @@ yet) or a surfaceless EGL raylib context. The virtual display is the cheaper fir
   it the same distance). Passes in about 25 s (2026-10-12). Scoping the toolbar lookup to the
   window for this script showed that a window's own toolbar was unreachable behind its keyboard;
   with a keyboard attached, the toolbar now sits above the window.
-  `deno task playtest all` runs all six in about 3 minutes.
+- `tests/playtest/wrist.ts`: the clock matches the host, battery readings (published into the
+  store) show on the wrist and one low-battery toast fires below 15%, the Settings toggles write
+  their settings, the Wrist menu page steps size, opacity and hand, and dragging the panel moves
+  it. Passes in about 40 s (2026-10-12). Its first run found
+  [wrist button clicks nudging the menu](../issues/FIXED-wrist-button-clicks-nudge-the-menu/README.md).
+  `deno task playtest all` runs all seven in about 3.5 minutes.
 - `--novr` / `dev:desktop` for runs without SteamVR, and the null driver toggle for runs with
   SteamVR but no headset.
 - `utils/headsetCheck.ts`: for what only a person in the headset can judge. `runHeadsetCheck(host)`
