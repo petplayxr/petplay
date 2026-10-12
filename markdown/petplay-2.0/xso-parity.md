@@ -8,6 +8,9 @@ every XSO feature.
 
 Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 blocking.
 
+The "not yet in a headset" items below are what `utils/headsetCheck.ts` walks through in one
+sitting (see [agentic-playtesting](agentic-playtesting.md)).
+
 ## Window / display
 
 - [~] **Overlay registry: spawn/despawn, per-window opacity, curve, size**. Opacity: "Opacity"
@@ -63,7 +66,8 @@ Legend: `[x]` have · `[~]` partial · `[ ]` lack. **Bold** = everyday, M2/M3 bl
 ## Notifications
 
 - [x] **Toast queue with an overlay slot**: head-locked stack of up to 3 (`toastStore.ts`,
-      `toastOverlay.tsx`); used for layout slots and capture lost/reconnected
+      `toastOverlay.tsx`); used for layout slots and capture lost/reconnected. Long titles and
+      content word-wrap to the card (`ui/wrapText.ts`)
 - [~] External API: XSO-compatible WebSocket/UDP so VRChat tools that already target XSO work with
   PetPlay unchanged. `xsoNotificationReceiver.ts`: legacy UDP 42069 and WebSocket 42070
   `SendNotification`, verified with an external sender in `--novr`. Notifications only; no icons

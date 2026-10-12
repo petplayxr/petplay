@@ -3,18 +3,22 @@
  * following the head with a little lag so it reads as attached to you without jittering with
  * every head tremor. It takes no pointer events: rays pass through to whatever is behind it.
  */
-import React, { useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three/webgpu";
 import { useFrame, useThree } from "@react-three/fiber/webgpu";
 import { Container, Text } from "../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
+import { measureMsdfText } from "../../submodules/threewebxrwebgpudeno/msdf-text.tsx";
 import { COLOR, OUTLINE_WIDTH } from "./ui/tokens.ts";
 import { type Toast, toastQueue, useVisibleToasts } from "./toastStore.ts";
+import { wrapText } from "./ui/wrapText.ts";
 
 /** In head space: slightly below the line of sight, closer than the displays. */
 const HEAD_OFFSET = new THREE.Vector3(0, -0.17, -0.6);
 const FOLLOW_RATE = 8;
 const TICK_INTERVAL_S = 0.25;
 const CARD_WIDTH = 480;
+const CARD_PADDING_X = 20;
+const TEXT_WIDTH = CARD_WIDTH - 2 * CARD_PADDING_X;
 const NO_POINTER_EVENTS = () => false;
 
 function toneColor(toast: Toast): string {
@@ -25,13 +29,31 @@ function toneColor(toast: Toast): string {
     : COLOR.outline;
 }
 
+/** Text broken onto lines that fit the card; the unwrapped text shows until measuring finishes. */
+function useWrapped(text: string, fontSize: number): string {
+  const [wrapped, setWrapped] = useState(text);
+  useEffect(() => {
+    let cancelled = false;
+    wrapText(text, TEXT_WIDTH, async (line) => (await measureMsdfText(line, fontSize)).width)
+      .then((next) => {
+        if (!cancelled) setWrapped(next);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [text, fontSize]);
+  return wrapped;
+}
+
 function ToastCard({ toast }: { toast: Toast }) {
+  const title = useWrapped(toast.title, 22);
+  const content = useWrapped(toast.content, 17);
   return (
     <Container
       width={CARD_WIDTH}
       flexDirection="column"
       gap={4}
-      paddingX={20}
+      paddingX={CARD_PADDING_X}
       paddingY={14}
       borderRadius={22}
       backgroundColor={COLOR.ground}
@@ -41,8 +63,8 @@ function ToastCard({ toast }: { toast: Toast }) {
       borderOpacity={toast.tone === "info" ? 0.35 : 1}
     >
       <Text color={COLOR.inkDim} fontSize={14}>{toast.source}</Text>
-      <Text color={COLOR.ink} fontSize={22}>{toast.title}</Text>
-      {toast.content !== "" && <Text color={COLOR.ink} fontSize={17}>{toast.content}</Text>}
+      <Text color={COLOR.ink} fontSize={22}>{title}</Text>
+      {content !== "" && <Text color={COLOR.ink} fontSize={17}>{content}</Text>}
     </Container>
   );
 }

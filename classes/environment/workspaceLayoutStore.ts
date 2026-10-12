@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { LayoutSlotSummary } from "./spatialLayoutPersistence.ts";
+import type { SpatialGraph } from "./spatialGraph.ts";
 
 export type WorkspaceLayoutOutput = {
   id: string;
@@ -27,6 +28,8 @@ type WorkspaceLayoutActions = {
   addOutput: (outputId: string) => void;
   saveSlot: (slot: number) => void;
   loadSlot: (slot: number) => void;
+  getGraph: () => SpatialGraph;
+  editGraph: (update: (current: SpatialGraph) => SpatialGraph) => void;
 };
 
 let snapshot: WorkspaceLayoutSnapshot = { outputs: [], displays: [] };
@@ -71,4 +74,16 @@ export function useWorkspaceLayoutSnapshot(): WorkspaceLayoutSnapshot {
     () => snapshot,
     () => snapshot,
   );
+}
+
+/** The live spatial graph, or null before the scene mounts. For scripts and the REPL. */
+export function getSpatialGraph(): SpatialGraph | null {
+  return actions?.getGraph() ?? null;
+}
+
+/** Apply `update` to the live graph, as a settings click would (it persists the same way). */
+export function editSpatialGraph(update: (current: SpatialGraph) => SpatialGraph): boolean {
+  if (actions == null) return false;
+  actions.editGraph(update);
+  return true;
 }

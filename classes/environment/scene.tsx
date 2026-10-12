@@ -619,6 +619,8 @@ function WindowLayer({
             : loaded,
         );
       },
+      getGraph: () => graphRef.current,
+      editGraph: (update) => setGraph(update),
     }), [layoutBootstrap.persistenceEnabled, workspaceOutputs]);
 
   React.useEffect(() => {
@@ -768,6 +770,46 @@ function TrackedOriginGroup(
  * "Anchored to" choices for a node's whole hierarchy: World, Head, Left hand, Right hand. The
  * window stays where it is at the moment of the switch; from then on it moves with the new anchor.
  */
+/**
+ * The local transform that keeps root `rootId` where it is in the world once it hangs off
+ * `originId`, so re-anchoring never makes it jump. "untracked" when that space has no pose right
+ * now; null when the root isn't in the scene.
+ */
+export function anchoredRootTransform(
+  scene: THREE.Object3D,
+  head: THREE.Object3D,
+  rootId: string,
+  originId: SpatialOriginId,
+): SpatialTransform | "untracked" | null {
+  let rootObject: THREE.Object3D | null = null;
+  let sceneRoot: THREE.Object3D | null = null;
+  scene.traverse((object) => {
+    if (object.userData?.spatialElementId === rootId) rootObject = object as THREE.Object3D;
+    if (object.userData?.spatialGraphRoot === true) sceneRoot = object as THREE.Object3D;
+  });
+  const anchor = new THREE.Matrix4();
+  if (isTrackedOriginId(originId)) {
+    if (!getTrackedOriginWorldMatrix(originId, head, anchor)) return "untracked";
+  } else if (sceneRoot != null) {
+    (sceneRoot as THREE.Object3D).updateWorldMatrix(true, false);
+    anchor.copy((sceneRoot as THREE.Object3D).matrixWorld);
+  }
+  if (rootObject == null) return null;
+  const root = rootObject as THREE.Object3D;
+  root.updateWorldMatrix(true, false);
+  const local = anchor.invert().multiply(root.matrixWorld);
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  local.decompose(position, quaternion, scale);
+  const rotation = new THREE.Euler().setFromQuaternion(quaternion, "XYZ");
+  return {
+    position: position.toArray() as [number, number, number],
+    rotation: [rotation.x, rotation.y, rotation.z],
+    scale: scale.toArray() as [number, number, number],
+  };
+}
+
 function AnchorSettingsSection(
   { graph, node, setGraph }: {
     graph: SpatialGraph;
@@ -783,39 +825,14 @@ function AnchorSettingsSection(
 
   const anchorTo = (originId: SpatialOriginId) => {
     if (originId === current) return;
-    let rootObject: THREE.Object3D | null = null;
-    let sceneRoot: THREE.Object3D | null = null;
-    scene.traverse((object) => {
-      if (object.userData?.spatialElementId === rootId) rootObject = object as THREE.Object3D;
-      if (object.userData?.spatialGraphRoot === true) sceneRoot = object as THREE.Object3D;
-    });
-    const anchor = new THREE.Matrix4();
-    if (isTrackedOriginId(originId)) {
-      const head = getHeadObject(renderer, camera as unknown as THREE.Camera);
-      if (!getTrackedOriginWorldMatrix(originId, head, anchor)) {
-        pushToast({ title: `${SPATIAL_ORIGIN_LABEL[originId]} isn't tracked`, tone: "warning" });
-        return;
-      }
-    } else if (sceneRoot != null) {
-      (sceneRoot as THREE.Object3D).updateWorldMatrix(true, false);
-      anchor.copy((sceneRoot as THREE.Object3D).matrixWorld);
+    const head = getHeadObject(renderer, camera as unknown as THREE.Camera);
+    const local = anchoredRootTransform(scene, head, rootId, originId);
+    if (local === "untracked") {
+      pushToast({ title: `${SPATIAL_ORIGIN_LABEL[originId]} isn't tracked`, tone: "warning" });
+      return;
     }
-    if (rootObject == null) return;
-    const root = rootObject as THREE.Object3D;
-    root.updateWorldMatrix(true, false);
-    const local = anchor.invert().multiply(root.matrixWorld);
-    const position = new THREE.Vector3();
-    const quaternion = new THREE.Quaternion();
-    const scale = new THREE.Vector3();
-    local.decompose(position, quaternion, scale);
-    const rotation = new THREE.Euler().setFromQuaternion(quaternion, "XYZ");
-    setGraph((latest) =>
-      setSpatialRootOrigin(latest, rootId, originId, {
-        position: position.toArray() as [number, number, number],
-        rotation: [rotation.x, rotation.y, rotation.z],
-        scale: scale.toArray() as [number, number, number],
-      })
-    );
+    if (local == null) return;
+    setGraph((latest) => setSpatialRootOrigin(latest, rootId, originId, local));
   };
 
   return (
