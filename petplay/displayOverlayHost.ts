@@ -1085,8 +1085,10 @@ async function startDesktopOpenVrOverlay(config: StartDesktopPayload) {
     }
   }
 
+  // The primary handle stays hidden until the scene syncs `display-1` onto it.
+  // Showing it here put an uncropped copy of the whole capture in front of the
+  // user whenever the layout's displays had other ids (one per monitor).
   state.visible = true;
-  overlay.ShowOverlay(overlayHandle);
 
   const texture = state.glManager!.getTexture();
   if (!texture) throw new Error("texture is null");
@@ -1098,14 +1100,6 @@ async function startDesktopOpenVrOverlay(config: StartDesktopPayload) {
   const [textureStructPtr] = createStruct<OpenVR.Texture>(textureData, OpenVR.TextureStruct);
   state.textureStructPtr = textureStructPtr;
 
-  const primarySync = pendingVirtualDisplays.get("display-1") ?? {
-    id: "display-1",
-    name,
-    hmd: idTransform,
-    widthMeters: widthM,
-    crop: { x: 0, y: 0, width: 1, height: 1 },
-  };
-  syncVirtualDisplay(primarySync);
   for (const sync of pendingVirtualDisplays.values()) syncVirtualDisplay(sync);
 
   if (config.runScreenCapture) {

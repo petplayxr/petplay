@@ -769,20 +769,23 @@ async function attachOpenVrRuntime(actors: SupervisedSceneActors): Promise<void>
     startWebXr(actors, pointers, hmdDisplayFrequencyHz, attachment.displayOverlayHost);
     PostMan.PostMessage({ target: origin, type: "ASSIGNHMD", payload: hmd });
     PostMan.PostMessage({ target: origin, type: "ASSIGNVRC", payload: actors.cameraOrigin });
-    PostMan.PostMessage({ target: origin, type: "ADDOVERLAY", payload: actors.webxr });
     PostMan.PostMessage({
       target: actors.cameraOrigin,
       type: "ASSIGNWEBXR",
       payload: actors.webxr,
     });
-    // Temporarily disable VRC origin updates into the WebXR scene. The
-    // scene will fall back to identity until the raythree-based path
-    // replaces the current ad-hoc ghost renderer/origin plumbing.
-    PostMan.PostMessage({
-      target: origin,
-      type: "STARTORIGIN",
-      payload: { name: "originoverlay", texture: "./resources/PetPlay.png" },
-    });
+    // The VRChat origin marker (a PetPlay-logo overlay that follows the
+    // avatar's CustomObjectSync position) and its pushes into the WebXR scene
+    // are opt-in: outside VRChat it is just a stray logo near the play-space
+    // origin.
+    if (Deno.args.includes("--vrc-origin")) {
+      PostMan.PostMessage({ target: origin, type: "ADDOVERLAY", payload: actors.webxr });
+      PostMan.PostMessage({
+        target: origin,
+        type: "STARTORIGIN",
+        payload: { name: "originoverlay", texture: "./resources/PetPlay.png" },
+      });
+    }
     PostMan.PostMessage({ target: actors.cameraOrigin, type: "STARTCAMERAORIGIN", payload: null });
     registerSceneActors(actors);
     LogChannel.log("actor", `[supervisor] OpenVR attached (attach #${supervisor.attachCount})`);
@@ -946,7 +949,6 @@ function getSupervisorHealth() {
     },
   };
 }
-
 
 async function createNoOpenVrScene() {
   LogChannel.log("default", "OpenVR actors disabled (--novr)");
