@@ -50,6 +50,7 @@ import {
   detachDisplayHierarchy,
   detachFromParent,
   type DisplaySpatialNode,
+  displayToolbarSide,
   getDisplayAttachmentRole,
   getSpatialChildren,
   getSpatialRootId,
@@ -57,7 +58,6 @@ import {
   type HingeConstraint,
   IDENTITY_SPATIAL_TRANSFORM,
   initializeWorkspaceLayoutOutputs,
-  isDisplayBottomSlotOccupied,
   type KeyboardSpatialNode,
   recenterSpatialRoots,
   reconcileWorkspaceOutputs,
@@ -1238,7 +1238,7 @@ function DisplaySpatialNodeView({
     return actions;
   }, [attachmentRole, graph, node.id, node.parentId, setGraph, workspaceOutputs]);
   // A keyboard hinged under the window would sit in front of a toolbar hanging below it.
-  const toolbarAbove = isDisplayBottomSlotOccupied(graph, node.id);
+  const toolbarSide = displayToolbarSide(graph, node.id);
   const assignedSide = node.constraint?.kind === "hinge"
     ? node.constraint.attachmentSlotId.match(/-(left|right|top|bottom)-slot$/)?.[1]
     : undefined;
@@ -1286,23 +1286,30 @@ function DisplaySpatialNodeView({
         <SpatialHierarchyIndicator
           role={attachmentRole ?? "solo"}
           position={[0, DEFAULT_DISPLAY_HEIGHT * 0.5 + 0.055, DEFAULT_DISPLAY_DEPTH]}
-          visible={hovered && attachmentRole != null}
+          // The open toolbar carries the badge instead.
+          visible={hovered && attachmentRole != null && selectedNodeId !== node.id}
         />
         {selectedNodeId === node.id && (
           <SpatialContextToolbar
             title={node.workspaceOutputName ?? `Display ${node.ordinal}`}
-            side={toolbarAbove ? "above" : "below"}
-            position={[
-              0,
-              // Above, clear of the hierarchy badge that also sits over the top edge.
-              toolbarAbove ? DEFAULT_DISPLAY_HEIGHT * 0.5 + 0.08 : -DEFAULT_DISPLAY_HEIGHT * 0.5,
-              DEFAULT_DISPLAY_DEPTH,
-            ]}
+            side={toolbarSide}
+            position={toolbarSide === "left" || toolbarSide === "right"
+              ? [
+                (toolbarSide === "right" ? 0.5 : -0.5) * DISPLAY_PANEL_WIDTH,
+                DEFAULT_DISPLAY_HEIGHT * 0.5,
+                DEFAULT_DISPLAY_DEPTH,
+              ]
+              : [
+                0,
+                (toolbarSide === "above" ? 0.5 : -0.5) * DEFAULT_DISPLAY_HEIGHT,
+                DEFAULT_DISPLAY_DEPTH,
+              ]}
             settingsPosition={[
               DISPLAY_PANEL_WIDTH * 0.5,
               DEFAULT_DISPLAY_HEIGHT * 0.5,
               DEFAULT_DISPLAY_DEPTH,
             ]}
+            role={attachmentRole ?? undefined}
             actions={contextActions}
             settings={
               <>

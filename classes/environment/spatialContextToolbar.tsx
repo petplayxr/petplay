@@ -21,7 +21,16 @@ import { Container } from "../../submodules/threewebxrwebgpudeno/webgpu-uikit.ts
 import { Text } from "./ui/text.tsx";
 import { Pill } from "./ui/primitives.tsx";
 import { Icon, type IconName } from "./ui/icons.tsx";
-import { COLOR, GAP, INNER_GAP, OUTLINE_WIDTH, RADIUS, UNIT, unitSpan } from "./ui/tokens.ts";
+import {
+  COLOR,
+  GAP,
+  INNER_GAP,
+  OUTLINE_WIDTH,
+  RADIUS,
+  slotSize,
+  UNIT,
+  unitSpan,
+} from "./ui/tokens.ts";
 import { pulseForPointerEvent } from "./haptics.ts";
 
 /**
@@ -62,15 +71,18 @@ export type SpatialContextToolbarProps = {
   actions: SpatialContextAction[];
   settings?: React.ReactNode;
   /**
-   * The middle of the node's edge, in the node's space: the bottom edge, which the card hangs
-   * below, or with `side: "above"` the top edge, which it stands on.
+   * Where the card attaches, in the node's space: the middle of the bottom edge, which the card
+   * hangs below; with `side: "above"` the middle of the top edge, which it stands on; with
+   * `"left"`/`"right"` that side's top corner, which it hangs beside.
    */
   position: [number, number, number];
   /**
    * "above" when something hangs from the node's bottom edge (a hinged keyboard): below, the card
-   * would sit behind it and every button would lose the ray to the keys in front.
+   * would sit behind it and every button would lose the ray to the keys in front. "left"/"right"
+   * when both edges are taken (a window between another window and a keyboard): the card turns
+   * into a narrow column beside the node.
    */
-  side?: "below" | "above";
+  side?: "below" | "above" | "left" | "right";
   /**
    * With `side: "above"`, the node-space corner the settings card hangs from by its top-left
    * corner (a window's top-right corner). Growing up from a raised card would put the settings
@@ -78,6 +90,11 @@ export type SpatialContextToolbarProps = {
    * so they open beside it.
    */
   settingsPosition?: [number, number, number];
+  /**
+   * The node's place in its hierarchy, shown as a badge at the start of the title row. The card
+   * covers the space the floating badge would take, so it carries the badge while it is open.
+   */
+  role?: HierarchyRole;
   /** World size, independent of how far the node is scaled. */
   scale?: number;
   pointerEventsType?: AllowedPointerEventsType;
@@ -162,6 +179,7 @@ export function SpatialContextToolbar({
   position,
   side = "below",
   settingsPosition,
+  role,
   scale = 0.72,
   pointerEventsType = "all",
 }: SpatialContextToolbarProps) {
@@ -175,6 +193,10 @@ export function SpatialContextToolbar({
   // title pill has no room to say anything useful.
   const tileCount = actions.length + (settings != null ? 1 : 0);
   const units = Math.max(2, tileCount);
+  // Beside the node the card is a column two tiles wide, the narrowest the title pill reads at;
+  // the tiles wrap into rows of two.
+  const vertical = side === "left" || side === "right";
+  const cardUnits = vertical ? 2 : units;
   const settingsAction: SpatialContextAction = {
     id: "settings",
     label: settingsOpen ? "Hide settings" : "Settings",
@@ -199,6 +221,11 @@ export function SpatialContextToolbar({
     node.parent.getWorldScale(s.parentScale);
     const k = scale;
     node.scale.set(k / s.parentScale.x, k / s.parentScale.y, k / s.parentScale.z);
+    if (vertical) {
+      const gap = (side === "right" ? EDGE_GAP : -EDGE_GAP) / s.parentScale.x;
+      node.position.set(position[0] + gap, position[1], position[2]);
+      return;
+    }
     const gap = (side === "above" ? EDGE_GAP : -EDGE_GAP) / s.parentScale.y;
     node.position.set(position[0], position[1] + gap, position[2]);
     // Inside the counter-scaled group, a node-space offset d is d * parentScale / k.
@@ -211,10 +238,12 @@ export function SpatialContextToolbar({
       );
     }
   });
-  const detachedSettings = side === "above" && settingsPosition != null;
-  const shell = {
+  // The settings rows are laid out for the full-width card, so beside the node they open in a
+  // card of their own, further out from it.
+  const detachedSettings = vertical || (side === "above" && settingsPosition != null);
+  const shellFor = (n: number) => ({
     pixelSize: 0.001,
-    width: unitSpan(units) + GAP * 2,
+    width: unitSpan(n) + GAP * 2,
     padding: GAP,
     gap: GAP,
     alignItems: "stretch",
@@ -222,7 +251,11 @@ export function SpatialContextToolbar({
     backgroundColor: COLOR.ground,
     backgroundOpacity: 1,
     pointerEventsType,
-  } as const;
+  } as const);
+  const shell = shellFor(units);
+  const toolbarShell = shellFor(cardUnits);
+  // uikit pixels are 0.001 group units (`pixelSize`).
+  const besideCard = (toolbarShell.width + GAP) * 0.001;
 
   return (
     <group
@@ -245,8 +278,15 @@ export function SpatialContextToolbar({
         Above the window it mirrors: the title stays next to the edge.
       */
       }
+      {
+        /*
+        Beside the window it hangs from the top corner and grows down, alongside the window
+        rather than into the stack above or below it.
+      */
+      }
       <Container
-        {...shell}
+        {...toolbarShell}
+        anchorX={side === "right" ? "left" : side === "left" ? "right" : undefined}
         anchorY={side === "above" ? "bottom" : "top"}
         flexDirection={side === "above" ? "column-reverse" : "column"}
       >
@@ -261,11 +301,14 @@ export function SpatialContextToolbar({
           is lit at all — which is the point.
         */
         }
-        <Pill slots={units * 2} units={units} fontSize={14}>
-          {hoverLabel ?? title}
-        </Pill>
+        <Container flexDirection="row" gap={INNER_GAP}>
+          {role != null && <HierarchyBadge role={role} size={slotSize(cardUnits)} />}
+          <Pill slots={cardUnits * 2 - (role != null ? 1 : 0)} units={cardUnits} fontSize={14}>
+            {hoverLabel ?? title}
+          </Pill>
+        </Container>
 
-        <Container flexDirection="row" gap={GAP}>
+        <Container flexDirection="row" flexWrap="wrap" gap={GAP}>
           {actions.map((action) => (
             <ActionTile key={action.id} action={action} onHover={setHoveredId} />
           ))}
@@ -274,8 +317,16 @@ export function SpatialContextToolbar({
         {settingsOpen && !detachedSettings && settings}
       </Container>
       {settingsOpen && detachedSettings && (
-        <group ref={settingsGroup}>
-          <Container {...shell} anchorX="left" anchorY="top" flexDirection="column">
+        <group
+          ref={vertical ? undefined : settingsGroup}
+          position={vertical ? [side === "right" ? besideCard : -besideCard, 0, 0] : undefined}
+        >
+          <Container
+            {...shell}
+            anchorX={side === "left" ? "right" : "left"}
+            anchorY="top"
+            flexDirection="column"
+          >
             {settings}
           </Container>
         </group>
@@ -330,17 +381,49 @@ export function SpatialSettingsButton({
  * card, which makes it a top-level element. The circle shape belongs to
  * single-unit elements nested on a tile.
  */
+type HierarchyRole = "parent" | "child" | "solo";
+
+/** P, C or S in a circle: whether a window holds others, hangs from one, or stands alone. */
+function HierarchyBadge(
+  { role, size, pixelSize }: { role: HierarchyRole; size: number; pixelSize?: number },
+) {
+  const label = role === "parent" ? "P" : role === "child" ? "C" : "S";
+  return (
+    <Container
+      pixelSize={pixelSize}
+      width={size}
+      height={size}
+      flexShrink={0}
+      alignItems="center"
+      justifyContent="center"
+      borderRadius={RADIUS.shell - GAP}
+      borderWidth={OUTLINE_WIDTH}
+      borderColor={COLOR.outline}
+      borderOpacity={1}
+      backgroundColor={COLOR.ground}
+      backgroundOpacity={1}
+    >
+      {
+        /*
+        Text directly, not wrapped in a pill: the circle already *is* the
+        round container the text rule asks for (radius = half the smaller
+        side), so nesting a pill inside it would be the same shape twice.
+      */
+      }
+      <Text color={COLOR.ink} fontSize={18}>{label}</Text>
+    </Container>
+  );
+}
+
 export function SpatialHierarchyIndicator({
   role,
   position,
   visible = true,
 }: {
-  role: "parent" | "child" | "solo";
+  role: HierarchyRole;
   position: [number, number, number];
   visible?: boolean;
 }) {
-  const label = role === "parent" ? "P" : role === "child" ? "C" : "S";
-  const size = UNIT * 0.5;
   return (
     <group
       position={position}
@@ -348,28 +431,7 @@ export function SpatialHierarchyIndicator({
       userData={{ spatialHierarchyIndicator: role }}
       {...({ pointerEvents: "none", pointerEventsOrder: 30 } as Record<string, unknown>)}
     >
-      <Container
-        pixelSize={0.001}
-        width={size}
-        height={size}
-        alignItems="center"
-        justifyContent="center"
-        borderRadius={RADIUS.shell - GAP}
-        borderWidth={OUTLINE_WIDTH}
-        borderColor={COLOR.outline}
-        borderOpacity={1}
-        backgroundColor={COLOR.ground}
-        backgroundOpacity={1}
-      >
-        {
-          /*
-          Text directly, not wrapped in a pill: the circle already *is* the
-          round container the text rule asks for (radius = half the smaller
-          side), so nesting a pill inside it would be the same shape twice.
-        */
-        }
-        <Text color={COLOR.ink} fontSize={18}>{label}</Text>
-      </Container>
+      <HierarchyBadge role={role} size={UNIT * 0.5} pixelSize={0.001} />
     </group>
   );
 }

@@ -871,8 +871,40 @@ export function hasAvailableDisplayAttachmentSlot(
 }
 
 /** True while a node hangs from the display's bottom slot (the keyboard, by default). */
-export function isDisplayBottomSlotOccupied(graph: SpatialGraph, displayId: SpatialNodeId) {
-  return isAttachmentSlotOccupied(graph, `${displayId}-bottom-slot`);
+/** Where a display's context toolbar goes. */
+export type DisplayToolbarSide = "below" | "above" | "left" | "right";
+
+const OPPOSITE_SIDE: Record<SpatialAttachmentSide, SpatialAttachmentSide> = {
+  left: "right",
+  right: "left",
+  top: "bottom",
+  bottom: "top",
+};
+
+/**
+ * Below the display unless something is there: then above, and when a stack fills both (a window
+ * between another window and a keyboard), beside it: on the left, where SteamVR puts an
+ * overlay's controls, unless only the right is free.
+ *
+ * A side is taken by a child hinged to that side's slot, or by the parent this display hangs
+ * from: a display in its parent's bottom slot has the parent above it.
+ */
+export function displayToolbarSide(
+  graph: SpatialGraph,
+  displayId: SpatialNodeId,
+): DisplayToolbarSide {
+  const constraint = graph.nodes[displayId]?.constraint;
+  const parentSide = constraint?.kind === "hinge"
+    ? constraint.attachmentSlotId.match(/-(left|right|top|bottom)-slot$/)?.[1] as
+      | SpatialAttachmentSide
+      | undefined
+    : undefined;
+  const taken = (side: SpatialAttachmentSide) =>
+    isAttachmentSlotOccupied(graph, `${displayId}-${side}-slot`) ||
+    (parentSide != null && OPPOSITE_SIDE[parentSide] === side);
+  if (!taken("bottom")) return "below";
+  if (!taken("top")) return "above";
+  return taken("left") && !taken("right") ? "right" : "left";
 }
 
 function isAttachmentSlotOccupied(graph: SpatialGraph, slotId: string): boolean {

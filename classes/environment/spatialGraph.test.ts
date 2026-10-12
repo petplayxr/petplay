@@ -9,6 +9,7 @@ import {
   deleteSpatialNode,
   detachDisplayHierarchy,
   detachFromParent,
+  displayToolbarSide,
   ensureDefaultSpatialContent,
   getDisplayAttachmentRole,
   getSpatialNodeWorldMatrix,
@@ -682,4 +683,26 @@ Deno.test("curvature is clamped, and flat clears the field", () => {
     !("curvature" in setSpatialNodeCurvature(curved, "display-1", -1).nodes["display-1"]),
     "flat",
   );
+});
+
+Deno.test("a display's toolbar goes beside it when the stack fills above and below", () => {
+  let graph = createInitialSpatialGraph();
+  assert(graph.nodes.keyboard?.parentId === "display-1", "the default keyboard hangs below");
+  assert(displayToolbarSide(graph, "display-1") === "above", "a keyboard below pushes it above");
+
+  graph = spawnHingedDisplay(graph, "display-1", "top");
+  assert(displayToolbarSide(graph, "display-1") === "left", "window above, keyboard below");
+  assert(displayToolbarSide(graph, "display-2") === "above", "the top window's parent is below it");
+
+  graph = spawnHingedDisplay(graph, "display-1", "left");
+  assert(
+    displayToolbarSide(graph, "display-1") === "right",
+    "a window on the left takes the right",
+  );
+
+  // A parent counts too: this window's parent is below it and its child above.
+  let tower = spawnHingedDisplay(createInitialSpatialGraph(), "display-1", "top");
+  tower = spawnHingedDisplay(tower, "display-2", "top");
+  assert(tower.nodes["display-3"]?.parentId === "display-2", "a third window stacks on top");
+  assert(displayToolbarSide(tower, "display-2") === "left", "a parent below counts as taken");
 });
