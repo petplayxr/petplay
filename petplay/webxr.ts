@@ -7,6 +7,7 @@ import { OpenVrControllerTipPoseResolver } from "../classes/openVrControllerTipP
 import { wait } from "../classes/utils.ts";
 import { getDisplayMouseDiagnostics } from "../classes/environment/displayInstance/mouse.ts";
 import { OpenVrOverlayTexture } from "../classes/openVrOverlayTexture.ts";
+import { closeRaylibAudio } from "../classes/environment/raylibAudioContext.ts";
 import { WEBXR_CRASH_ON_DROP_WARMUP_FRAMES } from "../classes/webxrCrashOnDrop.ts";
 import { getCrashOnDroppedFrameMode, WebXRHost } from "../classes/webxrhost.ts";
 import {
@@ -1126,6 +1127,7 @@ globalThis.addEventListener("unload", () => {
   state.webGpuOverlayGl?.cleanup();
   state.raylibOverlay?.cleanup();
   state.raylibOverlayRaylib?.cleanup();
+  closeRaylibAudio();
   state.webGpuOverlay = null;
   state.webGpuOverlayGl = null;
   state.raylibOverlay = null;
@@ -1398,6 +1400,7 @@ async function stopWebXR(): Promise<true> {
   LogChannel.log("webxrv2", "[webxr] shutdown: cleaning Raylib renderer");
   state.raylibOverlayRaylib?.cleanup();
   state.raylibOverlayRaylib = null;
+  closeRaylibAudio();
   LogChannel.log("webxrv2", "[webxr] shutdown: native cleanup complete");
   state.nativeRaylibPacer = null;
   state.nativeRaylibVrSystem = null;

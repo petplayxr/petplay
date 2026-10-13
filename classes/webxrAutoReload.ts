@@ -63,6 +63,14 @@ export function watchDirectories(files: Iterable<string>): string[] {
   return [...new Set([...files].map((file) => dirname(file)))].sort();
 }
 
+function isDirectory(path: string): boolean {
+  try {
+    return Deno.statSync(path).isDirectory;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Coalesces bursts of changes into one run, and never runs twice at once: a
  * change that arrives mid-run queues exactly one more run after it.
@@ -173,7 +181,9 @@ export async function startWebXrAutoReload(
   }, options.debounceMs);
 
   function rewatch(): void {
-    const directories = watchDirectories(graph.files);
+    // A module that failed to resolve can name a directory that does not exist, and
+    // `watchFs` throws on any missing path.
+    const directories = watchDirectories(graph.files).filter(isDirectory);
     const key = directories.join("\n");
     if (stopped || key === watched) return;
     watcher?.close();

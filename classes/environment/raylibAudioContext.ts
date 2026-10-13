@@ -202,29 +202,45 @@ export class RaylibAudioContext {
   }
 }
 
+/** Backends with an open device, so a worker shutdown can close them; see {@link closeRaylibAudio}. */
+const liveBackends = new Set<RaylibAudioBackend>();
+
+/**
+ * Close every audio device before the worker goes away. Miniaudio's device thread keeps calling
+ * into raylib until the device is closed, and React does not unmount the scene when the worker is
+ * torn down, so a reload unloaded raylib under that thread and segfaulted the whole process.
+ */
+export function closeRaylibAudio(): void {
+  for (const backend of [...liveBackends]) backend.dispose();
+}
+
 /** Native raylib endpoint for a [RaylibAudioContext]. One instance owns the device and voice pools. */
 export class RaylibAudioBackend {
   private readonly pools = new Map<
     string,
     { source: raylib.Sound; aliases: raylib.Sound[]; cursor: number }
   >();
-  private ownsRaylib = false;
   private ownsDevice = false;
+  private context: RaylibAudioContext | null = null;
 
   initialize(context: RaylibAudioContext): void {
-    if (!raylib.isRaylibLoaded()) {
-      raylib.loadRaylib(getDefaultRaylibPath());
-      this.ownsRaylib = true;
-    }
+    // Never unloaded here: the renderer and other wrappers share the library, and the
+    // worker's JS can keep calling into it after the scene unmounts. Deno releases it
+    // with the worker (see `WebXROverlayRaylib.cleanup`).
+    if (!raylib.isRaylibLoaded()) raylib.loadRaylib(getDefaultRaylibPath());
     if (!raylib.IsAudioDeviceReady()) {
       raylib.InitAudioDevice();
       this.ownsDevice = true;
     }
     context.onPlayback = (playback) => this.play(playback);
+    this.context = context;
+    liveBackends.add(this);
   }
 
-  dispose(context?: RaylibAudioContext): void {
+  dispose(context: RaylibAudioContext | null = this.context): void {
+    liveBackends.delete(this);
     if (context) context.onPlayback = null;
+    this.context = null;
     for (const { source, aliases } of this.pools.values()) {
       for (const alias of aliases) raylib.H.UnloadSoundAlias(alias);
       raylib.H.UnloadSound(source);
@@ -232,8 +248,6 @@ export class RaylibAudioBackend {
     this.pools.clear();
     if (this.ownsDevice && raylib.IsAudioDeviceReady()) raylib.CloseAudioDevice();
     this.ownsDevice = false;
-    if (this.ownsRaylib) raylib.unloadRaylib();
-    this.ownsRaylib = false;
   }
 
   private play(playback: RaylibPlayback): () => void {

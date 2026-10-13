@@ -136,7 +136,8 @@
   "scopes": {
     "./submodules/threewebxrwebgpudeno/": {
       "iwer": "./submodules/threewebxrwebgpudeno/submodules/iwer/packages/iwer/src/index.ts",
-      "iwer/": "./submodules/threewebxrwebgpudeno/submodules/iwer/packages/iwer/src/"
+      "iwer/": "./submodules/threewebxrwebgpudeno/submodules/iwer/packages/iwer/src/",
+      "iwer/lib/device/XRDevice": "./submodules/threewebxrwebgpudeno/submodules/iwer/packages/iwer/src/device/XRDevice.ts"
     }
   }
 }
