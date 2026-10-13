@@ -704,10 +704,6 @@ function WindowLayer({
       );
     }), [camera, forwardOffset, renderer]);
 
-  // The audio provider outlives a hide: acquiring it brings up the native audio device, which cost
-  // ~45 ms of the first frame of every show.
-  if (!visible) return <SpatialAudioProvider>{null}</SpatialAudioProvider>;
-
   const roots = getSpatialChildren(graph, null);
   const renderRoot = (node: SpatialNode) => (
     <SpatialNodeView
@@ -726,20 +722,29 @@ function WindowLayer({
     />
   );
 
+  // Hiding keeps the windows built: unmounting them and building them again stalled a frame by
+  // ~0.4 s on every show (~0.2 s on hide). A hidden Activity keeps React's tree and the three
+  // objects but runs effect cleanups, so a hidden window has no frame jobs and no OpenVR overlay.
+  // Pointer events ignore `visible`, so the wrapper also stops rays reaching hidden windows. The
+  // audio provider stays outside: acquiring it brings up the native audio device.
   return (
     <SpatialAudioProvider>
-      <group userData={{ spatialGraphRoot: true, originId: SCENE_ORIGIN_ID, static: true }}>
-        <CommonOverlayChords
-          inputSource={directOpenVrInputSource}
-          graph={graph}
-          handleStores={handleStores}
-          onMouse={onMouse}
-        />
-        {roots.map((node) => (
-          <SpatialRootOrigin key={node.id} originId={node.originId}>
-            {renderRoot(node)}
-          </SpatialRootOrigin>
-        ))}
+      <group {...({ intersectChildren: visible } as Record<string, unknown>)}>
+        <React.Activity mode={visible ? "visible" : "hidden"}>
+          <group userData={{ spatialGraphRoot: true, originId: SCENE_ORIGIN_ID, static: true }}>
+            <CommonOverlayChords
+              inputSource={directOpenVrInputSource}
+              graph={graph}
+              handleStores={handleStores}
+              onMouse={onMouse}
+            />
+            {roots.map((node) => (
+              <SpatialRootOrigin key={node.id} originId={node.originId}>
+                {renderRoot(node)}
+              </SpatialRootOrigin>
+            ))}
+          </group>
+        </React.Activity>
       </group>
     </SpatialAudioProvider>
   );
