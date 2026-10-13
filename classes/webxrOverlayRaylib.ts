@@ -154,8 +154,8 @@ export class WebXROverlayRaylib {
   private outputEyeHeight = 0;
   private leftEyeTarget: raylib.RenderTexture2D | null = null;
   private rightEyeTarget: raylib.RenderTexture2D | null = null;
-  /** The pair the compositor may still be reading; see {@link swapEyeTargets}. */
-  private spareEyeTargets: [raylib.RenderTexture2D, raylib.RenderTexture2D] | null = null;
+  /** Eye pairs besides the active one, for projection presents; see {@link useEyeTargetsOtherThan}. */
+  private spareEyeTargets: [raylib.RenderTexture2D, raylib.RenderTexture2D][] = [];
   private outputTarget: raylib.RenderTexture2D | null = null;
   private combineShader: raylib.Shader | null = null;
   private sceneRenderer: WebXRRaythreeRaylibRenderer | null = null;
@@ -234,16 +234,24 @@ export class WebXROverlayRaylib {
   }
 
   /**
-   * Render the next frame into the other pair of eye targets. The compositor reads a projection
-   * overlay's texture some time after `SetOverlayTexture`; drawing the next frame into the same
-   * texture meant it often showed the new image under the previous frame's pose, which doubled
-   * and juddered everything on head motion. The spare pair is created on first use.
+   * Make the active eye targets a pair whose left texture is none of `busyLeftTextures`. The
+   * compositor reads a projection overlay's texture some time after `SetOverlayTexture`, so a
+   * frame must never draw into the pair it is showing (drawing into it doubled and juddered the
+   * scene on head motion), nor into a pair still waiting to be presented. Spare pairs are created
+   * on first use, up to three in all.
    */
-  swapEyeTargets(): boolean {
+  useEyeTargetsOtherThan(busyLeftTextures: readonly number[]): boolean {
     if (!this.leftEyeTarget || !this.rightEyeTarget) {
       return false;
     }
-    if (!this.spareEyeTargets) {
+    if (!busyLeftTextures.includes(this.leftEyeTarget.texture.id)) {
+      return true;
+    }
+    let index = this.spareEyeTargets.findIndex(([left]) =>
+      !busyLeftTextures.includes(left.texture.id)
+    );
+    if (index < 0) {
+      if (this.spareEyeTargets.length >= 2) return false;
       const left = raylib.H.LoadRenderTexture(this.renderWidth, this.renderHeight);
       const right = raylib.H.LoadRenderTexture(this.renderWidth, this.renderHeight);
       if (!raylib.H.IsRenderTextureValid(left) || !raylib.H.IsRenderTextureValid(right)) {
@@ -254,10 +262,10 @@ export class WebXROverlayRaylib {
       for (const target of [left, right]) {
         raylib.H.SetTextureFilter(target.texture, raylib.TextureFilter.TEXTURE_FILTER_BILINEAR);
       }
-      this.spareEyeTargets = [left, right];
+      index = this.spareEyeTargets.push([left, right]) - 1;
     }
-    const [left, right] = this.spareEyeTargets;
-    this.spareEyeTargets = [this.leftEyeTarget, this.rightEyeTarget];
+    const [left, right] = this.spareEyeTargets[index];
+    this.spareEyeTargets[index] = [this.leftEyeTarget, this.rightEyeTarget];
     this.leftEyeTarget = left;
     this.rightEyeTarget = right;
     return true;
@@ -819,10 +827,10 @@ export class WebXROverlayRaylib {
   }
 
   private unloadTargets() {
-    for (const target of this.spareEyeTargets ?? []) {
-      raylib.H.UnloadRenderTexture(target);
+    for (const pair of this.spareEyeTargets) {
+      for (const target of pair) raylib.H.UnloadRenderTexture(target);
     }
-    this.spareEyeTargets = null;
+    this.spareEyeTargets = [];
     if (this.leftEyeTarget) {
       raylib.H.UnloadRenderTexture(this.leftEyeTarget);
       this.leftEyeTarget = null;

@@ -262,6 +262,18 @@ const state = actorState({
   /** Vsyncs after pacing a windowed present is displayed; poses are predicted to it. */
   raylibPresentDisplayFrames: 2,
   raylibPresentDropped: 0,
+  /**
+   * Present each frame one iteration later: the next iteration presents it in its window right
+   * after the sim, before rendering its own frame, so only the sim must finish by the window and
+   * rendering gets the rest of the frame. One more vsync of latency, predicted for.
+   */
+  raylibPresentPipelined: true,
+  /** The rendered frame waiting for the next iteration's window (pipelined mode). */
+  raylibPendingProjectionFrame: null as
+    | { frame: ProjectionFrameMatrices; textures: { left: number; right: number } }
+    | null,
+  /** Left texture of the last presented frame: the pair the compositor may be reading. */
+  raylibShownProjectionTexture: -1,
   /** Per frame: [ms after its vsync the pace returned, ms after it the render finished] (last 2000). */
   raylibFrameStartPhase: [] as [number, number][],
   /** Pace on `IVROverlay::WaitFrameSync` (live-switchable; starts from `--webxr-overlay-frame-sync`). */
@@ -1063,6 +1075,8 @@ function startPresentationWatch(): void {
  * showing nothing but the WebXR shell until restart.
  */
 function recoverRaylibOverlayTargets(reason: string): boolean {
+  state.raylibPendingProjectionFrame = null;
+  state.raylibShownProjectionTexture = -1;
   raylibOverlayRecoveryAttempts++;
   if (raylibOverlayRecoveryAttempts > MAX_RAYLIB_OVERLAY_RECOVERY_ATTEMPTS) {
     state.overlayRunning = false;
@@ -1814,16 +1828,59 @@ function ensureRaylibOverlayForFrame() {
   state.raylibOverlay = nextOverlay;
 }
 
-/** Projection mode: the panorama overlay is dropped so the watchdog never re-shows it. */
-function presentRaylibProjectionOverlays(frame: {
+type ProjectionFrameMatrices = {
   leftEyeViewMatrix: Float32Array;
   leftEyeProjectionMatrix: Float32Array;
   rightEyeViewMatrix: Float32Array;
   rightEyeProjectionMatrix: Float32Array;
-}): boolean {
+};
+
+/**
+ * Wait until `raylibPresentWindow` opens for the frame paced on `vsyncFrameIndex`.
+ * @returns false when the window has already closed: the frame must not be presented.
+ */
+async function awaitProjectionPresentWindow(
+  vsyncFrameIndex: bigint | undefined,
+  frameStartedMs: number,
+): Promise<boolean> {
+  const pacer = state.nativeRaylibPacer;
+  let phase = pacer?.sampleVsyncPhase();
+  if (!pacer || !phase || vsyncFrameIndex == null) return true;
+  const window = state.raylibPresentWindow;
+  const periodMs = 1000 / (state.nominalHmdDisplayHz ?? 90);
+  const sincePacedVsync = (sample: { msSinceVsync: number; frameIndex: bigint }) =>
+    Number(sample.frameIndex - vsyncFrameIndex) * periodMs + sample.msSinceVsync;
+  let elapsed = sincePacedVsync(phase);
+  state.raylibFrameStartPhase.push([frameStartedMs, elapsed]);
+  if (state.raylibFrameStartPhase.length > 2000) state.raylibFrameStartPhase.shift();
+  if (elapsed > window.maxMs) {
+    state.raylibPresentDropped++;
+    return false;
+  }
+  if (elapsed < window.minMs) {
+    if (window.minMs - elapsed > 1.5) await wait(window.minMs - elapsed - 1);
+    while (phase && elapsed < window.minMs) {
+      phase = pacer.sampleVsyncPhase();
+      if (phase) elapsed = sincePacedVsync(phase);
+    }
+  }
+  if (phase) {
+    state.raylibPresentPhase.push([
+      phase.msSinceVsync,
+      Number(phase.frameIndex - vsyncFrameIndex),
+    ]);
+    if (state.raylibPresentPhase.length > 2000) state.raylibPresentPhase.shift();
+  }
+  return true;
+}
+
+/** Projection mode: the panorama overlay is dropped so the watchdog never re-shows it. */
+function presentRaylibProjectionOverlays(
+  frame: ProjectionFrameMatrices,
+  eyes: { left: number; right: number },
+): boolean {
   const config = state.raylibOverlayConfig;
-  const eyes = state.raylibOverlayRaylib?.getEyeTextureHandles();
-  if (!config || !eyes) {
+  if (!config) {
     return false;
   }
   dropRaylibOverlayForRecreate("presenting projection overlays");
@@ -2114,6 +2171,36 @@ async function uploadRaylibShadowFrame() {
 
   const handlerT0 = performance.now();
   const projection = state.raylibProjectionOverlayEnabled;
+  const pipelined = projection && state.raylibPresentPipelined;
+  if (!pipelined) state.raylibPendingProjectionFrame = null;
+  if (projection) {
+    if (state.nativeRaylibPacer) {
+      state.nativeRaylibPacer.extraPredictionFrames = state.raylibPresentDisplayFrames - 1 +
+        (pipelined ? 1 : 0);
+    }
+    if (state.compositorTimingProbe) {
+      const timing = state.nativeRaylibPacer?.readCompositorFrameTiming(1);
+      if (timing && state.compositorTimings.at(-1)?.frameIndex !== timing.frameIndex) {
+        state.compositorTimings.push(timing);
+        if (state.compositorTimings.length > 600) state.compositorTimings.shift();
+      }
+    }
+  }
+  if (pipelined) {
+    // Present the frame rendered last iteration in this frame's window, then render this one.
+    // Only the sim above has to beat the window; rendering gets the rest of the frame.
+    const pending = state.raylibPendingProjectionFrame;
+    state.raylibPendingProjectionFrame = null;
+    if (pending && await awaitProjectionPresentWindow(vsyncFrameIndex, frameStartedMs)) {
+      if (!presentRaylibProjectionOverlays(pending.frame, pending.textures)) {
+        return recoverRaylibOverlayTargets("projection overlay present rejected a texture");
+      }
+      state.raylibShownProjectionTexture = pending.textures.left;
+    }
+    if (!state.raylibOverlayRaylib.useEyeTargetsOtherThan([state.raylibShownProjectionTexture])) {
+      return recoverRaylibOverlayTargets("no free projection eye targets");
+    }
+  }
   const rt = state.raylibOverlayRaylib.renderRaythreeFrame(payload, { skipCombine: projection });
   const renderMs = rt.totalMs;
   // Ship the same IR the in-worker overlay just rasterized to every registered
@@ -2126,50 +2213,29 @@ async function uploadRaylibShadowFrame() {
     // toggle around the OpenVR texture import can invalidate the FBO transiently.
     return recoverRaylibOverlayTargets("invalid Raylib output texture");
   }
-  if (projection) {
-    if (state.nativeRaylibPacer) {
-      state.nativeRaylibPacer.extraPredictionFrames = state.raylibPresentDisplayFrames - 1;
+  if (pipelined) {
+    const textures = state.raylibOverlayRaylib.getEyeTextureHandles();
+    if (textures) {
+      const frame = payload.frame;
+      state.raylibPendingProjectionFrame = {
+        textures,
+        frame: {
+          leftEyeViewMatrix: new Float32Array(frame.leftEyeViewMatrix),
+          leftEyeProjectionMatrix: new Float32Array(frame.leftEyeProjectionMatrix),
+          rightEyeViewMatrix: new Float32Array(frame.rightEyeViewMatrix),
+          rightEyeProjectionMatrix: new Float32Array(frame.rightEyeProjectionMatrix),
+        },
+      };
     }
-    if (state.compositorTimingProbe) {
-      const timing = state.nativeRaylibPacer?.readCompositorFrameTiming(1);
-      if (timing && state.compositorTimings.at(-1)?.frameIndex !== timing.frameIndex) {
-        state.compositorTimings.push(timing);
-        if (state.compositorTimings.length > 600) state.compositorTimings.shift();
-      }
-    }
-    const window = state.raylibPresentWindow;
-    const periodMs = 1000 / (state.nominalHmdDisplayHz ?? 90);
-    const sincePacedVsync = (sample: { msSinceVsync: number; frameIndex: bigint }) =>
-      Number(sample.frameIndex - (vsyncFrameIndex ?? sample.frameIndex)) * periodMs +
-      sample.msSinceVsync;
-    let phase = state.nativeRaylibPacer?.sampleVsyncPhase();
-    let missedPhase = false;
-    if (phase && vsyncFrameIndex != null) {
-      let elapsed = sincePacedVsync(phase);
-      state.raylibFrameStartPhase.push([frameStartedMs, elapsed]);
-      if (state.raylibFrameStartPhase.length > 2000) state.raylibFrameStartPhase.shift();
-      if (elapsed > window.maxMs) {
-        state.raylibPresentDropped++;
-        missedPhase = true;
-      } else if (elapsed < window.minMs) {
-        if (window.minMs - elapsed > 1.5) await wait(window.minMs - elapsed - 1);
-        while (phase && elapsed < window.minMs) {
-          phase = state.nativeRaylibPacer?.sampleVsyncPhase();
-          if (phase) elapsed = sincePacedVsync(phase);
-        }
-      }
-    }
-    if (phase) {
-      const elapsed = Number(phase.frameIndex) - Number(vsyncFrameIndex);
-      state.raylibPresentPhase.push([phase.msSinceVsync, elapsed]);
-      if (state.raylibPresentPhase.length > 2000) state.raylibPresentPhase.shift();
-    }
-    // A missed frame keeps its targets: the compositor is still showing the other pair.
-    if (!missedPhase) {
-      if (!presentRaylibProjectionOverlays(payload.frame)) {
+  } else if (projection) {
+    // A missed frame is not presented; its targets are free to draw the next one into.
+    if (await awaitProjectionPresentWindow(vsyncFrameIndex, frameStartedMs)) {
+      const textures = state.raylibOverlayRaylib.getEyeTextureHandles();
+      if (!textures || !presentRaylibProjectionOverlays(payload.frame, textures)) {
         return recoverRaylibOverlayTargets("projection overlay present rejected a texture");
       }
-      state.raylibOverlayRaylib.swapEyeTargets();
+      state.raylibShownProjectionTexture = textures.left;
+      state.raylibOverlayRaylib.useEyeTargetsOtherThan([textures.left]);
     }
   } else {
     dropRaylibProjectionOverlays();
