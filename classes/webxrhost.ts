@@ -2511,7 +2511,7 @@ export class WebXRHost {
 
   /**
    * IWER `XRSession.onDeviceFrame`: runs after `XRFrame` is created, **before**
-   * `device.onFrameStart` → `XRTrackedInput.applyPoseToTargetRaySpace` (see iwer source).
+   * `device.onFrameStart` → `XRTrackedInput.updateTargetRaySpace` (see iwer source).
    * Mirrors Aardvark `runFrame`: `updateOpenVrPoses` then `doInputWork` before any use of poses.
    */
   private applyOpenVrTrackingBeforeIwerOnFrameStart(_frame: XRFrame): void {

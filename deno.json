@@ -135,8 +135,8 @@
   ],
   "scopes": {
     "./submodules/threewebxrwebgpudeno/": {
-      "iwer": "./submodules/threewebxrwebgpudeno/submodules/iwer/src/index.ts",
-      "iwer/": "./submodules/threewebxrwebgpudeno/submodules/iwer/src/"
+      "iwer": "./submodules/threewebxrwebgpudeno/submodules/iwer/packages/iwer/src/index.ts",
+      "iwer/": "./submodules/threewebxrwebgpudeno/submodules/iwer/packages/iwer/src/"
     }
   }
 }
