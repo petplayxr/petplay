@@ -120,7 +120,12 @@ function pruneDeadRunTemps() {
     try {
       Deno.statSync(`/proc/${pid}`);
     } catch {
-      Deno.removeSync(join("./tmp", entry.name), { recursive: true });
+      try {
+        Deno.removeSync(join("./tmp", entry.name), { recursive: true });
+      } catch (error) {
+        // Servers started together race to prune the same directory.
+        if (!(error instanceof Deno.errors.NotFound)) throw error;
+      }
     }
   }
 }

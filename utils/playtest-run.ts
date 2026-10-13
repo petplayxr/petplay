@@ -63,7 +63,7 @@ async function portInUse(port: number): Promise<boolean> {
   }
 }
 
-type Server = { stop: () => Promise<void> };
+type Server = { stop: () => Promise<void>; exitCode: () => number | null };
 
 async function launch(runDir: string, port: number): Promise<Server> {
   const log = await Deno.open(join(runDir, "server.log"), { createNew: true, write: true });
@@ -90,10 +90,13 @@ async function launch(runDir: string, port: number): Promise<Server> {
     stdout: "piped",
     stderr: "piped",
   }).spawn();
+  let exitCode: number | null = null;
+  child.status.then((status) => exitCode = status.code);
   const mirrored = Promise.all([child.stdout, child.stderr].map(async (stream) => {
     for await (const chunk of stream) await log.write(chunk);
   }));
   return {
+    exitCode: () => exitCode,
     stop: async () => {
       try {
         child.kill("SIGTERM");
@@ -122,11 +125,15 @@ async function evalInWebxr(port: number, code: string, timeoutMs: number): Promi
   }
 }
 
-/** Waits for the webxr actor, then for a scene with a wrist menu in it. */
-async function waitForScene(port: number, timeoutMs: number): Promise<void> {
+/** Waits for the webxr actor, then for a scene with a wrist menu in it; gives up if the server exits. */
+async function waitForScene(port: number, server: Server, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let lastError = "";
   while (Date.now() < deadline) {
+    const code = server.exitCode();
+    if (code !== null) {
+      throw new Error(`the server exited with code ${code} before the scene came up`);
+    }
     try {
       await evalInWebxr(
         port,
@@ -245,12 +252,12 @@ async function prepare(name: string, port: number): Promise<Launched> {
 }
 
 /** Runs the script on its server; the caller stops the server. */
-async function runScript({ name, port, runDir }: Launched): Promise<RunResult> {
+async function runScript({ name, port, runDir, server }: Launched): Promise<RunResult> {
   const scriptUrl = toFileUrl(join(scriptsDir, `${name}.ts`)).href;
   const started = performance.now();
   const run: RunResult = { name, ok: false, seconds: 0, steps: [] };
   try {
-    await waitForScene(port, 90_000);
+    await waitForScene(port, server, 90_000);
     const total = await stepCount(port, scriptUrl, join(runDir, "steps.txt"));
     for (let index = 0; index < total; index++) {
       const result = await runStep(
