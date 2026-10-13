@@ -95,6 +95,31 @@ export type OpenVrHmdEmulationPose = {
   quaternion: [number, number, number, number];
 };
 
+export type CompositorFrameTiming = {
+  frameIndex: number;
+  numFramePresents: number;
+  numMisPresented: number;
+  numDroppedFrames: number;
+  reprojectionFlags: number;
+  systemTimeSeconds: number;
+  totalRenderGpuMs: number;
+  compositorRenderGpuMs: number;
+  compositorRenderCpuMs: number;
+  compositorIdleCpuMs: number;
+  clientFrameIntervalMs: number;
+  presentCallCpuMs: number;
+  waitForPresentCpuMs: number;
+  submitFrameMs: number;
+  waitGetPosesCalledMs: number;
+  newPosesReadyMs: number;
+  newFrameReadyMs: number;
+  compositorUpdateStartMs: number;
+  compositorUpdateEndMs: number;
+  compositorRenderStartMs: number;
+  numVSyncsReadyForUse: number;
+  numVSyncsToFirstView: number;
+};
+
 export type OpenVrOverlayPaceResult = {
   ok: boolean;
   frameIndex: bigint;
@@ -144,6 +169,8 @@ export class OpenVrOverlayFramePacer {
   private readonly fpsCounter = new FpsCounter();
   private lastFpsLogAt = 0;
   private readonly logVsyncSpin: boolean;
+  /** Off-thread `IVROverlay::WaitFrameSync`, see {@link enableOverlayFrameSync}. */
+  private waitFrameSync: ((timeoutMs: number) => Promise<number>) | null = null;
   private lastPaceResult: OpenVrOverlayPaceResult = {
     ok: false,
     frameIndex: 0n,
@@ -216,6 +243,9 @@ export class OpenVrOverlayFramePacer {
   async paceToDisplayAndRefreshPosesYielding(
     spinTailMs = DEFAULT_VSYNC_SPIN_TAIL_MS,
   ): Promise<OpenVrOverlayPaceResult> {
+    if (this.waitFrameSync && this.paceMode === "vsync") {
+      return await this.paceToOverlayFrameSync();
+    }
     let yieldedMs = 0;
     if (this.paceMode === "vsync" && this.lastVsyncFrameIndex !== 0n) {
       const gotVsync = this.vr.GetTimeSinceLastVsync(
@@ -243,6 +273,71 @@ export class OpenVrOverlayFramePacer {
     return this.paceToDisplayAndRefreshPosesSync(yieldedMs);
   }
 
+  /**
+   * Pace like WayVR: block (off the JS thread) in `IVROverlay::WaitFrameSync` until the
+   * compositor asks overlays for a frame, with a two-frame timeout, then sample the vsync
+   * index once instead of spinning on it. When the compositor stalls, the frame renders on
+   * timeout with fresh poses rather than burning a core waiting for the index to move.
+   */
+  enableOverlayFrameSync(overlayPointer: number | bigint): void {
+    const ptr = Deno.UnsafePointer.create(
+      typeof overlayPointer === "bigint" ? overlayPointer : BigInt(overlayPointer),
+    );
+    if (ptr == null) return;
+    // IVROverlay function table slot 45 (byte offset 360), as in the generated bindings.
+    const fn = Deno.UnsafePointer.create(new Deno.UnsafePointerView(ptr).getBigUint64(360)) as
+      | Deno.PointerObject<{ parameters: ["u32"]; result: "i32" }>
+      | null;
+    if (fn == null) return;
+    const waitFrameSync = new Deno.UnsafeFnPointer(
+      fn,
+      {
+        parameters: ["u32"],
+        result: "i32",
+        nonblocking: true,
+      } as const,
+    );
+    this.waitFrameSync = (timeoutMs) => waitFrameSync.call(timeoutMs);
+  }
+
+  disableOverlayFrameSync(): void {
+    this.waitFrameSync = null;
+  }
+
+  isOverlayFrameSyncEnabled(): boolean {
+    return this.waitFrameSync != null;
+  }
+
+  /** Ms since vsync at which each `WaitFrameSync` returned (last 600): the compositor's "top of frame" in our clock. */
+  readonly frameSyncPhases: number[] = [];
+
+  private async paceToOverlayFrameSync(): Promise<OpenVrOverlayPaceResult> {
+    this.displayHzCache ??= readHmdFloatProp(
+      this.vr,
+      OpenVR.TrackedDeviceProperty.Prop_DisplayFrequency_Float,
+    ) ?? 90;
+    const timeoutMs = Math.floor(2 * 1000 / this.displayHzCache);
+    const t0 = performance.now();
+    // WaitFrameSync returns at once when a sync is already pending, which can be the one
+    // just rendered; wait once more if the index has not moved.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await this.waitFrameSync!(timeoutMs);
+      const phase = this.sampleVsyncPhase();
+      if (phase) {
+        this.frameSyncPhases.push(phase.msSinceVsync);
+        if (this.frameSyncPhases.length > 600) this.frameSyncPhases.shift();
+      }
+      if (
+        this.lastVsyncFrameIndex === 0n ||
+        !this.vr.GetTimeSinceLastVsync(this.vsyncSecondsPtr, this.vsyncFramePtr) ||
+        this.vsyncFrameBuffer[0] !== this.lastVsyncFrameIndex
+      ) {
+        break;
+      }
+    }
+    return this.paceToDisplayAndRefreshPosesSync(performance.now() - t0, false);
+  }
+
   private async waitForFallbackDisplayInterval(): Promise<number> {
     this.displayHzCache ??= readHmdFloatProp(
       this.vr,
@@ -262,7 +357,10 @@ export class OpenVrOverlayFramePacer {
     return performance.now() - t0;
   }
 
-  private paceToDisplayAndRefreshPosesSync(yieldedMs: number): OpenVrOverlayPaceResult {
+  private paceToDisplayAndRefreshPosesSync(
+    yieldedMs: number,
+    spin = this.paceMode === "vsync",
+  ): OpenVrOverlayPaceResult {
     this.paceToDisplayCallCount++;
     this.fpsCounter.mark(performance.now());
     if (this.compositor != null && !this.compositor.CanRenderScene()) {
@@ -278,7 +376,7 @@ export class OpenVrOverlayFramePacer {
       });
     }
 
-    const useVsyncSpin = this.paceMode === "vsync";
+    const useVsyncSpin = spin;
     let previousFrameIndex = this.lastVsyncFrameIndex;
     let currentFrameIndex = this.lastVsyncFrameIndex;
     let spins = 0;
@@ -379,7 +477,10 @@ export class OpenVrOverlayFramePacer {
 
     const frameDuration = 1.0 / this.displayHzCache;
     const vsyncToPhotons = this.secondsVsyncToPhotonsCache;
-    const predictedSecondsFromNow = frameDuration - secondsSinceLastVsync + vsyncToPhotons;
+    const predictedSecondsFromNow = Math.max(
+      0,
+      frameDuration * (1 + this.extraPredictionFrames) - secondsSinceLastVsync + vsyncToPhotons,
+    );
     this.lastPredictedSeconds = predictedSecondsFromNow;
 
     this.vr.GetDeviceToAbsoluteTrackingPose(
@@ -404,7 +505,9 @@ export class OpenVrOverlayFramePacer {
       spinTimeMs: spinTime,
       yieldedMs,
       skippedDisplayFrames,
-      waitedForVsync: useVsyncSpin && (spins > 1 || yieldedMs > 0 || advancedOneFrame),
+      waitedForVsync: useVsyncSpin
+        ? spins > 1 || yieldedMs > 0 || advancedOneFrame
+        : this.waitFrameSync != null && currentFrameIndex !== previousFrameIndex,
     });
   }
 
@@ -434,7 +537,10 @@ export class OpenVrOverlayFramePacer {
     }
 
     const frameDuration = 1.0 / this.displayHzCache;
-    const predictedSecondsFromNow = frameDuration + this.secondsVsyncToPhotonsCache;
+    const predictedSecondsFromNow = Math.max(
+      0,
+      frameDuration * (1 + this.extraPredictionFrames) + this.secondsVsyncToPhotonsCache,
+    );
     this.lastPredictedSeconds = predictedSecondsFromNow;
     this.vr.GetDeviceToAbsoluteTrackingPose(
       OpenVR.TrackingUniverseOrigin.TrackingUniverseStanding,
@@ -464,6 +570,77 @@ export class OpenVrOverlayFramePacer {
   private setLastPaceResult(result: OpenVrOverlayPaceResult): OpenVrOverlayPaceResult {
     this.lastPaceResult = result;
     return result;
+  }
+
+  /**
+   * Whole display frames to predict poses beyond the next vsync, for a caller that shows each
+   * frame later than that (e.g. one that holds its present past the next vsync).
+   */
+  extraPredictionFrames = 0;
+  private readonly phaseSecondsBuffer = new Float32Array(1);
+  private readonly phaseFrameBuffer = new BigUint64Array(1);
+
+  /**
+   * Where in the display frame "now" is: ms since the last vsync and that vsync's index. Leaves
+   * the pacing state alone, so it can be sampled anywhere (e.g. right before a present).
+   */
+  sampleVsyncPhase(): { msSinceVsync: number; frameIndex: bigint } | null {
+    const ok = this.vr.GetTimeSinceLastVsync(
+      Deno.UnsafePointer.of(this.phaseSecondsBuffer) as Deno.PointerValue<number>,
+      Deno.UnsafePointer.of(this.phaseFrameBuffer) as Deno.PointerValue<bigint>,
+    );
+    if (!ok) return null;
+    return {
+      msSinceVsync: this.phaseSecondsBuffer[0] * 1000,
+      frameIndex: this.phaseFrameBuffer[0],
+    };
+  }
+
+  /** `Compositor_FrameTiming` (plain C layout: the double makes it 8-aligned, 192 bytes). */
+  private readonly frameTimingBuffer = new ArrayBuffer(192);
+  private readonly frameTimingView = new DataView(this.frameTimingBuffer);
+
+  /**
+   * The compositor's own timing for one of its frames (`IVRCompositor::GetFrameTiming`). The `*Ms`
+   * phase fields are measured from that frame's start, so `compositorRenderStartMs` is where in
+   * the frame the compositor begins composing — the deadline an overlay update has to beat.
+   */
+  readCompositorFrameTiming(framesAgo = 0): CompositorFrameTiming | null {
+    if (this.compositor == null) return null;
+    const view = this.frameTimingView;
+    view.setUint32(0, 192, true);
+    const ok = this.compositor.GetFrameTiming(
+      Deno.UnsafePointer.of(this.frameTimingBuffer) as Deno.PointerValue<
+        OpenVR.Compositor_FrameTiming
+      >,
+      framesAgo,
+    );
+    if (!ok) return null;
+    const f = (offset: number) => view.getFloat32(offset, true);
+    return {
+      frameIndex: view.getUint32(4, true),
+      numFramePresents: view.getUint32(8, true),
+      numMisPresented: view.getUint32(12, true),
+      numDroppedFrames: view.getUint32(16, true),
+      reprojectionFlags: view.getUint32(20, true),
+      systemTimeSeconds: view.getFloat64(24, true),
+      totalRenderGpuMs: f(40),
+      compositorRenderGpuMs: f(44),
+      compositorRenderCpuMs: f(48),
+      compositorIdleCpuMs: f(52),
+      clientFrameIntervalMs: f(56),
+      presentCallCpuMs: f(60),
+      waitForPresentCpuMs: f(64),
+      submitFrameMs: f(68),
+      waitGetPosesCalledMs: f(72),
+      newPosesReadyMs: f(76),
+      newFrameReadyMs: f(80),
+      compositorUpdateStartMs: f(84),
+      compositorUpdateEndMs: f(88),
+      compositorRenderStartMs: f(92),
+      numVSyncsReadyForUse: view.getUint32(176, true),
+      numVSyncsToFirstView: view.getUint32(180, true),
+    };
   }
 
   getLastPaceResult(): OpenVrOverlayPaceResult {

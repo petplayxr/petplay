@@ -154,6 +154,8 @@ export class WebXROverlayRaylib {
   private outputEyeHeight = 0;
   private leftEyeTarget: raylib.RenderTexture2D | null = null;
   private rightEyeTarget: raylib.RenderTexture2D | null = null;
+  /** The pair the compositor may still be reading; see {@link swapEyeTargets}. */
+  private spareEyeTargets: [raylib.RenderTexture2D, raylib.RenderTexture2D] | null = null;
   private outputTarget: raylib.RenderTexture2D | null = null;
   private combineShader: raylib.Shader | null = null;
   private sceneRenderer: WebXRRaythreeRaylibRenderer | null = null;
@@ -229,6 +231,44 @@ export class WebXROverlayRaylib {
       throw new Error("raylib output texture not initialized");
     }
     return this.outputTarget.texture.id;
+  }
+
+  /**
+   * Render the next frame into the other pair of eye targets. The compositor reads a projection
+   * overlay's texture some time after `SetOverlayTexture`; drawing the next frame into the same
+   * texture meant it often showed the new image under the previous frame's pose, which doubled
+   * and juddered everything on head motion. The spare pair is created on first use.
+   */
+  swapEyeTargets(): boolean {
+    if (!this.leftEyeTarget || !this.rightEyeTarget) {
+      return false;
+    }
+    if (!this.spareEyeTargets) {
+      const left = raylib.H.LoadRenderTexture(this.renderWidth, this.renderHeight);
+      const right = raylib.H.LoadRenderTexture(this.renderWidth, this.renderHeight);
+      if (!raylib.H.IsRenderTextureValid(left) || !raylib.H.IsRenderTextureValid(right)) {
+        raylib.H.UnloadRenderTexture(left);
+        raylib.H.UnloadRenderTexture(right);
+        return false;
+      }
+      for (const target of [left, right]) {
+        raylib.H.SetTextureFilter(target.texture, raylib.TextureFilter.TEXTURE_FILTER_BILINEAR);
+      }
+      this.spareEyeTargets = [left, right];
+    }
+    const [left, right] = this.spareEyeTargets;
+    this.spareEyeTargets = [this.leftEyeTarget, this.rightEyeTarget];
+    this.leftEyeTarget = left;
+    this.rightEyeTarget = right;
+    return true;
+  }
+
+  /** The per-eye perspective targets, for presenting them as projection overlays. */
+  getEyeTextureHandles(): { left: number; right: number } | null {
+    if (!this.leftEyeTarget || !this.rightEyeTarget) {
+      return null;
+    }
+    return { left: this.leftEyeTarget.texture.id, right: this.rightEyeTarget.texture.id };
   }
 
   private static isRenderTargetValid(
@@ -386,6 +426,7 @@ export class WebXROverlayRaylib {
   /** @returns wall ms breakdown; `left+right+combine` may slightly exceed `total` (timer overhead). */
   renderRaythreeFrame(
     payload: WebXRRaythreeRenderPayload,
+    options: { skipCombine?: boolean } = {},
   ): {
     totalMs: number;
     leftMs: number;
@@ -452,7 +493,10 @@ export class WebXROverlayRaylib {
         `frame=${payload.frame.frameCount} eye=left`,
         payload.ui,
       );
-      this.markCanary("eyePostScene", Math.min(leftTarget.texture.width, leftTarget.texture.height));
+      this.markCanary(
+        "eyePostScene",
+        Math.min(leftTarget.texture.width, leftTarget.texture.height),
+      );
       this.drawDebugLeftControllerCube(
         payload.frame,
         payload.frame.leftEyeProjectionMatrix,
@@ -494,12 +538,60 @@ export class WebXROverlayRaylib {
     const batchMaterials = leftB.batchMaterials + rightB.batchMaterials;
 
     const tCombine0 = performance.now();
+    if (!options.skipCombine) {
+      this.combineEyesIntoPanorama(payload.frame, leftTarget, rightTarget, outputTarget, shader);
+    }
+    const combineMs = performance.now() - tCombine0;
+    this.captureEyeDiagnosticsIfRequested(payload.frame);
+    const totalMs = performance.now() - renderT0;
+    return {
+      totalMs,
+      leftMs,
+      rightMs,
+      combineMs,
+      renderSyncMs,
+      renderDrawMs,
+      batchGeometries,
+      batchMaterials,
+      renderLeftSyncMs: leftB.syncMs,
+      renderLeftPrepMs: leftB.prepMs,
+      renderLeftOpaqueMs: leftB.opaqueMs,
+      renderLeftXparentMs: leftB.xparentMs,
+      renderLeftUiMs: leftB.uiMs,
+      renderLeftUiSortPrepMs: leftB.uiSortPrepMs,
+      renderLeftUiPanelsMs: leftB.uiPanelsMs,
+      renderLeftUiTextMs: leftB.uiTextMs,
+      renderLeftEndMs: leftB.endMs,
+      renderRightSyncMs: rightB.syncMs,
+      renderRightPrepMs: rightB.prepMs,
+      renderRightOpaqueMs: rightB.opaqueMs,
+      renderRightXparentMs: rightB.xparentMs,
+      renderRightUiMs: rightB.uiMs,
+      renderRightUiSortPrepMs: rightB.uiSortPrepMs,
+      renderRightUiPanelsMs: rightB.uiPanelsMs,
+      renderRightUiTextMs: rightB.uiTextMs,
+      renderRightEndMs: rightB.endMs,
+      uiPanelCount: leftB.uiPanelCount,
+      uiTextCount: leftB.uiTextCount,
+      uiPanelDrawn: leftB.uiPanelDrawn,
+      uiTextDrawn: leftB.uiTextDrawn,
+    };
+  }
+
+  /** Varggles: resample both eye targets into the head-locked stereo panorama in `outputTarget`. */
+  private combineEyesIntoPanorama(
+    frame: { lookRotation: Float32Array; halfFovInRadians: number },
+    leftTarget: raylib.RenderTexture2D,
+    rightTarget: raylib.RenderTexture2D,
+    outputTarget: raylib.RenderTexture2D,
+    shader: raylib.Shader,
+  ) {
     raylib.H.SetShaderValueMatrix(
       shader,
       this.lookRotationLocation,
-      createRaylibLookRotation(payload.frame.lookRotation),
+      createRaylibLookRotation(frame.lookRotation),
     );
-    this.halfFovBuffer[0] = payload.frame.halfFovInRadians;
+    this.halfFovBuffer[0] = frame.halfFovInRadians;
     const halfFovPointer = Deno.UnsafePointer.of(this.halfFovBuffer);
     if (!halfFovPointer) {
       throw new Error("Failed to allocate raylib half-FOV uniform buffer");
@@ -564,41 +656,6 @@ export class WebXROverlayRaylib {
     this.markCanary("outputPostRight", outputSize);
     raylib.H.EndBlendMode();
     raylib.H.EndTextureMode();
-    const combineMs = performance.now() - tCombine0;
-    this.captureEyeDiagnosticsIfRequested(payload.frame);
-    const totalMs = performance.now() - renderT0;
-    return {
-      totalMs,
-      leftMs,
-      rightMs,
-      combineMs,
-      renderSyncMs,
-      renderDrawMs,
-      batchGeometries,
-      batchMaterials,
-      renderLeftSyncMs: leftB.syncMs,
-      renderLeftPrepMs: leftB.prepMs,
-      renderLeftOpaqueMs: leftB.opaqueMs,
-      renderLeftXparentMs: leftB.xparentMs,
-      renderLeftUiMs: leftB.uiMs,
-      renderLeftUiSortPrepMs: leftB.uiSortPrepMs,
-      renderLeftUiPanelsMs: leftB.uiPanelsMs,
-      renderLeftUiTextMs: leftB.uiTextMs,
-      renderLeftEndMs: leftB.endMs,
-      renderRightSyncMs: rightB.syncMs,
-      renderRightPrepMs: rightB.prepMs,
-      renderRightOpaqueMs: rightB.opaqueMs,
-      renderRightXparentMs: rightB.xparentMs,
-      renderRightUiMs: rightB.uiMs,
-      renderRightUiSortPrepMs: rightB.uiSortPrepMs,
-      renderRightUiPanelsMs: rightB.uiPanelsMs,
-      renderRightUiTextMs: rightB.uiTextMs,
-      renderRightEndMs: rightB.endMs,
-      uiPanelCount: leftB.uiPanelCount,
-      uiTextCount: leftB.uiTextCount,
-      uiPanelDrawn: leftB.uiPanelDrawn,
-      uiTextDrawn: leftB.uiTextDrawn,
-    };
   }
 
   renderNativeOpenVrDebugFrame(frame: NativeOpenVrRaylibDebugFrame): {
@@ -762,6 +819,10 @@ export class WebXROverlayRaylib {
   }
 
   private unloadTargets() {
+    for (const target of this.spareEyeTargets ?? []) {
+      raylib.H.UnloadRenderTexture(target);
+    }
+    this.spareEyeTargets = null;
     if (this.leftEyeTarget) {
       raylib.H.UnloadRenderTexture(this.leftEyeTarget);
       this.leftEyeTarget = null;

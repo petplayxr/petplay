@@ -7,7 +7,9 @@ import { OpenVrControllerTipPoseResolver } from "../classes/openVrControllerTipP
 import { wait } from "../classes/utils.ts";
 import { getDisplayMouseDiagnostics } from "../classes/environment/displayInstance/mouse.ts";
 import { OpenVrOverlayTexture } from "../classes/openVrOverlayTexture.ts";
+import { OpenVrProjectionOverlays } from "../classes/openVrProjectionOverlays.ts";
 import { closeRaylibAudio } from "../classes/environment/raylibAudioContext.ts";
+import type { CompositorFrameTiming } from "../classes/openVrOverlayFramePacing.ts";
 import { WEBXR_CRASH_ON_DROP_WARMUP_FRAMES } from "../classes/webxrCrashOnDrop.ts";
 import { getCrashOnDroppedFrameMode, WebXRHost } from "../classes/webxrhost.ts";
 import {
@@ -71,6 +73,18 @@ function readPositiveProfileNumber(name: string, fallback: number): number {
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
+
+/**
+ * Present the eyes as projection overlays the compositor reprojects, instead of the head-locked
+ * stereo panorama. Live-switchable through `state.raylibProjectionOverlayEnabled`.
+ */
+const raylibProjectionOverlayDefault = Deno.args.includes("--webxr-projection-overlay");
+
+/**
+ * Pace the Raylib overlay on `IVROverlay::WaitFrameSync` (as WayVR does) instead of spinning
+ * on the vsync index.
+ */
+const raylibOverlayFrameSync = Deno.args.includes("--webxr-overlay-frame-sync");
 
 const raylibMaxFps = Math.min(
   240,
@@ -223,6 +237,38 @@ const state = actorState({
   webGpuOverlay: null as OpenVrOverlayTexture | null,
   webGpuOverlayGl: null as WebXROverlayGl | null,
   raylibOverlay: null as OpenVrOverlayTexture | null,
+  /** The per-eye projection overlays, while `raylibProjectionOverlayEnabled`. */
+  raylibProjectionOverlays: null as OpenVrProjectionOverlays | null,
+  raylibProjectionOverlayEnabled: raylibProjectionOverlayDefault,
+  /**
+   * Per projection present: [ms since vsync, vsyncs elapsed since this frame was paced]. A ring
+   * of the last 2000, for checking where presents land against the compositor's latch.
+   */
+  raylibPresentPhase: [] as [number, number][],
+  /**
+   * When projection presents may land, in ms after the vsync the frame was paced on. The
+   * compositor latches overlay state ~7 ms into each frame for the next vsync
+   * (`GetFrameTiming().m_flCompositorUpdateStartMs`), and the full sim+render frame cannot
+   * finish before this frame's latch. So every present aims between this frame's latch and the
+   * next one, and is shown two vsyncs after pacing — the same for every frame, so the pose
+   * prediction (`raylibPresentDisplayFrames`) is always right. Early frames wait for `minMs`; a
+   * frame past `maxMs` is not presented at all (`raylibPresentDropped`) and the compositor keeps
+   * reprojecting the last one, where a late present would pair its texture with the wrong pose.
+   */
+  // Measured at 75 Hz with VRChat running, in this clock: the compositor's update starts
+  // 4.2-7.3 ms after vsync and `WaitFrameSync` (its "top of frame") returns 6.9-9.3 ms (max
+  // 10.8). So: after this frame's sync, before the next frame's earliest update (13.3 + 4.2).
+  raylibPresentWindow: { minMs: 11, maxMs: 17 },
+  /** Vsyncs after pacing a windowed present is displayed; poses are predicted to it. */
+  raylibPresentDisplayFrames: 2,
+  raylibPresentDropped: 0,
+  /** Per frame: [ms after its vsync the pace returned, ms after it the render finished] (last 2000). */
+  raylibFrameStartPhase: [] as [number, number][],
+  /** Pace on `IVROverlay::WaitFrameSync` (live-switchable; starts from `--webxr-overlay-frame-sync`). */
+  raylibOverlayFrameSyncLive: raylibOverlayFrameSync,
+  /** Sample `IVRCompositor::GetFrameTiming` once per frame into `compositorTimings` (last 600). */
+  compositorTimingProbe: false,
+  compositorTimings: [] as CompositorFrameTiming[],
   raylibOverlayRaylib: null as WebXROverlayRaylib | null,
   nativeRaylibDebug: false,
   nativeRaylibDebugWithHost: false,
@@ -1126,9 +1172,11 @@ globalThis.addEventListener("unload", () => {
   state.webGpuOverlay?.cleanup();
   state.webGpuOverlayGl?.cleanup();
   state.raylibOverlay?.cleanup();
+  state.raylibProjectionOverlays?.cleanup();
   state.raylibOverlayRaylib?.cleanup();
   closeRaylibAudio();
   state.webGpuOverlay = null;
+  state.raylibProjectionOverlays = null;
   state.webGpuOverlayGl = null;
   state.raylibOverlay = null;
   state.raylibOverlayRaylib = null;
@@ -1397,6 +1445,8 @@ async function stopWebXR(): Promise<true> {
   LogChannel.log("webxrv2", "[webxr] shutdown: cleaning OpenVR overlay");
   state.raylibOverlay?.cleanup();
   state.raylibOverlay = null;
+  state.raylibProjectionOverlays?.cleanup();
+  state.raylibProjectionOverlays = null;
   LogChannel.log("webxrv2", "[webxr] shutdown: cleaning Raylib renderer");
   state.raylibOverlayRaylib?.cleanup();
   state.raylibOverlayRaylib = null;
@@ -1708,6 +1758,10 @@ function initializeRaylibOpenVrPacer(
   if (!state.nativeRaylibPacer) {
     throw new Error(`failed to create OpenVR pacer for ${label}`);
   }
+  if (raylibOverlayFrameSync && payload.overlayPointer) {
+    state.nativeRaylibPacer.enableOverlayFrameSync(payload.overlayPointer);
+    LogChannel.log("webxrv2", `[webxr] ${label} paces on IVROverlay::WaitFrameSync`);
+  }
   LogChannel.log("webxrv2", `[webxr] ${label} init: ready`);
 }
 
@@ -1758,6 +1812,51 @@ function ensureRaylibOverlayForFrame() {
     staleKeys: state.raylibOverlayConfig.staleKeys,
   });
   state.raylibOverlay = nextOverlay;
+}
+
+/** Projection mode: the panorama overlay is dropped so the watchdog never re-shows it. */
+function presentRaylibProjectionOverlays(frame: {
+  leftEyeViewMatrix: Float32Array;
+  leftEyeProjectionMatrix: Float32Array;
+  rightEyeViewMatrix: Float32Array;
+  rightEyeProjectionMatrix: Float32Array;
+}): boolean {
+  const config = state.raylibOverlayConfig;
+  const eyes = state.raylibOverlayRaylib?.getEyeTextureHandles();
+  if (!config || !eyes) {
+    return false;
+  }
+  dropRaylibOverlayForRecreate("presenting projection overlays");
+  if (!state.raylibProjectionOverlays) {
+    const overlays = new OpenVrProjectionOverlays(config.overlayPointer);
+    overlays.initialize({
+      key: `${config.overlayKey}.projection`,
+      name: config.overlayName ?? "PetPlay WebXR",
+      sortOrder: config.sortOrder,
+      staleKeys: config.staleKeys?.map((key) => `${key}.projection`),
+    });
+    state.raylibProjectionOverlays = overlays;
+  }
+  return state.raylibProjectionOverlays.present(
+    {
+      texture: eyes.left,
+      viewMatrix: frame.leftEyeViewMatrix,
+      projectionMatrix: frame.leftEyeProjectionMatrix,
+    },
+    {
+      texture: eyes.right,
+      viewMatrix: frame.rightEyeViewMatrix,
+      projectionMatrix: frame.rightEyeProjectionMatrix,
+    },
+  );
+}
+
+function dropRaylibProjectionOverlays(): void {
+  if (!state.raylibProjectionOverlays) {
+    return;
+  }
+  state.raylibProjectionOverlays.cleanup();
+  state.raylibProjectionOverlays = null;
 }
 
 function recordRaylibOverlayMetrics(payload: RaylibOverlayFrameAckPayload) {
@@ -1915,6 +2014,16 @@ async function uploadRaylibShadowFrame() {
 
   const prepStartedAt = performance.now();
   let vsyncFrameIndex: bigint | undefined;
+  let frameStartedMs = NaN;
+  const pacer = state.nativeRaylibPacer;
+  const overlayPointer = state.raylibOverlayConfig?.overlayPointer;
+  if (
+    pacer && overlayPointer &&
+    state.raylibOverlayFrameSyncLive !== pacer.isOverlayFrameSyncEnabled()
+  ) {
+    if (state.raylibOverlayFrameSyncLive) pacer.enableOverlayFrameSync(overlayPointer);
+    else pacer.disableOverlayFrameSync();
+  }
   if (state.nativeRaylibPacer) {
     const pace = await state.nativeRaylibPacer
       .paceToDisplayAndRefreshPosesYielding();
@@ -1934,7 +2043,16 @@ async function uploadRaylibShadowFrame() {
         OpenVR.TrackedControllerRole.TrackedControllerRole_RightHand,
       ),
     );
-    if (pace.ok) vsyncFrameIndex = pace.frameIndex;
+    // A frame-sync timeout renders with the index unchanged; the r3f clock then steps a
+    // nominal period instead of standing still.
+    if (pace.ok && pace.frameIndex !== pace.previousFrameIndex) {
+      vsyncFrameIndex = pace.frameIndex;
+    }
+    const started = state.nativeRaylibPacer.sampleVsyncPhase();
+    if (started && vsyncFrameIndex != null) {
+      frameStartedMs = Number(started.frameIndex - vsyncFrameIndex) *
+          (1000 / (state.nominalHmdDisplayHz ?? 90)) + started.msSinceVsync;
+    }
   }
   // The one clock: this frame's poses go through one IWER frame and one r3f advance, and
   // the scene captured below is that advance.
@@ -1995,7 +2113,8 @@ async function uploadRaylibShadowFrame() {
   state.raythreeExtractMetric.record(performance.now() - extractStartedAt);
 
   const handlerT0 = performance.now();
-  const rt = state.raylibOverlayRaylib.renderRaythreeFrame(payload);
+  const projection = state.raylibProjectionOverlayEnabled;
+  const rt = state.raylibOverlayRaylib.renderRaythreeFrame(payload, { skipCombine: projection });
   const renderMs = rt.totalMs;
   // Ship the same IR the in-worker overlay just rasterized to every registered
   // view; independent process, independent render rate, no second scene.
@@ -2007,15 +2126,63 @@ async function uploadRaylibShadowFrame() {
     // toggle around the OpenVR texture import can invalidate the FBO transiently.
     return recoverRaylibOverlayTargets("invalid Raylib output texture");
   }
-  ensureRaylibOverlayForFrame();
-  if (!state.raylibOverlay) {
-    throw new Error("OpenVR Raylib overlay not initialized");
-  }
-  state.raylibOverlay.setTextureHandle(
-    state.raylibOverlayRaylib.getTextureHandle(),
-  );
-  if (!state.raylibOverlay.present()) {
-    return recoverRaylibOverlayTargets("Raylib overlay present rejected the texture");
+  if (projection) {
+    if (state.nativeRaylibPacer) {
+      state.nativeRaylibPacer.extraPredictionFrames = state.raylibPresentDisplayFrames - 1;
+    }
+    if (state.compositorTimingProbe) {
+      const timing = state.nativeRaylibPacer?.readCompositorFrameTiming(1);
+      if (timing && state.compositorTimings.at(-1)?.frameIndex !== timing.frameIndex) {
+        state.compositorTimings.push(timing);
+        if (state.compositorTimings.length > 600) state.compositorTimings.shift();
+      }
+    }
+    const window = state.raylibPresentWindow;
+    const periodMs = 1000 / (state.nominalHmdDisplayHz ?? 90);
+    const sincePacedVsync = (sample: { msSinceVsync: number; frameIndex: bigint }) =>
+      Number(sample.frameIndex - (vsyncFrameIndex ?? sample.frameIndex)) * periodMs +
+      sample.msSinceVsync;
+    let phase = state.nativeRaylibPacer?.sampleVsyncPhase();
+    let missedPhase = false;
+    if (phase && vsyncFrameIndex != null) {
+      let elapsed = sincePacedVsync(phase);
+      state.raylibFrameStartPhase.push([frameStartedMs, elapsed]);
+      if (state.raylibFrameStartPhase.length > 2000) state.raylibFrameStartPhase.shift();
+      if (elapsed > window.maxMs) {
+        state.raylibPresentDropped++;
+        missedPhase = true;
+      } else if (elapsed < window.minMs) {
+        if (window.minMs - elapsed > 1.5) await wait(window.minMs - elapsed - 1);
+        while (phase && elapsed < window.minMs) {
+          phase = state.nativeRaylibPacer?.sampleVsyncPhase();
+          if (phase) elapsed = sincePacedVsync(phase);
+        }
+      }
+    }
+    if (phase) {
+      const elapsed = Number(phase.frameIndex) - Number(vsyncFrameIndex);
+      state.raylibPresentPhase.push([phase.msSinceVsync, elapsed]);
+      if (state.raylibPresentPhase.length > 2000) state.raylibPresentPhase.shift();
+    }
+    // A missed frame keeps its targets: the compositor is still showing the other pair.
+    if (!missedPhase) {
+      if (!presentRaylibProjectionOverlays(payload.frame)) {
+        return recoverRaylibOverlayTargets("projection overlay present rejected a texture");
+      }
+      state.raylibOverlayRaylib.swapEyeTargets();
+    }
+  } else {
+    dropRaylibProjectionOverlays();
+    ensureRaylibOverlayForFrame();
+    if (!state.raylibOverlay) {
+      throw new Error("OpenVR Raylib overlay not initialized");
+    }
+    state.raylibOverlay.setTextureHandle(
+      state.raylibOverlayRaylib.getTextureHandle(),
+    );
+    if (!state.raylibOverlay.present()) {
+      return recoverRaylibOverlayTargets("Raylib overlay present rejected the texture");
+    }
   }
   raylibOverlayRecoveryAttempts = 0;
   state.frameStability.record(
