@@ -38,7 +38,7 @@ Deno.test("a cancelled controller pointer releases its active Handle grab", () =
   assert(store.inputState.size === 1, "pointer down should start a grab");
   assert(store.capturedObjects.size === 1, "pointer should be captured");
 
-  store.handlers.onPointerCancel(pointerEvent("pointercancel", handle));
+  store.handlers.onPointerEnd(pointerEvent("pointercancel", handle));
   assert(Number(store.inputState.size) === 0, "controller cancellation should end the grab");
   assert(
     Number(store.capturedObjects.size) === 0,

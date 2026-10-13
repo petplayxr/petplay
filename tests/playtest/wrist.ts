@@ -28,7 +28,7 @@ import {
   getWorkspaceLayoutSnapshot,
 } from "../../classes/environment/workspaceLayoutStore.ts";
 import { deleteSpatialNode } from "../../classes/environment/spatialGraph.ts";
-import { aim, LEFT_ORIGIN, worldOf } from "./lib/steps.ts";
+import { aim, LEFT_ORIGIN, squeeze, worldOf } from "./lib/steps.ts";
 
 function wristMenu(ctx: PlaytestContext): THREE.Object3D {
   let menu: THREE.Object3D | null = null;
@@ -246,14 +246,14 @@ export const steps: PlaytestStep[] = [
       await ctx.t.faceWristMenu();
       const menu = wristMenu(ctx);
       menu.updateWorldMatrix(true, false);
-      // The clock tile: no button under it, so a held trigger there is only a grab.
+      // The clock tile. Only squeeze grabs the menu; the trigger presses its controls.
       const point = menu.localToWorld(new THREE.Vector3(-0.13, 0.1, 0.02));
       const before = worldOf(menu).position;
       const shift = new THREE.Vector3(0.06, 0, 0);
       try {
         aim(ctx, "left", LEFT_ORIGIN, point);
         await ctx.sleep(300);
-        ctx.t.input.left.trigger = true;
+        squeeze(ctx, "left", true);
         await ctx.sleep(200);
         for (let i = 1; i <= 10; i++) {
           const step = shift.clone().multiplyScalar(i / 10);
@@ -261,7 +261,7 @@ export const steps: PlaytestStep[] = [
           await ctx.sleep(50);
         }
         await ctx.sleep(200);
-        ctx.t.input.left.trigger = false;
+        squeeze(ctx, "left", false);
         await ctx.sleep(300);
         ctx.t.parkLeftHand();
         const moved = worldOf(wristMenu(ctx)).position.distanceTo(before);
@@ -272,7 +272,7 @@ export const steps: PlaytestStep[] = [
           "and letting go saves where it ended up",
         );
       } finally {
-        ctx.t.input.left.trigger = false;
+        squeeze(ctx, "left", false);
         ctx.t.parkLeftHand();
         setSetting("wristMenuOffset", null);
         await ctx.sleep(300);
