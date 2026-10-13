@@ -10,6 +10,7 @@
  * deno task playtest smoke --port=3995 --keep   # leave the server up afterwards to poke at it
  * deno task playtest smoke --file-issue         # a failed run writes markdown/issues/<slug>/
  * deno task playtest smoke --captures           # a PNG after every step, not just failed ones
+ * deno task playtest smoke --profile            # CPU-profile each step, break down long stalls
  * ```
  *
  * Never touches the real layout or settings, and never attaches to a running session: steps move
@@ -37,6 +38,8 @@ const captureAll = args.includes("--captures");
  * the scripts check depends on the rate (grab damping and timers run on elapsed time).
  */
 const hz = Number(argValue("hz") ?? 240);
+/** CPU-profile every step and print where each long stall's time went. */
+const profile = args.includes("--profile");
 const names = args.filter((arg) => !arg.startsWith("--"));
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -161,12 +164,15 @@ async function runStep(
   scriptUrl: string,
   index: number,
   resultPath: string,
+  profilePath?: string,
 ): Promise<PlaytestStepResult> {
   const playtestUrl = toFileUrl(join(projectRoot, "utils", "playtest.ts")).href;
   await evalInWebxr(
     port,
     `const p = await import(${JSON.stringify(playtestUrl)});
-     const result = await p.runPlaytestStep(host, ${JSON.stringify(scriptUrl)}, ${index});
+     const result = await p.runPlaytestStep(host, ${JSON.stringify(scriptUrl)}, ${index}, ${
+      JSON.stringify({ profilePath })
+    });
      await Deno.writeTextFile(${JSON.stringify(resultPath)}, JSON.stringify(result));
      return result.ok;`,
     60_000,
@@ -247,7 +253,13 @@ async function runScript({ name, port, runDir }: Launched): Promise<RunResult> {
     await waitForScene(port, 90_000);
     const total = await stepCount(port, scriptUrl, join(runDir, "steps.txt"));
     for (let index = 0; index < total; index++) {
-      const result = await runStep(port, scriptUrl, index, join(runDir, `step-${index}.json`));
+      const result = await runStep(
+        port,
+        scriptUrl,
+        index,
+        join(runDir, `step-${index}.json`),
+        profile ? join(runDir, `step-${index}.cpuprofile`) : undefined,
+      );
       const shot = join(runDir, `${index + 1}-${result.name}.png`);
       const captured = (captureAll || !result.ok) && await capture(port, shot);
       run.steps.push({ ...result, capture: captured ? shot : null });
@@ -261,6 +273,13 @@ async function runScript({ name, port, runDir }: Launched): Promise<RunResult> {
           `       ~ ${frames.stalls.length} stalled of ${frames.count} frames (median ` +
             `${frames.medianMs} ms): ${worst.map(([at, ms]) => `${ms} ms @${at}`).join(", ")}`,
         );
+      }
+      for (const stall of result.stallProfiles ?? []) {
+        console.log(`       ~ ${stall.ms} ms @${stall.at}`);
+        const list = (pairs: [string, number][], count: number) =>
+          pairs.slice(0, count).map(([label, ms]) => `${ms} ${label}`).join("\n             ");
+        console.log(`           self:  ${list(stall.self, 8)}`);
+        console.log(`           app:   ${list(stall.app, 10)}`);
       }
       for (const failure of result.failures) console.log(`       ! ${failure.split("\n")[0]}`);
     }

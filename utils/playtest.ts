@@ -253,7 +253,128 @@ export type PlaytestStepResult = {
   failures: string[];
   /** Frame pacing over the step; absent when the scene has no r3f scheduler to time. */
   frames?: PlaytestFrameStats;
+  /** With a profile path: what ran during each stall of at least `STALL_PROFILE_MIN_MS`. */
+  stallProfiles?: PlaytestStallProfile[];
 };
+
+/** Where a stalled frame's time went, in ms per function, from a CPU profile of the step. */
+export type PlaytestStallProfile = {
+  at: number;
+  ms: number;
+  /** Time with the function on top of the stack. */
+  self: [string, number][];
+  /** Time with the function anywhere on the stack. */
+  total: [string, number][];
+  /** `total` for PetPlay's own code only, which is usually where a fix goes. */
+  app: [string, number][];
+};
+
+const STALL_PROFILE_MIN_MS = 40;
+
+type CpuProfile = {
+  nodes: {
+    id: number;
+    callFrame: { functionName: string; url: string; lineNumber: number };
+    children?: number[];
+  }[];
+  startTime: number;
+  samples: number[];
+  timeDeltas: number[];
+};
+
+/** Starts V8's sampler on this isolate; the returned stop writes the profile to `path`. */
+async function startProfile(
+  path: string,
+): Promise<() => Promise<{ profile: CpuProfile; perfAtStart: number }>> {
+  const { Session } = await import("node:inspector");
+  const session = new Session();
+  session.connect();
+  const post = (method: string, params?: Record<string, unknown>) =>
+    new Promise<Record<string, unknown>>((resolve, reject) =>
+      session.post(
+        method,
+        params ?? {},
+        (error, result) =>
+          error != null ? reject(error) : resolve(result as Record<string, unknown>),
+      )
+    );
+  await post("Profiler.enable");
+  await post("Profiler.setSamplingInterval", { interval: 250 });
+  await post("Profiler.start");
+  const perfAtStart = performance.now();
+  return async () => {
+    try {
+      const { profile } = await post("Profiler.stop") as { profile: CpuProfile };
+      await Deno.writeTextFile(path, JSON.stringify(profile));
+      return { profile, perfAtStart };
+    } finally {
+      session.disconnect();
+    }
+  };
+}
+
+const projectUrl = new URL("../", import.meta.url).href;
+
+function isAppFrame(url: string): boolean {
+  return url.startsWith(projectUrl) && !/\/(node_modules|submodules|utils|tests)\//.test(url);
+}
+
+function frameLabel(frame: CpuProfile["nodes"][number]["callFrame"]): string {
+  const file = frame.url.split("/").slice(-2).join("/");
+  const name = frame.functionName || "(anonymous)";
+  return file ? `${name} ${file}:${frame.lineNumber + 1}` : name;
+}
+
+/** Self and inclusive time per function for the samples inside each stalled frame. */
+function profileStalls(
+  { profile, perfAtStart }: { profile: CpuProfile; perfAtStart: number },
+  started: number,
+  stalls: [number, number][],
+): PlaytestStallProfile[] {
+  const byId = new Map(profile.nodes.map((node) => [node.id, node]));
+  const parent = new Map<number, number>();
+  for (const node of profile.nodes) {
+    for (const child of node.children ?? []) parent.set(child, node.id);
+  }
+  // Sample i lands at startTime + sum(timeDeltas[0..i]) µs; Profiler.start resolving is perfAtStart.
+  // Deltas can be negative, so weigh each sample by the gap to the next one in time order.
+  const times: number[] = [];
+  let clock = 0;
+  for (const delta of profile.timeDeltas) times.push(perfAtStart + (clock += delta) / 1000);
+  const order = times.map((_, i) => i).sort((a, b) => times[a] - times[b]);
+  const weights: number[] = [];
+  order.forEach((i, k) => weights[i] = k + 1 < order.length ? times[order[k + 1]] - times[i] : 0);
+  const top = (map: Map<string, number>) =>
+    [...map].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([label, ms]) =>
+      [label, Math.round(ms * 10) / 10] as [string, number]
+    );
+  return stalls.filter(([, ms]) => ms >= STALL_PROFILE_MIN_MS).map(([at, ms]) => {
+    const end = started + at;
+    const self = new Map<string, number>();
+    const total = new Map<string, number>();
+    const app = new Map<string, number>();
+    for (let i = 0; i < profile.samples.length; i++) {
+      if (times[i] < end - ms || times[i] > end) continue;
+      const weight = weights[i];
+      let node = byId.get(profile.samples[i]);
+      if (node == null) continue;
+      const leaf = frameLabel(node.callFrame);
+      self.set(leaf, (self.get(leaf) ?? 0) + weight);
+      const seen = new Set<string>();
+      while (node != null) {
+        const label = frameLabel(node.callFrame);
+        if (label !== "(root)" && !seen.has(label)) {
+          seen.add(label);
+          total.set(label, (total.get(label) ?? 0) + weight);
+          if (isAppFrame(node.callFrame.url)) app.set(label, (app.get(label) ?? 0) + weight);
+        }
+        const up = parent.get(node.id);
+        node = up == null ? undefined : byId.get(up);
+      }
+    }
+    return { at, ms, self: top(self), total: top(total), app: top(app) };
+  });
+}
 
 export type PlaytestFrameStats = {
   count: number;
@@ -305,6 +426,7 @@ export async function runPlaytestStep(
   host: PlaytestHost,
   scriptUrl: string,
   index: number,
+  options: { profilePath?: string } = {},
 ): Promise<PlaytestStepResult> {
   const { steps } = await import(scriptUrl) as { steps: PlaytestStep[] };
   const step = steps[index];
@@ -364,6 +486,7 @@ export async function runPlaytestStep(
     },
     memo,
   };
+  const stopProfile = options.profilePath ? await startProfile(options.profilePath) : null;
   const started = performance.now();
   const stopWatching = watchFrames(host, started);
   try {
@@ -371,12 +494,16 @@ export async function runPlaytestStep(
   } catch (error) {
     failures.push(`threw: ${error instanceof Error ? error.stack ?? error.message : error}`);
   }
+  const ms = Math.round(performance.now() - started);
+  const frames = stopWatching();
+  const profile = await stopProfile?.();
   return {
     name: step.name,
     ok: failures.length === 0,
-    ms: Math.round(performance.now() - started),
+    ms,
     notes,
     failures,
-    frames: stopWatching(),
+    frames,
+    stallProfiles: profile && frames ? profileStalls(profile, started, frames.stalls) : undefined,
   };
 }
