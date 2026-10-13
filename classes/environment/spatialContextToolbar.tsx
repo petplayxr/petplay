@@ -12,7 +12,7 @@
  * labels are. That is the rule that keeps an otherwise rigid system from
  * reading as loose.
  */
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 // @deno-types="@types/three/webgpu"
 import * as THREE from "three/webgpu";
 import { useFrame } from "@react-three/fiber/webgpu";
@@ -97,6 +97,11 @@ export type SpatialContextToolbarProps = {
   role?: HierarchyRole;
   /** World size, independent of how far the node is scaled. */
   scale?: number;
+  /**
+   * Whether the card shows. Keep it mounted and flip this rather than mounting it on selection:
+   * uikit builds the icons a couple of frames after mount, so a fresh card popped in half-drawn.
+   */
+  open?: boolean;
   pointerEventsType?: AllowedPointerEventsType;
 };
 
@@ -182,11 +187,18 @@ export function SpatialContextToolbar({
   role,
   scale = 0.72,
   pointerEventsType = "all",
+  open = true,
 }: SpatialContextToolbarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // By id, so the tooltip follows a label that changes on click (Lock -> "Locked — unlock") and
   // goes away with a tile that a click removed, which never gets its pointer-out.
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // Closing used to unmount the card, which reset these; reopen it the same way.
+  useEffect(() => {
+    if (open) return;
+    setSettingsOpen(false);
+    setHoveredId(null);
+  }, [open]);
 
   // Rule 4: the card is sized in whole element units to what it holds — a
   // 3-button menu is a 3-wide card holding 3 buttons. Two is the floor, or the
@@ -262,8 +274,12 @@ export function SpatialContextToolbar({
       ref={group}
       position={position}
       scale={[scale, scale, scale]}
+      visible={open}
       userData={{ spatialContextToolbar: true }}
-      {...({ pointerEventsOrder: 20 } as Record<string, unknown>)}
+      {
+        // Pointer events ignore `visible`, so a closed card must also stop rays from reaching it.
+        ...({ pointerEventsOrder: 20, intersectChildren: open } as Record<string, unknown>)
+      }
     >
       {
         /*

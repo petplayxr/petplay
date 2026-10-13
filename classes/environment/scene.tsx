@@ -1311,68 +1311,64 @@ function DisplaySpatialNodeView({
           // The open toolbar carries the badge instead.
           visible={hovered && attachmentRole != null && selectedNodeId !== node.id}
         />
-        {selectedNodeId === node.id && (
-          <SpatialContextToolbar
-            title={node.workspaceOutputName ?? `Display ${node.ordinal}`}
-            side={toolbarSide}
-            position={toolbarSide === "left" || toolbarSide === "right"
-              ? [
-                (toolbarSide === "right" ? 0.5 : -0.5) * DISPLAY_PANEL_WIDTH,
-                DEFAULT_DISPLAY_HEIGHT * 0.5,
-                DEFAULT_DISPLAY_DEPTH,
-              ]
-              : [
-                0,
-                (toolbarSide === "above" ? 0.5 : -0.5) * DEFAULT_DISPLAY_HEIGHT,
-                DEFAULT_DISPLAY_DEPTH,
-              ]}
-            settingsPosition={[
-              DISPLAY_PANEL_WIDTH * 0.5,
+        <SpatialContextToolbar
+          open={selectedNodeId === node.id}
+          title={node.workspaceOutputName ?? `Display ${node.ordinal}`}
+          side={toolbarSide}
+          position={toolbarSide === "left" || toolbarSide === "right"
+            ? [
+              (toolbarSide === "right" ? 0.5 : -0.5) * DISPLAY_PANEL_WIDTH,
               DEFAULT_DISPLAY_HEIGHT * 0.5,
               DEFAULT_DISPLAY_DEPTH,
+            ]
+            : [
+              0,
+              (toolbarSide === "above" ? 0.5 : -0.5) * DEFAULT_DISPLAY_HEIGHT,
+              DEFAULT_DISPLAY_DEPTH,
             ]}
-            role={attachmentRole ?? undefined}
-            actions={contextActions}
-            settings={
-              <>
-                <SpatialSettingsSection label="Physical output">
-                  {workspaceOutputs.map((output) => (
-                    <SpatialSettingsButton
-                      key={output.id}
-                      label={output.name}
-                      selected={node.workspaceOutputId === output.id}
-                      onClick={() =>
-                        setGraph((current) =>
-                          assignWorkspaceOutput(current, node.id, output.id, workspaceOutputs)
-                        )}
-                    />
-                  ))}
-                </SpatialSettingsSection>
-                <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
-                <OpacitySettingsSection node={node} setGraph={setGraph} />
-                <MouseSettingsSection node={node} setGraph={setGraph} />
-                <AutoHideSettingsSection node={node} setGraph={setGraph} />
-                <CurvatureSettingsSection node={node} setGraph={setGraph} />
-                <SpatialSettingsSection
-                  label={assignedSide == null
-                    ? "Free spatial element"
-                    : `Attached: ${assignedSide}`}
-                >
+          settingsPosition={[
+            DISPLAY_PANEL_WIDTH * 0.5,
+            DEFAULT_DISPLAY_HEIGHT * 0.5,
+            DEFAULT_DISPLAY_DEPTH,
+          ]}
+          role={attachmentRole ?? undefined}
+          actions={contextActions}
+          settings={
+            <>
+              <SpatialSettingsSection label="Physical output">
+                {workspaceOutputs.map((output) => (
                   <SpatialSettingsButton
-                    label="Grab outline"
-                    selected={grabOutlineVisible}
-                    onClick={() => setGrabboxOutlineVisible(!grabOutlineVisible)}
-                  />
-                  <SpatialSettingsButton
-                    label="Reset pose"
+                    key={output.id}
+                    label={output.name}
+                    selected={node.workspaceOutputId === output.id}
                     onClick={() =>
-                      setGraph((current) => resetSpatialNodeTransform(current, node.id))}
+                      setGraph((current) =>
+                        assignWorkspaceOutput(current, node.id, output.id, workspaceOutputs)
+                      )}
                   />
-                </SpatialSettingsSection>
-              </>
-            }
-          />
-        )}
+                ))}
+              </SpatialSettingsSection>
+              <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
+              <OpacitySettingsSection node={node} setGraph={setGraph} />
+              <MouseSettingsSection node={node} setGraph={setGraph} />
+              <AutoHideSettingsSection node={node} setGraph={setGraph} />
+              <CurvatureSettingsSection node={node} setGraph={setGraph} />
+              <SpatialSettingsSection
+                label={assignedSide == null ? "Free spatial element" : `Attached: ${assignedSide}`}
+              >
+                <SpatialSettingsButton
+                  label="Grab outline"
+                  selected={grabOutlineVisible}
+                  onClick={() => setGrabboxOutlineVisible(!grabOutlineVisible)}
+                />
+                <SpatialSettingsButton
+                  label="Reset pose"
+                  onClick={() => setGraph((current) => resetSpatialNodeTransform(current, node.id))}
+                />
+              </SpatialSettingsSection>
+            </>
+          }
+        />
       </DisplayInstance>
       {children.map((child) => (
         <SpatialAttachmentView
@@ -1512,21 +1508,20 @@ function KeyboardSpatialNodeView({
         onSpatialFocus={selectNode}
         opacity={node.opacity}
       >
-        {selectedNodeId === node.id && (
-          <SpatialContextToolbar
-            title="Keyboard"
-            position={[0, -node.snapSource.size[1] * 0.5, node.snapSource.size[2]]}
-            actions={contextActions}
-            settings={
-              <>
-                <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
-                <OpacitySettingsSection node={node} setGraph={setGraph} />
-                <TypingSoundSettingsSection />
-                <KeyboardLocaleSettingsSection />
-              </>
-            }
-          />
-        )}
+        <SpatialContextToolbar
+          open={selectedNodeId === node.id}
+          title="Keyboard"
+          position={[0, -node.snapSource.size[1] * 0.5, node.snapSource.size[2]]}
+          actions={contextActions}
+          settings={
+            <>
+              <AnchorSettingsSection graph={graph} node={node} setGraph={setGraph} />
+              <OpacitySettingsSection node={node} setGraph={setGraph} />
+              <TypingSoundSettingsSection />
+              <KeyboardLocaleSettingsSection />
+            </>
+          }
+        />
       </KeyboardPanel>
       {children.map((child) => (
         <SpatialAttachmentView

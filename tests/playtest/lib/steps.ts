@@ -63,7 +63,11 @@ export function toolbarOf(object: THREE.Object3D): THREE.Object3D | null {
   const own = object.userData?.spatialElementId;
   const search = (node: THREE.Object3D): THREE.Object3D | null => {
     for (const child of node.children) {
-      if (child.userData?.spatialContextToolbar) return child;
+      // Every node keeps its toolbar mounted; only the selected one's shows.
+      if (child.userData?.spatialContextToolbar) {
+        if (child.visible) return child;
+        continue;
+      }
       const id = child.userData?.spatialElementId;
       if (id != null && id !== own) continue;
       const found = search(child);
