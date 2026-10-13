@@ -270,6 +270,7 @@ export type PlaytestStallProfile = {
 };
 
 const STALL_PROFILE_MIN_MS = 40;
+const PROFILE_WARMUP_FRAMES = 30;
 
 type CpuProfile = {
   nodes: {
@@ -278,6 +279,7 @@ type CpuProfile = {
     children?: number[];
   }[];
   startTime: number;
+  endTime: number;
   samples: number[];
   timeDeltas: number[];
 };
@@ -285,7 +287,7 @@ type CpuProfile = {
 /** Starts V8's sampler on this isolate; the returned stop writes the profile to `path`. */
 async function startProfile(
   path: string,
-): Promise<() => Promise<{ profile: CpuProfile; perfAtStart: number }>> {
+): Promise<() => Promise<{ profile: CpuProfile; perfAtStop: number }>> {
   const { Session } = await import("node:inspector");
   const session = new Session();
   session.connect();
@@ -301,12 +303,12 @@ async function startProfile(
   await post("Profiler.enable");
   await post("Profiler.setSamplingInterval", { interval: 250 });
   await post("Profiler.start");
-  const perfAtStart = performance.now();
   return async () => {
     try {
+      const perfAtStop = performance.now();
       const { profile } = await post("Profiler.stop") as { profile: CpuProfile };
       await Deno.writeTextFile(path, JSON.stringify(profile));
-      return { profile, perfAtStart };
+      return { profile, perfAtStop };
     } finally {
       session.disconnect();
     }
@@ -327,7 +329,7 @@ function frameLabel(frame: CpuProfile["nodes"][number]["callFrame"]): string {
 
 /** Self and inclusive time per function for the samples inside each stalled frame. */
 function profileStalls(
-  { profile, perfAtStart }: { profile: CpuProfile; perfAtStart: number },
+  { profile, perfAtStop }: { profile: CpuProfile; perfAtStop: number },
   started: number,
   stalls: [number, number][],
 ): PlaytestStallProfile[] {
@@ -336,11 +338,14 @@ function profileStalls(
   for (const node of profile.nodes) {
     for (const child of node.children ?? []) parent.set(child, node.id);
   }
-  // Sample i lands at startTime + sum(timeDeltas[0..i]) µs; Profiler.start resolving is perfAtStart.
+  // Sample i lands at startTime + sum(timeDeltas[0..i]) µs. Anchored at the stop: starting the
+  // profiler blocks the isolate for a while, so its resolving is well after startTime.
   // Deltas can be negative, so weigh each sample by the gap to the next one in time order.
   const times: number[] = [];
-  let clock = 0;
-  for (const delta of profile.timeDeltas) times.push(perfAtStart + (clock += delta) / 1000);
+  let clock = profile.startTime;
+  for (const delta of profile.timeDeltas) {
+    times.push(perfAtStop - (profile.endTime - (clock += delta)) / 1000);
+  }
   const order = times.map((_, i) => i).sort((a, b) => times[a] - times[b]);
   const weights: number[] = [];
   order.forEach((i, k) => weights[i] = k + 1 < order.length ? times[order[k + 1]] - times[i] : 0);
@@ -487,6 +492,8 @@ export async function runPlaytestStep(
     memo,
   };
   const stopProfile = options.profilePath ? await startProfile(options.profilePath) : null;
+  // Starting the sampler stalls the isolate; let that pass before the step acts.
+  if (stopProfile != null) await waitFrames(host, PROFILE_WARMUP_FRAMES);
   const started = performance.now();
   const stopWatching = watchFrames(host, started);
   try {

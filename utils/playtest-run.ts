@@ -11,6 +11,8 @@
  * deno task playtest smoke --file-issue         # a failed run writes markdown/issues/<slug>/
  * deno task playtest smoke --captures           # a PNG after every step, not just failed ones
  * deno task playtest smoke --profile            # CPU-profile each step, break down long stalls
+ *   (each step's full profile is kept as step-N.cpuprofile in the run dir; open it in Chrome
+ *   DevTools' Performance panel or speedscope to dive past the stall summary)
  * ```
  *
  * Never touches the real layout or settings, and never attaches to a running session: steps move
