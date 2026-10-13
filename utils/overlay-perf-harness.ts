@@ -195,17 +195,10 @@ function readLayoutFile(path: string): string | null {
  * the production path (`updateControllerState` -> IWER buttons/poses -> XRSpace -> pmndrs pointers)
  * runs unmodified.
  *
- * Refuses to install while a real IVRInput session is live, so an attached headset session can
- * never be hijacked by a perf run.
+ * Works on a headset run too: the synthetic hands override the real controllers until `restore`.
  */
 export function installSyntheticInput(host: WebXrHostLike): SynthInput {
   const source = host.directOpenVrInputSource;
-  if (source.inputReady === true || source.vrInput != null) {
-    throw new Error(
-      "overlay-perf: an IVRInput session is active (headset run); refusing to synthesize controller " +
-        "input — measure it with scenarios disabled, or run the scenarios against a launched headless build",
-    );
-  }
 
   const input: SynthInput = { left: handDefaults(), right: handDefaults(), restore: () => {} };
   const original = host.updateEmulatedControllersFromOpenVr.bind(host);
