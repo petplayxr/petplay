@@ -20,6 +20,7 @@ import {
   WebXROverlayRaylib,
 } from "../classes/webxrOverlayRaylib.ts";
 import { FpsCounter } from "../classes/fpsCounter.ts";
+import { formatFrameStability, FrameStabilityTracker } from "../classes/frameStability.ts";
 import { IntervalMetric, type IntervalMetricSample } from "../classes/intervalMetric.ts";
 import type { RaylibOverlayFrameAckPayload } from "../classes/raylibOverlayAckPayload.ts";
 import {
@@ -276,6 +277,7 @@ const state = actorState({
   raythreeUiMetric: new IntervalMetric(),
   /** `captureShadowFrame` + `getRaythreeSceneContext` in webxr worker. */
   raylibHostPrepMetric: new IntervalMetric(),
+  frameStability: new FrameStabilityTracker(),
   /** Full in-process Raylib overlay handler until after `SetOverlayTexture`. */
   raylibOvrHandlerMetric: new IntervalMetric(),
   /** `WebXROverlayRaylib.renderRaythreeFrame` in the webxr worker. */
@@ -1431,6 +1433,7 @@ async function stopWebXR(): Promise<true> {
   state.raythreeRightEyeMetric.reset();
   state.raythreeUiMetric.reset();
   state.raylibHostPrepMetric.reset();
+  state.frameStability.reset();
   state.raylibOvrHandlerMetric.reset();
   state.raylibOvrRenderMetric.reset();
   state.raylibOvrOpenvrMetric.reset();
@@ -2022,6 +2025,11 @@ async function uploadRaylibShadowFrame() {
     return recoverRaylibOverlayTargets("Raylib overlay present rejected the texture");
   }
   raylibOverlayRecoveryAttempts = 0;
+  state.frameStability.record(
+    state.nativeRaylibPacer?.getLastPaceResult() ?? null,
+    sourceFrame.frameCount,
+    1000 / (state.nominalHmdDisplayHz ?? 90),
+  );
   if (signalHostAfterPresent) {
     state.host.signalExternalPacerAdvanced();
   }
@@ -2618,4 +2626,8 @@ function maybeLogOverlayPerf() {
     }
   }
   LogChannel.log("perf", `[webxr] ${parts.join(" | ")}`);
+  const stability = state.frameStability.flush();
+  if (stability.frames > 0) {
+    LogChannel.log("perf", `[webxr] stability ${formatFrameStability(stability)}`);
+  }
 }
