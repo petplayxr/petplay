@@ -23,7 +23,11 @@ import { WebXRScene } from "./environment/scene.tsx";
 import { FpsCounter } from "./fpsCounter.ts";
 import { IntervalMetric } from "./intervalMetric.ts";
 import { tempFile } from "./utils.ts";
-import { installWebXRHostPolyfills, type WebXrHostPolyfillOptions } from "./webxrPolyfills.ts";
+import {
+  installWebXRHostPolyfills,
+  runManualAnimationFrame,
+  type WebXrHostPolyfillOptions,
+} from "./webxrPolyfills.ts";
 import {
   type OpenVrHmdEmulationPose,
   type OpenVrOverlayFramePacer,
@@ -49,7 +53,6 @@ import * as iwerModule from "../submodules/threewebxrwebgpudeno/submodules/iwer/
 // External pacer pulses are coalesced by sequence number, not queued. Under VR
 // load the IWER rAF that consumes the latest pulse can legitimately arrive more
 // than 25 ms later; discarding it caused multi-hundred-ms R3F/input stalls.
-const EXTERNAL_PACER_PULSE_MAX_AGE_MS = 100;
 
 type OpenVrPoseActionData = ReturnType<typeof OpenVR.InputPoseActionDataStruct.read>;
 type OpenVrDigitalActionData = ReturnType<typeof OpenVR.InputDigitalActionDataStruct.read>;
@@ -1030,12 +1033,12 @@ export class WebXRHost {
   private xrRafSlowFrameCount = 0;
   private vrCompositorPointer: number | bigint | null = null;
   private vrInputPointer: number | bigint | null = null;
-  private externalPacerTimestamp = 0;
-  private externalPacerFrameSeq = 0;
-  private consumedExternalPacerFrameSeq = 0;
-  private externalPacerXrTickPending = false;
-  private requestExternalPacerXrTick: (() => void) | null = null;
-  private externalPacerSyntheticAdvanceTime = 0;
+  /** r3f clock in external-pacer mode: vsync index → ms, see {@link stepExternalFrame}. */
+  private externalFrameTime = 0;
+  private externalFrameIndexBase: bigint | null = null;
+  private externalFrameTimeBase = 0;
+  private externalXrTickRequested = false;
+  private requestExternalXrTick: (() => void) | null = null;
   private useExternalPacerTiming = false;
   private onBeforeExternalControllerApply: (() => void) | undefined;
   private onInProcessControllerFrame: ((data: ExternalControllerData) => void) | undefined;
@@ -1097,12 +1100,11 @@ export class WebXRHost {
     this.lastLayerInfo = null;
     this.lastXrCallbackAt = 0;
     this.lastXrSessionRafWallAt = 0;
-    this.externalPacerTimestamp = 0;
-    this.externalPacerFrameSeq = 0;
-    this.consumedExternalPacerFrameSeq = 0;
-    this.externalPacerXrTickPending = false;
-    this.requestExternalPacerXrTick = null;
-    this.externalPacerSyntheticAdvanceTime = 0;
+    this.externalFrameTime = 0;
+    this.externalFrameIndexBase = null;
+    this.externalFrameTimeBase = 0;
+    this.externalXrTickRequested = false;
+    this.requestExternalXrTick = null;
     this.lastSlowXrFrameLogAt = 0;
     this.xrRafMaxIntervalMs = 0;
     this.xrRafSlowFrameCount = 0;
@@ -1224,12 +1226,13 @@ export class WebXRHost {
         : nom != null && Number.isFinite(nom) && nom > 0 && nom < 1000
         ? 1000 / nom
         : 16;
-    // Use 0ms delay when external pacer is active (raylib mode); the manual loop consumes at
-    // most one XR tick per external pacer pulse so this stays low-latency without running ahead.
+    // External pacer (raylib mode): no rAF timer at all. The Raylib/OpenVR frame loop is the
+    // only clock and runs one IWER device frame per frame via `stepExternalFrame`.
     const actualPollIntervalMs = this.useExternalPacerTiming ? 0 : rafPolyfillIntervalMs;
     const polyfill: WebXrHostPolyfillOptions = {
       pollIntervalMs: actualPollIntervalMs,
       openVrVsyncDrivesRaf: this.openVrOverlayPacer != null,
+      manual: this.useExternalPacerTiming,
     };
     installWebXRHostPolyfills(this.width, this.height, polyfill);
     LogChannel.log(
@@ -1240,9 +1243,7 @@ export class WebXRHost {
             ? "OpenVR fast pace (single GetTimeSinceLastVsync; IWER rAF delay=0)"
             : "OpenVR display pacing (Aardvark-style wait for new vsync index; IWER rAF delay=0)")
           : this.useExternalPacerTiming
-          ? `external OpenVR pacer (IWER rAF delay=${
-            actualPollIntervalMs.toFixed(0)
-          }ms; one XR tick per pacer pulse)`
+          ? "external OpenVR pacer (manual rAF; one IWER frame per Raylib frame)"
           : `polyfill=${rafPolyfillIntervalMs.toFixed(3)}ms (~${
             (1000 / rafPolyfillIntervalMs).toFixed(1)
           }Hz)`) +
@@ -1700,8 +1701,8 @@ export class WebXRHost {
     this.nominalHmdDisplayHz = null;
     this.vrCompositorPointer = null;
     this.openVrOverlayPacer = null;
-    this.externalPacerXrTickPending = false;
-    this.requestExternalPacerXrTick = null;
+    this.externalXrTickRequested = false;
+    this.requestExternalXrTick = null;
     this.crashOnDroppedXrRaf = false;
     this.crashOnDroppedXrRafStrict = false;
     this.onBeforeExternalControllerApply = undefined;
@@ -2093,63 +2094,29 @@ export class WebXRHost {
     const requestNextTick = (delayMs = 0) => {
       if (!this.running || !this.session) {
         this.xrFrameRequestActive = false;
-        this.externalPacerXrTickPending = false;
         return;
       }
       if (delayMs <= 0) {
-        if (this.useExternalPacerTiming) {
-          this.externalPacerXrTickPending = true;
-        }
         this.session.requestAnimationFrame(tick);
         return;
       }
       this.xrSimTickDelayTimeout = setTimeout(() => {
         this.xrSimTickDelayTimeout = null;
-        if (this.useExternalPacerTiming) {
-          this.externalPacerXrTickPending = true;
-        }
         this.session?.requestAnimationFrame(tick);
       }, delayMs);
     };
-    this.requestExternalPacerXrTick = () => {
-      if (
-        !this.running || !this.session || !this.useExternalPacerTiming ||
-        this.externalPacerXrTickPending
-      ) {
+    this.requestExternalXrTick = () => {
+      if (!this.running || !this.session || this.externalXrTickRequested) {
         return;
       }
-      requestNextTick();
+      this.externalXrTickRequested = true;
+      this.session.requestAnimationFrame(tick);
     };
     tick = (time: number, frame: XRFrame) => {
       const tickT0 = performance.now();
+      this.externalXrTickRequested = false;
       if (!this.running || !this.session) {
         this.xrFrameRequestActive = false;
-        this.externalPacerXrTickPending = false;
-        return;
-      }
-
-      if (this.useExternalPacerTiming) {
-        this.externalPacerXrTickPending = false;
-        const hasUnconsumedPacerPulse =
-          this.externalPacerFrameSeq !== this.consumedExternalPacerFrameSeq;
-        const pacerAgeMs = this.externalPacerTimestamp > 0
-          ? tickT0 - this.externalPacerTimestamp
-          : Number.POSITIVE_INFINITY;
-        if (
-          !hasUnconsumedPacerPulse ||
-          pacerAgeMs > EXTERNAL_PACER_PULSE_MAX_AGE_MS
-        ) {
-          if (pacerAgeMs > EXTERNAL_PACER_PULSE_MAX_AGE_MS) {
-            this.consumedExternalPacerFrameSeq = this.externalPacerFrameSeq;
-          }
-          return;
-        }
-        this.consumedExternalPacerFrameSeq = this.externalPacerFrameSeq;
-      }
-
-      if (!this.running || !this.session) {
-        this.xrFrameRequestActive = false;
-        this.externalPacerXrTickPending = false;
         return;
       }
 
@@ -2239,7 +2206,7 @@ export class WebXRHost {
       (this.renderer as XrPoseOnlyRenderer | null)?.xr?.updateFromFrame?.(frame);
       const t2 = performance.now();
       try {
-        advance(this.getAdvanceTimestamp(time, expectedMs));
+        advance(this.getAdvanceTimestamp(time));
       } finally {
         currentXRFrame.value = undefined;
       }
@@ -2284,8 +2251,7 @@ export class WebXRHost {
 
       const minInterval = this.xrSimTickMinIntervalMs;
       if (this.useExternalPacerTiming) {
-        // External Raylib/OpenVR mode is edge-triggered by `signalExternalPacerAdvanced`.
-        // Do not poll here; even a 1ms timer loop can disturb the pacer's wait-for-vsync cadence.
+        // Stepped by `stepExternalFrame`, which re-requests this tick each Raylib frame.
       } else if (minInterval == null) {
         requestNextTick();
       } else {
@@ -2294,36 +2260,47 @@ export class WebXRHost {
       }
     };
 
-    if (this.useExternalPacerTiming) {
-      if (this.externalPacerFrameSeq !== this.consumedExternalPacerFrameSeq) {
-        this.requestExternalPacerXrTick?.();
-      }
-    } else {
+    if (!this.useExternalPacerTiming) {
       requestNextTick();
     }
   }
 
   /**
-   * Signal that an external pacer (e.g., raylib overlay) has advanced to a new frame.
-   * Used to synchronize webxrhost's rAF loop with the external pacer's timing.
+   * External-pacer mode: runs one IWER device frame, and with it one r3f advance, right now.
+   * The Raylib/OpenVR frame loop calls this once per frame after pacing and refreshing poses,
+   * before capturing the scene, so every rendered frame shows a scene advanced exactly once
+   * with that frame's poses. `vsyncFrameIndex` makes the r3f clock follow display frames,
+   * skips included; without it the clock steps one nominal period.
    */
-  signalExternalPacerAdvanced(): void {
-    this.externalPacerTimestamp = performance.now();
-    this.externalPacerFrameSeq++;
-    this.requestExternalPacerXrTick?.();
+  stepExternalFrame(vsyncFrameIndex?: bigint): void {
+    if (!this.useExternalPacerTiming || !this.running || !this.session) {
+      return;
+    }
+    const nom = this.nominalHmdDisplayHz;
+    const periodMs = nom != null && nom > 0 && Number.isFinite(nom) ? 1000 / nom : 1000 / 90;
+    if (vsyncFrameIndex != null && vsyncFrameIndex > 0n) {
+      if (this.externalFrameIndexBase == null) {
+        this.externalFrameIndexBase = vsyncFrameIndex;
+        this.externalFrameTimeBase = performance.now();
+      }
+      const t = this.externalFrameTimeBase +
+        Number(vsyncFrameIndex - this.externalFrameIndexBase) * periodMs;
+      // The index can repeat when a pace fails; r3f time must still move forward.
+      this.externalFrameTime = Math.max(t, this.externalFrameTime + 0.001);
+    } else {
+      this.externalFrameTime = this.externalFrameTime > 0
+        ? this.externalFrameTime + periodMs
+        : performance.now();
+      this.externalFrameIndexBase = null;
+    }
+    this.requestExternalXrTick?.();
+    runManualAnimationFrame(performance.now());
   }
 
-  private getAdvanceTimestamp(time: number, expectedMs: number): number {
-    if (!this.useExternalPacerTiming) {
-      return time;
-    }
-    if (this.externalPacerSyntheticAdvanceTime === 0) {
-      this.externalPacerSyntheticAdvanceTime = time;
-      return time;
-    }
-    const stepMs = expectedMs > 0 && Number.isFinite(expectedMs) ? expectedMs : 1000 / 90;
-    this.externalPacerSyntheticAdvanceTime += stepMs;
-    return this.externalPacerSyntheticAdvanceTime;
+  private getAdvanceTimestamp(time: number): number {
+    return this.useExternalPacerTiming && this.externalFrameTime > 0
+      ? this.externalFrameTime
+      : time;
   }
 
   private async inspectProjectionLayer(device: GPUDevice) {

@@ -9,12 +9,51 @@ type RafCallback = (time: number) => void;
  * When `openVrVsyncDrivesRaf` is set, the delay is `0` and `OpenVrOverlayFramePacer` in
  * `WebXRHost` blocks in `paceToDisplayAndRefreshPoses` before emulated HMD work (Aardvark-style
  * overlay timing — not `WaitGetPoses`).
+ *
+ * With `manual`, no timer runs at all: callbacks queue until {@link runManualAnimationFrame},
+ * so the Raylib/OpenVR frame loop is the only clock and each of its frames runs exactly one
+ * IWER device frame (and one r3f advance).
  */
 export type WebXrHostPolyfillOptions = {
   pollIntervalMs: number;
   /** @default false */
   openVrVsyncDrivesRaf?: boolean;
+  /** @default false */
+  manual?: boolean;
 };
+
+type QueuedRaf = { id: number; cb: RafCallback; cancelled: boolean };
+
+let manualRafQueue: QueuedRaf[] = [];
+let manualRafRunning: QueuedRaf[] = [];
+let manualRafNextId = 1;
+
+/**
+ * Runs every callback queued before this call, like one browser animation frame. Callbacks
+ * that request another frame land in the next one. Returns how many callbacks ran.
+ */
+export function runManualAnimationFrame(now = performance.now()): number {
+  const queue = manualRafQueue;
+  if (queue.length === 0) return 0;
+  manualRafQueue = [];
+  manualRafRunning = queue;
+  let ran = 0;
+  let firstError: unknown = null;
+  for (const entry of queue) {
+    if (entry.cancelled) continue;
+    ran++;
+    // One failing callback must not starve the rest of the frame (IWER's device frame
+    // among them), so run them all and rethrow the first failure afterwards.
+    try {
+      entry.cb(now);
+    } catch (error) {
+      firstError ??= error;
+    }
+  }
+  manualRafRunning = [];
+  if (firstError != null) throw firstError;
+  return ran;
+}
 
 export function installWebXRHostPolyfills(
   width: number,
@@ -48,13 +87,27 @@ export function installWebXRHostPolyfills(
     }
   };
 
-  (globalAny as Record<string, unknown>).requestAnimationFrame = ((cb: RafCallback): number => {
-    return setTimeout(() => cb(performance.now()), delayMs) as unknown as number;
-  }) as unknown;
+  if (rafOptions.manual) {
+    manualRafQueue = [];
+    (globalAny as Record<string, unknown>).requestAnimationFrame = ((cb: RafCallback): number => {
+      const id = manualRafNextId++;
+      manualRafQueue.push({ id, cb, cancelled: false });
+      return id;
+    }) as unknown;
+    (globalAny as Record<string, unknown>).cancelAnimationFrame = ((id: number): void => {
+      const entry = manualRafQueue.find((e) => e.id === id) ??
+        manualRafRunning.find((e) => e.id === id);
+      if (entry) entry.cancelled = true;
+    }) as unknown;
+  } else {
+    (globalAny as Record<string, unknown>).requestAnimationFrame = ((cb: RafCallback): number => {
+      return setTimeout(() => cb(performance.now()), delayMs) as unknown as number;
+    }) as unknown;
 
-  (globalAny as Record<string, unknown>).cancelAnimationFrame = ((id: number): void => {
-    clearTimeout(id as unknown as number);
-  }) as unknown;
+    (globalAny as Record<string, unknown>).cancelAnimationFrame = ((id: number): void => {
+      clearTimeout(id as unknown as number);
+    }) as unknown;
+  }
 
   class ResizeObserver {
     observe() {}

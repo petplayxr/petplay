@@ -929,7 +929,7 @@ async function handleOverlayFrameFailure(error: unknown, label: string): Promise
     `[webxr] ${label} failed: ${message} (retrying in ${overlayFrameFailureBackoffMs} ms)`,
   );
   dropRaylibOverlayForRecreate("frame failure");
-  state.host?.signalExternalPacerAdvanced();
+  state.host?.stepExternalFrame();
   await wait(overlayFrameFailureBackoffMs);
 }
 
@@ -1868,15 +1868,6 @@ async function uploadWebGpuSceneFrame() {
   }
 }
 
-function shouldSignalHostFromRaylibPace(
-  pace: ReturnType<OpenVrOverlayFramePacer["getLastPaceResult"]>,
-): boolean {
-  if (raylibMaxFps > 0) {
-    return pace.ok;
-  }
-  return pace.ok && pace.waitedForVsync && pace.skippedDisplayFrames === 0;
-}
-
 function hasAnyOverlayMode(): boolean {
   return includesRaylibOverlay(state.overlayRenderMode) ||
     includesWebGpuOverlay(state.overlayRenderMode);
@@ -1920,7 +1911,7 @@ async function uploadRaylibShadowFrame() {
   }
 
   const prepStartedAt = performance.now();
-  let signalHostAfterPresent = false;
+  let vsyncFrameIndex: bigint | undefined;
   if (state.nativeRaylibPacer) {
     const pace = await state.nativeRaylibPacer
       .paceToDisplayAndRefreshPosesYielding();
@@ -1940,12 +1931,11 @@ async function uploadRaylibShadowFrame() {
         OpenVR.TrackedControllerRole.TrackedControllerRole_RightHand,
       ),
     );
-    signalHostAfterPresent = shouldSignalHostFromRaylibPace(pace);
-    if (signalHostAfterPresent && state.host.getStatus().frameCount === 0) {
-      state.host.signalExternalPacerAdvanced();
-      signalHostAfterPresent = false;
-    }
+    if (pace.ok) vsyncFrameIndex = pace.frameIndex;
   }
+  // The one clock: this frame's poses go through one IWER frame and one r3f advance, and
+  // the scene captured below is that advance.
+  state.host.stepExternalFrame(vsyncFrameIndex);
   const sourceFrame = state.host.captureShadowFrame();
   if (!sourceFrame) {
     if (!state.raylibShadowNoSourceLogged) {
@@ -2030,9 +2020,6 @@ async function uploadRaylibShadowFrame() {
     sourceFrame.frameCount,
     1000 / (state.nominalHmdDisplayHz ?? 90),
   );
-  if (signalHostAfterPresent) {
-    state.host.signalExternalPacerAdvanced();
-  }
   const openvrMs = performance.now() - openvrT0;
   const handlerMs = performance.now() - handlerT0;
 
