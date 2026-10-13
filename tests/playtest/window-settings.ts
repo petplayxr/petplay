@@ -86,7 +86,7 @@ export const steps: PlaytestStep[] = [
       } finally {
         turnHead(ctx, 0);
       }
-      await ctx.sleep(300);
+      await ctx.settle();
       if (!await press(ctx, "Hide when looking away", "Off")) return;
       await ctx.waitFor(() => node()?.autoHide !== true, "Hide when looking away: Off");
     },
@@ -122,13 +122,16 @@ export const steps: PlaytestStep[] = [
       const before = worldOf(display(ctx)).position;
       turnHead(ctx, 0.6);
       try {
-        await ctx.sleep(500);
-        const moved = worldOf(display(ctx)).position.distanceTo(before);
+        let moved = 0;
+        await ctx.waitFor(
+          () => (moved = worldOf(display(ctx)).position.distanceTo(before)) > 0.2,
+          "a head-anchored window follows the head",
+          1000,
+        );
         ctx.note(`head turn moved the window ${moved.toFixed(3)} m`);
-        ctx.expect(moved > 0.2, "a head-anchored window follows the head");
       } finally {
         turnHead(ctx, 0);
-        await ctx.sleep(300);
+        await ctx.settle();
       }
       if (!await openSettings(ctx)) return;
       if (!await press(ctx, label, "World")) return;

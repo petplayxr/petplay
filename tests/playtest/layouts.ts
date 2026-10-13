@@ -84,7 +84,7 @@ export const steps: PlaytestStep[] = [
       await ctx.t.clickWristMenu(WRIST_MAIN.settings);
       await ctx.t.clickWristMenu(WRIST_SETTINGS.layouts);
       await ctx.t.clickWristMenu(WRIST_LAYOUTS.save(1));
-      await ctx.sleep(300);
+      await ctx.settle();
       ctx.t.parkLeftHand();
       const moved = await laserDrag(ctx, -0.3);
       ctx.expect(moved > 0.1, `the window moves away from the saved spot (${moved.toFixed(3)} m)`);

@@ -74,7 +74,13 @@ const VIEW_TARGET = new THREE.Vector3(0, 1.6, -0.2);
 const CLICK_ORIGIN: readonly [number, number, number] = [-0.1, 1.5, 0.1];
 /** The menu's local z for the uikit surface (the grab box is 0.04 deep). */
 const PANEL_SURFACE_Z = 0.02;
-const SETTLE_MS = 300;
+/**
+ * Frames for an aim or a trigger change to land: the next frame samples the input, moves the
+ * XRSpace and the pointer, and React commits what the handlers set a frame or two after.
+ */
+const SETTLE_FRAMES = 4;
+/** Frames a trigger stays down for a click. */
+const PRESS_FRAMES = 2;
 
 type PlaytestScene = THREE.Object3D;
 type PlaytestHost = Omit<WebXrHostLike, "rootStore"> & {
@@ -98,6 +104,24 @@ const SESSION_KEY = "__petplayPlaytest";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Resolves after `count` r3f frames. Steps wait in frames, not milliseconds: what they wait for is
+ * the input reaching the scene, which takes frames however long a frame is.
+ */
+export function waitFrames(host: PlaytestHost, count: number): Promise<void> {
+  // deno-lint-ignore no-explicit-any
+  const internal = (host.rootStore.getState() as any).internal;
+  if (internal?.scheduler?.register == null) return sleep(count * 20);
+  return new Promise((resolve) => {
+    let seen = 0;
+    const unregister = internal.scheduler.register(() => {
+      if (++seen < count) return;
+      unregister();
+      resolve();
+    }, { priority: -1e9, rootId: internal.rootId });
+  });
 }
 
 function findWristMenu(scene: PlaytestScene): THREE.Object3D {
@@ -141,7 +165,7 @@ export function startPlaytest(host: PlaytestHost): PlaytestSession {
       const base = new THREE.Vector3(0, 1.2, -0.3);
       input.right.position = [base.x, base.y, base.z];
       input.right.quaternion = [0, 0, 0, 1];
-      await sleep(SETTLE_MS * 2);
+      await waitFrames(host, SETTLE_FRAMES * 2);
       const { position, quaternion } = menuWorld();
       const handQuaternion = quaternion.clone().invert();
       const offset = position.sub(base).applyQuaternion(handQuaternion);
@@ -153,7 +177,7 @@ export function startPlaytest(host: PlaytestHost): PlaytestSession {
         handQuaternion.z,
         handQuaternion.w,
       ];
-      await sleep(SETTLE_MS);
+      await waitFrames(host, SETTLE_FRAMES);
     }
     parkLeftHand();
   };
@@ -162,17 +186,17 @@ export function startPlaytest(host: PlaytestHost): PlaytestSession {
     const { menu } = menuWorld();
     const target = menu.localToWorld(new THREE.Vector3(x * 0.001, y * 0.001, PANEL_SURFACE_Z));
     aimAt(input, "left", CLICK_ORIGIN, [target.x, target.y, target.z]);
-    await sleep(SETTLE_MS);
+    await waitFrames(host, SETTLE_FRAMES);
   };
 
   const clickWristMenu = async (point: PanelPoint) => {
     await hoverWristMenu(point);
     input.left.trigger = true;
-    await sleep(150);
+    await waitFrames(host, PRESS_FRAMES);
     input.left.trigger = false;
-    await sleep(SETTLE_MS);
+    await waitFrames(host, SETTLE_FRAMES);
     parkLeftHand();
-    await sleep(SETTLE_MS);
+    await waitFrames(host, SETTLE_FRAMES);
   };
 
   const session: PlaytestSession = {
@@ -204,7 +228,12 @@ export type PlaytestContext = {
   /** Records a failure when `condition` is falsy; the step carries on. */
   expect: (condition: unknown, message: string) => boolean;
   note: (message: string) => void;
+  /** Real time, for what the app itself times (a debounce, an animation); input waits use `frames`. */
   sleep: (ms: number) => Promise<void>;
+  /** Waits `count` frames. */
+  frames: (count: number) => Promise<void>;
+  /** Waits for an aim or a trigger change to land. */
+  settle: () => Promise<void>;
   /** Polls until `check` is truthy; a timeout is a failed expectation. */
   waitFor: (check: () => unknown, message: string, timeoutMs?: number) => Promise<boolean>;
   /** Kept across steps, for values a later step compares against. */
@@ -222,7 +251,49 @@ export type PlaytestStepResult = {
   ms: number;
   notes: string[];
   failures: string[];
+  /** Frame pacing over the step; absent when the scene has no r3f scheduler to time. */
+  frames?: PlaytestFrameStats;
 };
+
+export type PlaytestFrameStats = {
+  count: number;
+  medianMs: number;
+  maxMs: number;
+  /** Frames that took at least twice the median: `[ms into the step, frame interval ms]`. */
+  stalls: [number, number][];
+};
+
+/**
+ * Times every frame while a step runs, from the end of one r3f update to the next, so a stall
+ * anywhere on the thread (a React commit, a texture upload, the render) shows up as a long
+ * interval.
+ */
+function watchFrames(host: PlaytestHost, started: number): () => PlaytestFrameStats | undefined {
+  // deno-lint-ignore no-explicit-any
+  const internal = (host.rootStore.getState() as any).internal;
+  if (internal?.scheduler?.register == null) return () => undefined;
+  const intervals: [number, number][] = [];
+  let last = 0;
+  // r3f v10 scheduler: higher priority runs earlier, so this is the last job of the update.
+  const unregister = internal.scheduler.register(() => {
+    const now = performance.now();
+    if (last > 0) intervals.push([Math.round(now - started), now - last]);
+    last = now;
+  }, { priority: -1e9, rootId: internal.rootId });
+  return () => {
+    unregister();
+    if (intervals.length === 0) return undefined;
+    const sorted = intervals.map(([, ms]) => ms).sort((a, b) => a - b);
+    const medianMs = sorted[sorted.length >> 1];
+    const round = (ms: number) => Math.round(ms * 10) / 10;
+    return {
+      count: intervals.length,
+      medianMs: round(medianMs),
+      maxMs: round(sorted.at(-1)!),
+      stalls: intervals.filter(([, ms]) => ms >= medianMs * 2).map(([at, ms]) => [at, round(ms)]),
+    };
+  };
+}
 
 const MEMO_KEY = "__petplayPlaytestMemo";
 
@@ -270,28 +341,31 @@ export async function runPlaytestStep(
       const facing = face.getWorldQuaternion(new THREE.Quaternion());
       const from = new THREE.Vector3(0, 0, distance).applyQuaternion(facing).add(point);
       aimAt(t.input, "left", [from.x, from.y, from.z], [point.x, point.y, point.z]);
-      await sleep(SETTLE_MS);
+      await waitFrames(host, SETTLE_FRAMES);
       t.input.left.trigger = true;
-      await sleep(150);
+      await waitFrames(host, PRESS_FRAMES);
       t.input.left.trigger = false;
-      await sleep(SETTLE_MS);
+      await waitFrames(host, SETTLE_FRAMES);
       t.parkLeftHand();
-      await sleep(SETTLE_MS);
+      await waitFrames(host, SETTLE_FRAMES);
     },
     expect,
     note: (message) => notes.push(message),
     sleep,
+    frames: (count) => waitFrames(host, count),
+    settle: () => waitFrames(host, SETTLE_FRAMES),
     waitFor: async (check, message, timeoutMs = 3000) => {
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
         if (check()) return true;
-        await sleep(50);
+        await waitFrames(host, 1);
       }
       return expect(check(), message);
     },
     memo,
   };
   const started = performance.now();
+  const stopWatching = watchFrames(host, started);
   try {
     await step.run(ctx);
   } catch (error) {
@@ -303,5 +377,6 @@ export async function runPlaytestStep(
     ms: Math.round(performance.now() - started),
     notes,
     failures,
+    frames: stopWatching(),
   };
 }

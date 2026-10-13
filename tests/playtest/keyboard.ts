@@ -44,7 +44,7 @@ async function press(ctx: PlaytestContext, ...legends: string[]): Promise<Keyboa
       if (!ctx.expect(cap, `the keyboard has a ${legend} key`)) break;
       await ctx.clickObject(cap!, keyboard(ctx));
     }
-    await ctx.sleep(200);
+    await ctx.frames(3);
   } finally {
     stop();
   }
@@ -81,17 +81,17 @@ async function keyboardDrag(ctx: PlaytestContext) {
   const position = worldOf(keyboard(ctx)).position;
   const start = worldOf(keyboard(ctx)).position;
   aim(ctx, "left", LEFT_ORIGIN, start);
-  await ctx.sleep(300);
+  await ctx.settle();
   squeeze(ctx, "left", true);
-  await ctx.sleep(200);
+  await ctx.frames(3);
   for (let i = 1; i <= 10; i++) {
     const down = new THREE.Vector3(0, -0.015 * i, 0);
     aim(ctx, "left", LEFT_ORIGIN.clone().add(down), start.clone().add(down));
-    await ctx.sleep(50);
+    await ctx.frames(1);
   }
-  await ctx.sleep(200);
+  await ctx.frames(3);
   squeeze(ctx, "left", false);
-  await ctx.sleep(300);
+  await ctx.settle();
   ctx.t.parkLeftHand();
   const swung = Math.abs((hingeAngle() ?? 0) - angle);
   const moved = worldOf(keyboard(ctx)).position.distanceTo(position);
@@ -110,16 +110,16 @@ async function doubleTap(ctx: PlaytestContext, legend: string): Promise<Keyboard
     const from = new THREE.Vector3(0, 0, 0.6).applyQuaternion(worldOf(keyboard(ctx)).quaternion)
       .add(point);
     aim(ctx, "left", from, point);
-    await ctx.sleep(300);
+    await ctx.settle();
     for (let i = 0; i < 2; i++) {
       ctx.t.input.left.trigger = true;
-      await ctx.sleep(50);
+      await ctx.frames(2);
       ctx.t.input.left.trigger = false;
-      await ctx.sleep(50);
+      await ctx.frames(2);
     }
-    await ctx.sleep(300);
+    await ctx.settle();
     ctx.t.parkLeftHand();
-    await ctx.sleep(200);
+    await ctx.frames(3);
   } finally {
     stop();
   }
@@ -235,6 +235,8 @@ export const steps: PlaytestStep[] = [
       );
       // A slow second tap is just a second tap: it unlatches.
       await press(ctx, "alt");
+      // The double-tap window is real time, so wait it out on the clock rather than in frames.
+      await ctx.sleep(300);
       const slow = await press(ctx, "alt");
       ctx.expect(
         slow.some((event) => event.kind === "modifier" && !event.active),
@@ -270,7 +272,7 @@ export const steps: PlaytestStep[] = [
         if (
           !await ctx.waitFor(() => ctx.textObject(keyboard(ctx), "ö"), "the Finnish legends are up")
         ) return;
-        await ctx.sleep(300);
+        await ctx.settle();
         legendsFit(ctx);
         for (const legend of ["ö", "ä", "å", "§", "´", "¨"]) {
           ctx.expect(
@@ -292,7 +294,7 @@ export const steps: PlaytestStep[] = [
       const resting = hingeAngle();
       if (!ctx.expect(resting != null, "the keyboard is hinged to the window")) return;
       setHingeAngle(resting! + 0.5);
-      await ctx.sleep(300);
+      await ctx.settle();
       if (!await toolbarButton(ctx, "refresh", keyboard(ctx))) return;
       await ctx.waitFor(
         () => Math.abs((hingeAngle() ?? 0) - resting!) < 1e-6,
@@ -310,7 +312,7 @@ export const steps: PlaytestStep[] = [
       const free = await keyboardDrag(ctx);
       ctx.expect(free.swung > 0.05 || free.moved > 0.02, "an unlocked keyboard moves when grabbed");
       if (resting != null) setHingeAngle(resting);
-      await ctx.sleep(300);
+      await ctx.settle();
       if (!await toolbarButton(ctx, "lock", keyboard(ctx))) return;
       if (!await ctx.waitFor(() => keyboardNode().locked === true, "the lock button locks it")) {
         return;
@@ -359,7 +361,7 @@ export const steps: PlaytestStep[] = [
       if (
         !await ctx.waitFor(() => keyboardNode().parentId == null, "the link button detaches it")
       ) return;
-      await ctx.sleep(300);
+      await ctx.settle();
       const jump = worldOf(keyboard(ctx)).position.distanceTo(before);
       ctx.note(`detaching moved it ${jump.toFixed(4)} m`);
       ctx.expect(jump < 0.01, "detaching leaves the keyboard where it was");

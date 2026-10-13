@@ -127,7 +127,7 @@ export const steps: PlaytestStep[] = [
     name: "burst-queues",
     run: async (ctx) => {
       clearToasts();
-      await ctx.sleep(300);
+      await ctx.settle();
       for (let i = 1; i <= 5; i++) notify(ctx, "Chat", `Message ${i}`, "");
       await ctx.waitFor(() => overlayText(ctx, "Message 3"), "the first three of a burst show");
       ctx.expect(
@@ -156,7 +156,7 @@ export const steps: PlaytestStep[] = [
     name: "long-text-wraps",
     run: async (ctx) => {
       clearToasts();
-      await ctx.sleep(300);
+      await ctx.settle();
       const body = "The quick brown fox jumps over the lazy dog. ".repeat(6).trim();
       notify(ctx, "Mail", "A long message", body);
       await ctx.waitFor(() => overlayText(ctx, "A long message"), "the long toast shows");
@@ -192,7 +192,7 @@ export const steps: PlaytestStep[] = [
     name: "follows-head",
     run: async (ctx) => {
       clearToasts();
-      await ctx.sleep(300);
+      await ctx.settle();
       notify(ctx, "Calendar", "Standup in 5 minutes", "");
       await ctx.waitFor(() => overlayText(ctx, "Standup in 5 minutes"), "the toast shows");
       turnHead(ctx, Math.PI / 2);
@@ -212,7 +212,7 @@ export const steps: PlaytestStep[] = [
     name: "laser-passes-through",
     run: async (ctx) => {
       clearToasts();
-      await ctx.sleep(300);
+      await ctx.settle();
       notify(ctx, "Chat", "Over the window", "");
       await ctx.waitFor(() => overlayText(ctx, "Over the window"), "the toast shows");
       const id = rootDisplayId();
@@ -238,7 +238,7 @@ export const steps: PlaytestStep[] = [
         return;
       }
       clearToasts();
-      await ctx.sleep(300);
+      await ctx.settle();
       const socket = Deno.listenDatagram({ transport: "udp", hostname: "127.0.0.1", port: 0 });
       const datagram = JSON.stringify({
         messageType: 1,

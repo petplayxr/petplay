@@ -66,7 +66,7 @@ export const steps: PlaytestStep[] = [
       if (
         !await ctx.waitFor(() => added(ctx)?.parentId == null, "the link button detaches it")
       ) return;
-      await ctx.sleep(300);
+      await ctx.settle();
       const after = addedObject(ctx);
       if (!ctx.expect(after, "the detached display is still in the scene")) return;
       const jump = worldOf(after!).position.distanceTo(before);
@@ -113,11 +113,11 @@ export const steps: PlaytestStep[] = [
       const start = LEFT_ORIGIN.clone();
       const below = start.clone().add(new THREE.Vector3(0, -1, 0));
       aim(ctx, "left", start, below);
-      await ctx.sleep(300);
+      await ctx.settle();
       const before = worldOf(display(ctx)).position;
       const shift = new THREE.Vector3(0.3, 0, 0);
       aim(ctx, "left", start.clone().add(shift), below.clone().add(shift));
-      await ctx.sleep(300);
+      await ctx.settle();
       const moved = worldOf(display(ctx)).position.distanceTo(before);
       ctx.note(`a 0.3 m hand slide moved the window ${moved.toFixed(3)} m`);
       ctx.expect(Math.abs(moved - 0.3) < 0.03, "a hand-anchored window moves with the hand");

@@ -114,7 +114,7 @@ export const steps: PlaytestStep[] = [
           left: { percent: 62, charging: false },
           right: { percent: 11, charging: false },
         });
-        await ctx.sleep(300);
+        await ctx.settle();
         ctx.expect(lowToasts() === 1, `falling further does not repeat it (${lowToasts()} toasts)`);
       } finally {
         batteryStore.publish({});
@@ -167,7 +167,7 @@ export const steps: PlaytestStep[] = [
       if (getWindowLayerVisible()) await ctx.t.clickWristMenu(WRIST_MAIN.layout);
       await ctx.waitFor(() => !getWindowLayerVisible(), "the windows are hidden");
       await ctx.t.clickWristMenu(WRIST_MAIN.edit);
-      await ctx.sleep(300);
+      await ctx.settle();
       ctx.expect(!getToolEditMode(), "edit stays off while the windows are hidden");
       await ctx.t.clickWristMenu(WRIST_MAIN.layout);
       await ctx.waitFor(getWindowLayerVisible, "the windows show");
@@ -252,17 +252,17 @@ export const steps: PlaytestStep[] = [
       const shift = new THREE.Vector3(0.06, 0, 0);
       try {
         aim(ctx, "left", LEFT_ORIGIN, point);
-        await ctx.sleep(300);
+        await ctx.settle();
         squeeze(ctx, "left", true);
-        await ctx.sleep(200);
+        await ctx.frames(3);
         for (let i = 1; i <= 10; i++) {
           const step = shift.clone().multiplyScalar(i / 10);
           aim(ctx, "left", LEFT_ORIGIN.clone().add(step), point.clone().add(step));
-          await ctx.sleep(50);
+          await ctx.frames(1);
         }
-        await ctx.sleep(200);
+        await ctx.frames(3);
         squeeze(ctx, "left", false);
-        await ctx.sleep(300);
+        await ctx.settle();
         ctx.t.parkLeftHand();
         const moved = worldOf(wristMenu(ctx)).position.distanceTo(before);
         ctx.note(`a 6 cm drag moved the menu ${moved.toFixed(3)} m`);
@@ -275,7 +275,7 @@ export const steps: PlaytestStep[] = [
         squeeze(ctx, "left", false);
         ctx.t.parkLeftHand();
         setSetting("wristMenuOffset", null);
-        await ctx.sleep(300);
+        await ctx.settle();
       }
     },
   },
@@ -295,7 +295,7 @@ export const steps: PlaytestStep[] = [
         const widthBefore = width();
         await ctx.t.clickWristMenu(WRIST_WRIST.scale);
         if (!await ctx.waitFor(() => getSetting("wristMenuScale") !== scale, "scale steps")) return;
-        await ctx.sleep(300);
+        await ctx.settle();
         const ratio = width() / widthBefore;
         const expected = getSetting("wristMenuScale") / scale;
         ctx.note(
@@ -303,7 +303,7 @@ export const steps: PlaytestStep[] = [
         );
         ctx.expect(Math.abs(ratio - expected) < 0.02, "the menu is drawn at the new scale");
         setSetting("wristMenuScale", scale);
-        await ctx.sleep(300);
+        await ctx.settle();
         // Re-aim at the panel: its points moved with the scale.
         await ctx.t.faceWristMenu();
         await ctx.t.clickWristMenu(WRIST_WRIST.opacity);
@@ -322,7 +322,7 @@ export const steps: PlaytestStep[] = [
       } finally {
         setSetting("wristMenuScale", scale);
         setSetting("wristMenuOpacity", opacity);
-        await ctx.sleep(300);
+        await ctx.settle();
         await ctx.t.faceWristMenu();
         await ctx.t.clickWristMenu(WRIST_WRIST.back);
         await ctx.t.clickWristMenu(WRIST_SETTINGS.back);

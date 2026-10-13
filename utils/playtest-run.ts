@@ -1,14 +1,15 @@
 /**
  * Playtest runner: launches a `--novr` server on scratch files, runs `tests/playtest/<name>.ts`
- * step by step inside the `webxr` actor, captures the view after each step, and leaves the run in
- * `logs/playtest/<time>-<name>/` (`result.json`, one PNG per step, `server.log`, and the scratch
- * layout and settings it ran against).
+ * step by step inside the `webxr` actor, and leaves the run in `logs/playtest/<time>-<name>/`
+ * (`result.json`, a capture of each failed step, `server.log`, and the scratch layout and settings
+ * it ran against).
  *
  * ```sh
  * deno task playtest smoke
  * deno task playtest all
  * deno task playtest smoke --port=3995 --keep   # leave the server up afterwards to poke at it
  * deno task playtest smoke --file-issue         # a failed run writes markdown/issues/<slug>/
+ * deno task playtest smoke --captures           # a PNG after every step, not just failed ones
  * ```
  *
  * Never touches the real layout or settings, and never attaches to a running session: steps move
@@ -26,9 +27,16 @@ function argValue(name: string): string | undefined {
   return args.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
 }
 
-const port = Number(argValue("port") ?? 3995);
+const basePort = Number(argValue("port") ?? 3995);
 const keep = args.includes("--keep");
 const fileIssue = args.includes("--file-issue");
+/** A capture boots a preview process (about a second), so by default only failed steps get one. */
+const captureAll = args.includes("--captures");
+/**
+ * The test server's frame rate. Steps wait in frames, so a faster clock runs them faster; nothing
+ * the scripts check depends on the rate (grab damping and timers run on elapsed time).
+ */
+const hz = Number(argValue("hz") ?? 240);
 const names = args.filter((arg) => !arg.startsWith("--"));
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -42,7 +50,7 @@ async function scriptNames(): Promise<string[]> {
   return found.sort();
 }
 
-async function portInUse(): Promise<boolean> {
+async function portInUse(port: number): Promise<boolean> {
   try {
     const response = await fetch(`http://127.0.0.1:${port}/registry`);
     await response.body?.cancel();
@@ -54,7 +62,7 @@ async function portInUse(): Promise<boolean> {
 
 type Server = { stop: () => Promise<void> };
 
-async function launch(runDir: string): Promise<Server> {
+async function launch(runDir: string, port: number): Promise<Server> {
   const log = await Deno.open(join(runDir, "server.log"), { createNew: true, write: true });
   const child = new Deno.Command(Deno.execPath(), {
     args: [
@@ -68,6 +76,7 @@ async function launch(runDir: string): Promise<Server> {
       "--novr",
       "--agent-repl",
       `--agent-repl-port=${port}`,
+      `--webxr-polyfill-hz=${hz}`,
     ],
     cwd: projectRoot,
     env: {
@@ -95,7 +104,7 @@ async function launch(runDir: string): Promise<Server> {
   };
 }
 
-async function evalInWebxr(code: string, timeoutMs: number): Promise<void> {
+async function evalInWebxr(port: number, code: string, timeoutMs: number): Promise<void> {
   const response = await fetch(`http://127.0.0.1:${port}/eval`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -111,12 +120,13 @@ async function evalInWebxr(code: string, timeoutMs: number): Promise<void> {
 }
 
 /** Waits for the webxr actor, then for a scene with a wrist menu in it. */
-async function waitForScene(timeoutMs: number): Promise<void> {
+async function waitForScene(port: number, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let lastError = "";
   while (Date.now() < deadline) {
     try {
       await evalInWebxr(
+        port,
         `let found = false;
          host.rootStore.getState().scene.traverse((o) => {
            if (o.userData?.wristMenuActor !== undefined) found = true;
@@ -135,8 +145,9 @@ async function waitForScene(timeoutMs: number): Promise<void> {
 }
 
 /** Counted in the actor: the script imports the app's modules, which only load there. */
-async function stepCount(scriptUrl: string, path: string): Promise<number> {
+async function stepCount(port: number, scriptUrl: string, path: string): Promise<number> {
   await evalInWebxr(
+    port,
     `const { steps } = await import(${JSON.stringify(scriptUrl)});
      await Deno.writeTextFile(${JSON.stringify(path)}, String(steps.length));
      return true;`,
@@ -146,12 +157,14 @@ async function stepCount(scriptUrl: string, path: string): Promise<number> {
 }
 
 async function runStep(
+  port: number,
   scriptUrl: string,
   index: number,
   resultPath: string,
 ): Promise<PlaytestStepResult> {
   const playtestUrl = toFileUrl(join(projectRoot, "utils", "playtest.ts")).href;
   await evalInWebxr(
+    port,
     `const p = await import(${JSON.stringify(playtestUrl)});
      const result = await p.runPlaytestStep(host, ${JSON.stringify(scriptUrl)}, ${index});
      await Deno.writeTextFile(${JSON.stringify(resultPath)}, JSON.stringify(result));
@@ -161,7 +174,7 @@ async function runStep(
   return JSON.parse(await Deno.readTextFile(resultPath)) as PlaytestStepResult;
 }
 
-async function capture(path: string): Promise<boolean> {
+async function capture(port: number, path: string): Promise<boolean> {
   const output = await new Deno.Command(Deno.execPath(), {
     args: [
       "run",
@@ -215,25 +228,40 @@ full run is in \`${runDir.replace(projectRoot + "/", "")}\`, and \`result.json\`
   return dir;
 }
 
-async function runScript(name: string): Promise<RunResult> {
+/** A script's server, launched ahead of its turn. */
+type Launched = { name: string; port: number; runDir: string; server: Server };
+
+async function prepare(name: string, port: number): Promise<Launched> {
   const stamp = new Date().toISOString().replaceAll(":", "-").replace(/\.\d+Z$/, "");
   const runDir = join(projectRoot, "logs", "playtest", `${stamp}-${name}`);
   await Deno.mkdir(runDir, { recursive: true });
+  return { name, port, runDir, server: await launch(runDir, port) };
+}
+
+/** Runs the script on its server; the caller stops the server. */
+async function runScript({ name, port, runDir }: Launched): Promise<RunResult> {
   const scriptUrl = toFileUrl(join(scriptsDir, `${name}.ts`)).href;
   const started = performance.now();
   const run: RunResult = { name, ok: false, seconds: 0, steps: [] };
-  const server = await launch(runDir);
   try {
-    await waitForScene(90_000);
-    const total = await stepCount(scriptUrl, join(runDir, "steps.txt"));
+    await waitForScene(port, 90_000);
+    const total = await stepCount(port, scriptUrl, join(runDir, "steps.txt"));
     for (let index = 0; index < total; index++) {
-      const result = await runStep(scriptUrl, index, join(runDir, `step-${index}.json`));
+      const result = await runStep(port, scriptUrl, index, join(runDir, `step-${index}.json`));
       const shot = join(runDir, `${index + 1}-${result.name}.png`);
-      const captured = await capture(shot);
+      const captured = (captureAll || !result.ok) && await capture(port, shot);
       run.steps.push({ ...result, capture: captured ? shot : null });
       const mark = result.ok ? "ok  " : "FAIL";
       console.log(`  ${mark} ${result.name} (${result.ms} ms)`);
       for (const note of result.notes) console.log(`         ${note}`);
+      const frames = result.frames;
+      if (frames != null && frames.stalls.length > 0) {
+        const worst = [...frames.stalls].sort((a, b) => b[1] - a[1]).slice(0, 5);
+        console.log(
+          `       ~ ${frames.stalls.length} stalled of ${frames.count} frames (median ` +
+            `${frames.medianMs} ms): ${worst.map(([at, ms]) => `${ms} ms @${at}`).join(", ")}`,
+        );
+      }
       for (const failure of result.failures) console.log(`       ! ${failure.split("\n")[0]}`);
     }
     run.ok = run.steps.every((step) => step.ok);
@@ -243,25 +271,42 @@ async function runScript(name: string): Promise<RunResult> {
   } finally {
     run.seconds = Math.round((performance.now() - started) / 1000);
     await Deno.writeTextFile(join(runDir, "result.json"), JSON.stringify(run, null, 2) + "\n");
-    if (keep) {
-      console.log(`  server left running on :${port} (--keep)`);
-    } else {
-      await server.stop();
-    }
   }
   console.log(`${run.ok ? "PASS" : "FAIL"} ${name} in ${run.seconds} s -> ${runDir}`);
   if (!run.ok && fileIssue) console.log(`  issue: ${await writeIssue(run, runDir)}`);
   return run;
 }
 
-if (await portInUse()) {
-  console.error(`port ${port} already has a petplay server; pick another with --port=<n>`);
-  Deno.exit(2);
+const list = keep ? (await scriptNames()).slice(0, 1) : await scriptNames();
+// Scripts run one at a time, each on a fresh server. The next script's server boots while the
+// current one runs and the finished one shuts down in the background, so neither start-up (~4 s)
+// nor the graceful teardown (~3 s) is on the clock. Three ports, so a port is never reused while
+// its last server may still be tearing down.
+const ports = [basePort, basePort + 1, basePort + 2].slice(0, Math.min(3, list.length));
+for (const port of ports) {
+  if (await portInUse(port)) {
+    console.error(`port ${port} already has a petplay server; pick another base with --port=<n>`);
+    Deno.exit(2);
+  }
 }
+const stopping = new Map<number, Promise<void>>();
+const launchAt = async (index: number) => {
+  const port = ports[index % ports.length];
+  await stopping.get(port);
+  return await prepare(list[index], port);
+};
 const results: RunResult[] = [];
-for (const name of await scriptNames()) {
-  console.log(`playtest ${name}`);
-  results.push(await runScript(name));
-  if (keep) break;
+let next = list.length > 0 ? launchAt(0) : null;
+for (let index = 0; index < list.length; index++) {
+  const current = await next!;
+  next = index + 1 < list.length ? launchAt(index + 1) : null;
+  console.log(`playtest ${current.name}`);
+  results.push(await runScript(current));
+  if (keep) {
+    console.log(`  server left running on :${current.port} (--keep)`);
+  } else {
+    stopping.set(current.port, current.server.stop());
+  }
 }
+await Promise.all(stopping.values());
 Deno.exit(results.every((run) => run.ok) ? 0 : 1);

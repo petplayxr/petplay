@@ -50,20 +50,20 @@ export const steps: PlaytestStep[] = [
       const at = (spread: number) => centre.clone().addScaledVector(right, spread);
       aim(ctx, "left", LEFT_ORIGIN, at(-0.1));
       aim(ctx, "right", RIGHT_ORIGIN, at(0.1));
-      await ctx.sleep(300);
+      await ctx.settle();
       squeeze(ctx, "left", true);
       squeeze(ctx, "right", true);
-      await ctx.sleep(200);
+      await ctx.frames(3);
       for (let i = 1; i <= 10; i++) {
         const spread = 0.1 + 0.05 * i / 10;
         aim(ctx, "left", LEFT_ORIGIN, at(-spread));
         aim(ctx, "right", RIGHT_ORIGIN, at(spread));
-        await ctx.sleep(50);
+        await ctx.frames(1);
       }
-      await ctx.sleep(200);
+      await ctx.frames(3);
       squeeze(ctx, "left", false);
       squeeze(ctx, "right", false);
-      await ctx.sleep(300);
+      await ctx.settle();
       ctx.t.parkLeftHand();
       const after = worldOf(display(ctx)).scale.x;
       ctx.note(`scale ${before.toFixed(3)} -> ${after.toFixed(3)}`);

@@ -92,11 +92,11 @@ export async function laserClick(
   from: THREE.Vector3 = hand === "left" ? LEFT_ORIGIN : RIGHT_ORIGIN,
 ) {
   aim(ctx, hand, from, target);
-  await ctx.sleep(300);
+  await ctx.settle();
   ctx.t.input[hand].trigger = true;
-  await ctx.sleep(150);
+  await ctx.frames(2);
   ctx.t.input[hand].trigger = false;
-  await ctx.sleep(300);
+  await ctx.settle();
   if (hand === "left") ctx.t.parkLeftHand();
 }
 
@@ -106,17 +106,17 @@ export async function laserDrag(ctx: PlaytestContext, distance: number) {
   const before = worldOf(target).position;
   const shift = worldOf(target).right.multiplyScalar(distance);
   aim(ctx, "left", LEFT_ORIGIN, before);
-  await ctx.sleep(300);
+  await ctx.settle();
   squeeze(ctx, "left", true);
-  await ctx.sleep(200);
+  await ctx.frames(3);
   for (let i = 1; i <= 10; i++) {
     const offset = shift.clone().multiplyScalar(i / 10);
     aim(ctx, "left", LEFT_ORIGIN.clone().add(offset), before.clone().add(offset));
-    await ctx.sleep(50);
+    await ctx.frames(1);
   }
-  await ctx.sleep(200);
+  await ctx.frames(3);
   squeeze(ctx, "left", false);
-  await ctx.sleep(300);
+  await ctx.settle();
   ctx.t.parkLeftHand();
   return worldOf(display(ctx)).position.distanceTo(before);
 }
@@ -189,7 +189,7 @@ export async function select(
 ) {
   if (toolbarOf(root) == null) {
     aim(ctx, hand, hand === "left" ? LEFT_ORIGIN : RIGHT_ORIGIN, worldOf(root).position);
-    await ctx.sleep(300);
+    await ctx.settle();
     if (hand === "left") ctx.t.parkLeftHand();
   }
   await ctx.waitFor(() => toolbarOf(root), "pointing at the window selects it");
