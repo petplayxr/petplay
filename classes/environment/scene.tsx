@@ -105,7 +105,6 @@ import {
   SPATIAL_ORIGIN_IDS,
   SPATIAL_ORIGIN_LABEL,
   type SpatialOriginId,
-  TRACKED_ORIGIN_IDS,
   type TrackedOriginId,
 } from "./trackedOrigins.ts";
 import {
@@ -705,7 +704,9 @@ function WindowLayer({
       );
     }), [camera, forwardOffset, renderer]);
 
-  if (!visible) return null;
+  // The audio provider outlives a hide: acquiring it brings up the native audio device, which cost
+  // ~45 ms of the first frame of every show.
+  if (!visible) return <SpatialAudioProvider>{null}</SpatialAudioProvider>;
 
   const roots = getSpatialChildren(graph, null);
   const renderRoot = (node: SpatialNode) => (
@@ -726,40 +727,44 @@ function WindowLayer({
   );
 
   return (
-    <group userData={{ spatialGraphRoot: true, originId: SCENE_ORIGIN_ID, static: true }}>
-      <CommonOverlayChords
-        inputSource={directOpenVrInputSource}
-        graph={graph}
-        handleStores={handleStores}
-        onMouse={onMouse}
-      />
-      <SpatialAudioProvider>
-        {roots.filter((node) => !isTrackedOriginId(node.originId)).map(renderRoot)}
-        {TRACKED_ORIGIN_IDS.map((originId) => {
-          const attached = roots.filter((node) => node.originId === originId);
-          return attached.length === 0
-            ? null
-            : (
-              <TrackedOriginGroup key={originId} originId={originId}>
-                {attached.map(renderRoot)}
-              </TrackedOriginGroup>
-            );
-        })}
-      </SpatialAudioProvider>
-    </group>
+    <SpatialAudioProvider>
+      <group userData={{ spatialGraphRoot: true, originId: SCENE_ORIGIN_ID, static: true }}>
+        <CommonOverlayChords
+          inputSource={directOpenVrInputSource}
+          graph={graph}
+          handleStores={handleStores}
+          onMouse={onMouse}
+        />
+        {roots.map((node) => (
+          <SpatialRootOrigin key={node.id} originId={node.originId}>
+            {renderRoot(node)}
+          </SpatialRootOrigin>
+        ))}
+      </group>
+    </SpatialAudioProvider>
   );
 }
 
 /**
- * Holds the windows attached to the head or a hand: each frame its matrix becomes that space's
- * pose (in its parent's space), so the windows' local transforms are relative to it. Runs in the
- * default phase, ahead of the display pose sync in `finish`. An untracked controller holds the
- * last pose.
+ * Holds one root window. Attached to the head or a hand, each frame its matrix becomes that
+ * space's pose (in its parent's space), so the window's local transform is relative to it; in the
+ * world it stays at identity. Runs in the default phase, ahead of the display pose sync in
+ * `finish`. An untracked controller holds the last pose.
+ *
+ * Every root gets one, keyed by the root, so re-anchoring only changes `originId`: moving the
+ * window under a different group remounted it, and rebuilding its UI stalled a frame ~0.5 s.
  */
-function TrackedOriginGroup(
-  { originId, children }: { originId: TrackedOriginId; children: React.ReactNode },
+function SpatialRootOrigin(
+  { originId, children }: { originId: string; children: React.ReactNode },
 ) {
   const ref = React.useRef<THREE.Group>(null);
+  const tracked = isTrackedOriginId(originId);
+  React.useLayoutEffect(() => {
+    const group = ref.current;
+    if (group == null || tracked) return;
+    group.matrix.identity();
+    group.matrixWorldNeedsUpdate = true;
+  }, [tracked]);
   const camera = useThree((r3fState) => r3fState.camera);
   const renderer = useThree((r3fState) => r3fState.gl);
   const scratch = React.useMemo(
@@ -768,7 +773,7 @@ function TrackedOriginGroup(
   );
   useFrame(() => {
     const group = ref.current;
-    if (group == null) return;
+    if (group == null || !isTrackedOriginId(originId)) return;
     const head = getHeadObject(renderer, camera as unknown as THREE.Camera);
     if (!getTrackedOriginWorldMatrix(originId, head, scratch.world)) return;
     const parent = group.parent;
@@ -781,7 +786,7 @@ function TrackedOriginGroup(
     group.matrixWorldNeedsUpdate = true;
   });
   return (
-    <group ref={ref} matrixAutoUpdate={false} userData={{ spatialOrigin: originId }}>
+    <group ref={ref} matrixAutoUpdate={false}>
       {children}
     </group>
   );

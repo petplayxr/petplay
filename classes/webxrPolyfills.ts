@@ -55,6 +55,25 @@ export function runManualAnimationFrame(now = performance.now()): number {
   return ran;
 }
 
+const sharedAbortReasonInstalled = Symbol.for("petplay.sharedAbortReason");
+
+/**
+ * A reason-less `abort()` builds a fresh `DOMException` and captures its stack, ~5 µs under
+ * React's deep stacks. uikit aborts a controller per effect, so remounting a window spent 40-75 ms
+ * of one frame there. Reason-less aborts share one `AbortError` instead (~0.5 µs); anything that
+ * reads `signal.reason` still sees an AbortError `DOMException`.
+ */
+export function installSharedAbortReason(): void {
+  const proto = AbortController.prototype as AbortController & Record<symbol, boolean>;
+  if (proto[sharedAbortReasonInstalled]) return;
+  proto[sharedAbortReasonInstalled] = true;
+  const abort = proto.abort;
+  const reason = new DOMException("This operation was aborted", "AbortError");
+  proto.abort = function (this: AbortController, given?: unknown) {
+    abort.call(this, given === undefined ? reason : given);
+  };
+}
+
 export function installWebXRHostPolyfills(
   width: number,
   height: number,
@@ -64,6 +83,7 @@ export function installWebXRHostPolyfills(
     ? { pollIntervalMs, openVrVsyncDrivesRaf: false }
     : pollIntervalMs;
   const delayMs = rafOptions.openVrVsyncDrivesRaf ? 0 : rafOptions.pollIntervalMs;
+  installSharedAbortReason();
   const globalAny = globalThis as Record<string, unknown>;
   const setGlobalNumber = (name: "innerWidth" | "innerHeight", value: number) => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);

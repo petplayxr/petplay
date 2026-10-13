@@ -132,9 +132,8 @@ function requestedKeyboardLocaleId(): { id: string | null; source: KeyboardLocal
   if (fromEnv != null && fromEnv.length > 0) {
     return { id: fromEnv, source: "env" };
   }
-  const fromHost = hostKeyboardLocaleId();
-  if (fromHost != null) {
-    return { id: fromHost, source: "host-layout" };
+  if (hostLocaleId != null) {
+    return { id: hostLocaleId, source: "host-layout" };
   }
   return { id: null, source: "default" };
 }
@@ -145,18 +144,21 @@ function requestedKeyboardLocaleId(): { id: string | null; source: KeyboardLocal
  * session (`setxkbmap` there reports XWayland's copy, not the compositor's), and
  * a locale we do not have a table for simply leaves the default in place — a
  * wrong guess would relabel every key.
+ *
+ * Asked once at import and never on the render path: `localectl` takes ~80 ms, and the first
+ * keyboard render used to block a frame on it.
  */
-function hostKeyboardLocaleId(): string | null {
+async function probeHostKeyboardLocaleId(): Promise<string | null> {
   if (Deno.build.os !== "linux") {
     return null;
   }
   try {
-    const result = new Deno.Command("localectl", {
+    const result = await new Deno.Command("localectl", {
       args: ["status"],
       stdout: "piped",
       stderr: "null",
       stdin: "null",
-    }).outputSync();
+    }).output();
     if (!result.success) {
       return null;
     }
@@ -173,6 +175,25 @@ function hostKeyboardLocaleId(): string | null {
 let currentLocaleId: KeyboardLocaleId | null = null;
 let currentLocaleSource: KeyboardLocaleSource | null = null;
 const localeListeners = new Set<() => void>();
+let hostLocaleId: string | null = null;
+
+/** Drops the resolved locale and resolves it again, telling listeners if it changed. */
+function reresolveKeyboardLocale(): void {
+  const before = currentLocaleId;
+  currentLocaleId = null;
+  if (getKeyboardLocaleId() === before) return;
+  for (const listener of [...localeListeners]) {
+    listener();
+  }
+}
+
+void probeHostKeyboardLocaleId().then((id) => {
+  hostLocaleId = id;
+  // Only a locale that fell through to the default is waiting on the host layout.
+  if (id != null && currentLocaleId != null && currentLocaleSource === "default") {
+    reresolveKeyboardLocale();
+  }
+});
 
 /** Active locale id; resolved once from the launch args / env / host layout, then frozen until set. */
 export function getKeyboardLocaleId(): KeyboardLocaleId {
@@ -220,12 +241,7 @@ subscribeSettings(() => {
   const next = getSetting("keyboardLocale");
   if (next === lastLocaleSetting) return;
   lastLocaleSetting = next;
-  const before = currentLocaleId;
-  currentLocaleId = null;
-  if (getKeyboardLocaleId() === before) return;
-  for (const listener of [...localeListeners]) {
-    listener();
-  }
+  reresolveKeyboardLocale();
 });
 
 export function subscribeKeyboardLocale(listener: () => void): () => void {
