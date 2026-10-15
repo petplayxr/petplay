@@ -8,6 +8,7 @@ import type { NormalizedKeyFace } from "./types.ts";
 import { keyTextColor, tokenBackground, tokenBorderColor } from "./theme.ts";
 import { ICON_CODEPOINTS, type IconName } from "../ui/icons.tsx";
 import { COLOR } from "../ui/tokens.ts";
+import { recordPress } from "../pressLog.ts";
 
 const requestAnimFrame: (c: (t: number) => void) => number = (c) =>
   (globalThis as unknown as { requestAnimationFrame: (c: (t: number) => void) => number })
@@ -320,6 +321,7 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
             Number.isFinite(point.x) && Number.isFinite(point.y) && Number.isFinite(point.z)
           ? [point.x!, point.y!, point.z!] as const
           : undefined;
+        recordPress(`key:${face.id}`, e);
         onActivate(face, (e.object as unknown as THREE.Object3D | undefined) ?? null, worldPoint);
         updateDepressVisual(1);
         // Hold to repeat: one press now, then this key keeps firing until the

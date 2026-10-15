@@ -32,6 +32,7 @@ import {
   unitSpan,
 } from "./ui/tokens.ts";
 import { pulseForPointerEvent } from "./haptics.ts";
+import { recordPress } from "./pressLog.ts";
 
 /**
  * Action id -> glyph.
@@ -162,6 +163,7 @@ function ActionTile(
       onPointerOut={() => hover(false)}
       onClick={action.disabled ? undefined : (event: unknown) => {
         pulseForPointerEvent(event, "click");
+        recordPress(`toolbar:${action.id}`, event);
         action.run();
       }}
     >
