@@ -1,8 +1,10 @@
+import { initializeLinuxScheduling } from "../classes/linuxScheduling.ts";
 import { dispatchChildModule } from "../classes/childModule.ts";
 import { startPetplayServer } from "./petplayServer.ts";
 import { installNativeCrashTrace } from "../classes/nativeCrashTrace.ts";
 
 installNativeCrashTrace();
+initializeLinuxScheduling();
 
 /**
  * PetPlay's process entry: either this process *is* a dispatched child module, or it is the server.

@@ -48,6 +48,10 @@ import {
   stopServerProcess,
 } from "../petplay/serverProcess.ts";
 
+import { initializeLinuxScheduling } from "../classes/linuxScheduling.ts";
+
+initializeLinuxScheduling("petplay-watch");
+
 const LOG_PREFIX = "[steamvr-watch]";
 
 /** The runtime server; SteamVR is up while it runs and gone when it exits. */

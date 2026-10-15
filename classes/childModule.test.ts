@@ -24,14 +24,17 @@ Deno.test("a source build runs the child module through the Deno CLI", () => {
     ["run", "-A", "--unstable-webgpu", "--env-file", "--no-check"],
     "the CLI flags lead",
   );
-  assert(args.includes("file:///app/child.ts"), "the module follows the flags");
   assert(
-    args.indexOf("file:///app/child.ts") < args.indexOf("--title=x"),
+    args.some((arg) => arg.endsWith("/petplayChildEntry.ts")),
+    "the startup wrapper follows the flags",
+  );
+  assert(
+    args.indexOf(`${CHILD_MODULE_FLAG}file:///app/child.ts`) < args.indexOf("--title=x"),
     "the child's own arguments come after the module",
   );
   assert(
-    !args.some((arg) => arg.startsWith(CHILD_MODULE_FLAG)),
-    "a source build never dispatches",
+    args.includes(`${CHILD_MODULE_FLAG}file:///app/child.ts`),
+    "the source wrapper dispatches the requested module",
   );
 });
 

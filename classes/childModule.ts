@@ -1,7 +1,8 @@
 /**
  * How PetPlay starts another PetPlay process.
  *
- * A source checkout hands the child module to the Deno CLI — `deno run -A … <script> <args>`. A
+ * A source checkout runs `petplayChildEntry.ts` through the Deno CLI; that wrapper sets the
+ * Linux process identity/scheduling and then dispatches the requested module. A
  * compiled build has nothing to hand it to: `deno compile` embeds `denort`, which ships none of the
  * CLI subcommands, so `run -A <script>` reaches the launcher as ordinary arguments and boots the app
  * a second time. Instead the binary dispatches itself — the parent re-execs the same executable with
@@ -47,7 +48,11 @@ export function childProcessArgs(
   } catch {
     // Deno can resolve the child without an explicit project config.
   }
-  commandArgs.push(scriptUrl.href, ...args);
+  commandArgs.push(
+    new URL("./petplayChildEntry.ts", import.meta.url).href,
+    `${CHILD_MODULE_FLAG}${scriptUrl.href}`,
+    ...args,
+  );
   return commandArgs;
 }
 
