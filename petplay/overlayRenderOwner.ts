@@ -66,21 +66,23 @@ const state = actorState({
    * panorama is head-locked and never reprojected, so any gap between the predicted and the
    * displayed pose shows up as the world swimming with the head.
    */
-  panoramaExtraPredictionFrames: 1,
+  panoramaExtraPredictionFrames: 0,
   /**
    * Panorama only. `vsync`: start each frame at the vsync, as the in-worker renderer did, so every
    * frame reaches the compositor at the same point. `frame-sync`: start at `WaitFrameSync`, which
    * returns anywhere from 1 to 10 ms after the vsync.
    */
-  panoramaPacing: "frame-sync" as "vsync" | "frame-sync",
+  panoramaPacing: "vsync" as "vsync" | "frame-sync",
   /**
    * Vsync-paced panorama: hold each present until this many ms after the frame's vsync. The
    * compositor latches overlays 4-7 ms after a vsync, and a render finishing around 5 ms
    * straddles that, so frames alternate between two display frames. Presenting past the latch
    * puts every frame on the same one, as the in-worker renderer did by running the sim first.
    */
-  panoramaPresentMinMs: 9,
+  panoramaPresentMinMs: 0,
   lastPresent: null as unknown,
+  /** `GetEyeToHeadTransform` per eye (column-major), as the render eye views use it. */
+  eyeToHead: null as { left: number[]; right: number[] } | null,
   lastRenderTracking: null as { head: number[]; predictedSecondsToPhotons: number } | null,
   transport: "OpenGL baseline (compositor image reuse is not resolved)",
 });
@@ -276,6 +278,7 @@ async function run(options: Start) {
     let activeMode: PresentMode | null = null;
     const leftEye = trackingMatrix34(system.GetEyeToHeadTransform(OpenVR.Eye.Eye_Left).m);
     const rightEye = trackingMatrix34(system.GetEyeToHeadTransform(OpenVR.Eye.Eye_Right).m);
+    state.eyeToHead = { left: leftEye.toArray(), right: rightEye.toArray() };
     const headsetProjections = {
       leftEyeProjectionMatrix: projection(system, OpenVR.Eye.Eye_Left),
       rightEyeProjectionMatrix: projection(system, OpenVR.Eye.Eye_Right),
@@ -286,6 +289,9 @@ async function run(options: Start) {
       leftEyeProjectionMatrix: new Float32Array(16),
       rightEyeProjectionMatrix: new Float32Array(16),
     };
+    const lookRotation = new Float32Array(16);
+    const lookRotationMatrix = new THREE.Matrix4();
+    const zFlip = new THREE.Matrix4().makeScale(1, 1, -1);
     let shownLeft = 0;
     let registeredAt = performance.now();
     let activeEpoch: string | null = null;
@@ -348,6 +354,8 @@ async function run(options: Start) {
         predictedSecondsToPhotons: pacer.getLastPredictedSecondsToPhotons(),
       };
       writeStereoRenderViews(head, leftEye, rightEye, cameras);
+      // The panorama combine resamples around the head rotation the eyes were rendered from.
+      lookRotation.set(lookRotationMatrix.copy(head).invert().multiply(zFlip).elements);
       // Compare only the optical frusta; eye views always come from fresh render tracking.
       const projections = state.projectionMode === "scene-compatible"
         ? payload.frame
@@ -374,7 +382,11 @@ async function run(options: Start) {
       if (!renderer.useEyeTargetsOtherThan([shownLeft])) {
         throw new Error("No eligible render targets");
       }
-      renderer.renderRaythreeFrame(payload, { skipCombine: !panoramaMode, cameras });
+      renderer.renderRaythreeFrame(payload, {
+        skipCombine: !panoramaMode,
+        cameras,
+        lookRotation,
+      });
       inbox.markAdopted(scene);
       state.renderFrameId++;
       if (panoramaMode) {

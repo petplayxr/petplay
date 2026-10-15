@@ -172,8 +172,10 @@ export class WebXROverlayRaylib {
   lastEyeDiagnostics: unknown = null;
 
   constructor(private readonly requestedEyeSize?: number) {
-    if (requestedEyeSize != null &&
-      (!Number.isInteger(requestedEyeSize) || requestedEyeSize < 64 || requestedEyeSize > 4096)) {
+    if (
+      requestedEyeSize != null &&
+      (!Number.isInteger(requestedEyeSize) || requestedEyeSize < 64 || requestedEyeSize > 4096)
+    ) {
       throw new Error("Eye size must be 64..4096");
     }
   }
@@ -221,14 +223,16 @@ export class WebXROverlayRaylib {
 
     LogChannel.log(
       "webxrv2",
-      `[webxr] raylib compositor ready hidden=yes context=${CONTEXT_WINDOW_WIDTH}x${CONTEXT_WINDOW_HEIGHT} eye=${(this.requestedEyeSize ?? getRaylibNativeEyeSize())}x${(this.requestedEyeSize ?? getRaylibNativeEyeSize())} max`,
+      `[webxr] raylib compositor ready hidden=yes context=${CONTEXT_WINDOW_WIDTH}x${CONTEXT_WINDOW_HEIGHT} eye=${(this
+        .requestedEyeSize ?? getRaylibNativeEyeSize())}x${(this.requestedEyeSize ??
+          getRaylibNativeEyeSize())} max`,
     );
     LogChannel.log(
       "webxrv2",
       `[webxr] raylib combine shader locs lookRotation=${this.lookRotationLocation} halfFov=${this.halfFovLocation} outputUvScale=${this.outputUvScaleLocation} outputUvOffset=${this.outputUvOffsetLocation}`,
     );
 
-    const eye = (this.requestedEyeSize ?? getRaylibNativeEyeSize());
+    const eye = this.requestedEyeSize ?? getRaylibNativeEyeSize();
     this.ensureTexture(eye, eye, eye, eye);
   }
 
@@ -448,8 +452,18 @@ export class WebXROverlayRaylib {
     payload: WebXRRaythreeRenderPayload,
     options: {
       skipCombine?: boolean;
-      cameras?: Pick<WebXRRaythreeRenderPayload["frame"],
-        "leftEyeViewMatrix" | "rightEyeViewMatrix" | "leftEyeProjectionMatrix" | "rightEyeProjectionMatrix">;
+      cameras?: Pick<
+        WebXRRaythreeRenderPayload["frame"],
+        | "leftEyeViewMatrix"
+        | "rightEyeViewMatrix"
+        | "leftEyeProjectionMatrix"
+        | "rightEyeProjectionMatrix"
+      >;
+      /**
+       * Head rotation for the panorama combine, matching `cameras`. Without it the combine uses
+       * the scene frame's, which a renderer with its own tracking must not mix with its eyes.
+       */
+      lookRotation?: Float32Array;
     } = {},
   ): {
     totalMs: number;
@@ -563,7 +577,15 @@ export class WebXROverlayRaylib {
 
     const tCombine0 = performance.now();
     if (!options.skipCombine) {
-      this.combineEyesIntoPanorama(payload.frame, leftTarget, rightTarget, outputTarget, shader);
+      this.combineEyesIntoPanorama(
+        options.lookRotation
+          ? { lookRotation: options.lookRotation, halfFovInRadians: payload.frame.halfFovInRadians }
+          : payload.frame,
+        leftTarget,
+        rightTarget,
+        outputTarget,
+        shader,
+      );
     }
     const combineMs = performance.now() - tCombine0;
     this.captureEyeDiagnosticsIfRequested(payload.frame);
