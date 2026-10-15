@@ -31,6 +31,7 @@ import { OverlaySceneInbox } from "../classes/overlaySceneDelivery.ts";
  * in-worker renderer did: sorts with other overlays normally, no reprojection.
  */
 export type PresentMode = "projection" | "panorama";
+type PanoramaPacing = "vsync" | "frame-sync" | "presenter";
 type Start = {
   webxrTarget: string;
   overlayKey?: string;
@@ -70,9 +71,11 @@ const state = actorState({
   /**
    * Panorama only. `vsync`: start each frame at the vsync, as the in-worker renderer did, so every
    * frame reaches the compositor at the same point. `frame-sync`: start at `WaitFrameSync`, which
-   * returns anywhere from 1 to 10 ms after the vsync.
+   * returns anywhere from 1 to 10 ms after the vsync. `presenter`: exactly the projection path's
+   * loop (fast pacer, render, native GPU finish + `WaitFrameSync` + publish), so the two modes
+   * differ only in the combine pass and the overlay type.
    */
-  panoramaPacing: "vsync" as "vsync" | "frame-sync",
+  panoramaPacing: "vsync" as PanoramaPacing,
   /**
    * Vsync-paced panorama: hold each present until this many ms after the frame's vsync. The
    * compositor latches overlays 4-7 ms after a vsync, and a render finishing around 5 ms
@@ -149,7 +152,7 @@ new PostMan(
     GETPANORAMAPHASE: () => panoramaPhase.slice(),
     SETRENDERERDEBUG: (value: {
       panoramaExtraPredictionFrames?: number;
-      panoramaPacing?: "vsync" | "frame-sync";
+      panoramaPacing?: PanoramaPacing;
       panoramaPresentMinMs?: number;
       freezeScene?: boolean;
       freezeRendering?: boolean;
@@ -159,7 +162,7 @@ new PostMan(
         state.panoramaExtraPredictionFrames;
       state.panoramaPresentMinMs = value.panoramaPresentMinMs ?? state.panoramaPresentMinMs;
       if (value.panoramaPacing != null) {
-        if (value.panoramaPacing !== "vsync" && value.panoramaPacing !== "frame-sync") {
+        if (!["vsync", "frame-sync", "presenter"].includes(value.panoramaPacing)) {
           throw new Error("Unknown panorama pacing");
         }
         state.panoramaPacing = value.panoramaPacing;
@@ -338,7 +341,9 @@ async function run(options: Start) {
       pacer.extraPredictionFrames = panoramaMode ? state.panoramaExtraPredictionFrames : 0;
       if (vsyncPaced) await pacer.paceToDisplayAndRefreshPosesYielding();
       else {
-        if (panoramaMode) overlayInterface.WaitFrameSync(100);
+        if (panoramaMode && state.panoramaPacing === "frame-sync") {
+          overlayInterface.WaitFrameSync(100);
+        }
         pacer.paceToDisplayAndRefreshPoses();
       }
       const syncPhase = panoramaMode ? pacer.sampleVsyncPhase() : null;
@@ -405,6 +410,7 @@ async function run(options: Start) {
           panoramaReady = true;
         }
         panorama.setTextureHandle(texture);
+        const presenterPaced = state.panoramaPacing === "presenter";
         if (vsyncPaced && syncPhase) {
           for (;;) {
             const now = pacer.sampleVsyncPhase();
@@ -414,7 +420,16 @@ async function run(options: Start) {
             await wait(remainingMs > 1.5 ? remainingMs - 1 : 0);
           }
         }
-        if (!panorama.present()) throw new Error("Panorama texture rejected");
+        if (presenterPaced) {
+          const result = presenter.presentTexture(panorama.getHandle(), texture);
+          state.lastPresent = { mode: "panorama-presenter", ...result };
+          if (result.waitResult === OpenVR.OverlayError.VROverlayError_TimedOut) {
+            state.waitTimeouts++;
+          } else if (result.error) {
+            throw new Error(`Panorama publication failed: ${JSON.stringify(result)}`);
+          }
+        } else if (!panorama.present()) throw new Error("Panorama texture rejected");
+        else state.lastPresent = { mode: "panorama", texture };
         const presentPhase = pacer.sampleVsyncPhase();
         if (syncPhase && presentPhase) {
           panoramaPhase.push([
@@ -425,7 +440,6 @@ async function run(options: Start) {
           ]);
           if (panoramaPhase.length > 600) panoramaPhase.shift();
         }
-        state.lastPresent = { mode: "panorama", texture };
         state.publishedFrames++;
       } else {
         const textures = renderer.getEyeTextureHandles();

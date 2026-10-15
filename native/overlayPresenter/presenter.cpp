@@ -70,3 +70,40 @@ extern "C" int32_t pp_overlay_present(VR_IVROverlay_FnTable *api, uint64_t left,
   stats[4] = error;
   return error;
 }
+
+// The panorama overlay through the projection path's sequence: GPU finish, frame
+// sync, then the texture, so the two modes differ only in overlay type. stats as
+// pp_overlay_present.
+extern "C" int32_t pp_overlay_present_texture(VR_IVROverlay_FnTable *api,
+                                              uint64_t handle, uint32_t tex,
+                                              uint32_t timeout_ms,
+                                              double *stats) {
+  if (!api || !stats || !handle || !tex || !timeout_ms)
+    return -1;
+  std::memset(stats, 0, 6 * sizeof(double));
+  if (!glGetString(GL_VERSION)) {
+    stats[4] = -2;
+    return -2;
+  }
+  auto t = now_ms();
+  glFinish();
+  stats[0] = now_ms() - t;
+  t = now_ms();
+  auto wait = api->WaitFrameSync(timeout_ms);
+  stats[1] = now_ms() - t;
+  stats[5] = wait;
+  if (wait != EVROverlayError_VROverlayError_None) {
+    stats[4] = wait;
+    return wait;
+  }
+  t = now_ms();
+  Texture_t texture{reinterpret_cast<void *>(uintptr_t(tex)),
+                    ETextureType_TextureType_OpenGL,
+                    EColorSpace_ColorSpace_Auto};
+  int32_t error = api->SetOverlayTexture(handle, &texture);
+  if (!error)
+    stats[3]++;
+  stats[2] = now_ms() - t;
+  stats[4] = error;
+  return error;
+}

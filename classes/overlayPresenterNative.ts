@@ -13,6 +13,10 @@ const symbols = {
     parameters: ["pointer", "u64", "u64", "u32", "u32", "buffer", "buffer", "u32", "u32", "buffer"],
     result: "i32",
   },
+  pp_overlay_present_texture: {
+    parameters: ["pointer", "u64", "u32", "u32", "buffer"],
+    result: "i32",
+  },
 } as const;
 /** Synchronous FFI deliberately keeps GL and OpenVR submission on the context owner. */
 export class OverlayPresenterNative {
@@ -63,6 +67,25 @@ export class OverlayPresenterNative {
       completedSetters: this.stats[3],
       waitResult: this.stats[5],
       partial: error !== 0 && this.stats[3] > 0,
+    };
+  }
+  /** One overlay's texture through the same finish, frame-sync and publish sequence. */
+  presentTexture(handle: bigint, texture: number) {
+    const error = this.library.symbols.pp_overlay_present_texture(
+      this.table,
+      handle,
+      texture,
+      100,
+      this.stats,
+    );
+    return {
+      error,
+      gpuFinishMs: this.stats[0],
+      waitMs: this.stats[1],
+      publicationMs: this.stats[2],
+      completedSetters: this.stats[3],
+      waitResult: this.stats[5],
+      partial: false,
     };
   }
   /** The overlays were destroyed or hidden elsewhere; show them again on the next present. */

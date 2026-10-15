@@ -202,6 +202,12 @@ export class OpenVrOverlayTexture {
     this.assertOverlayOk(this.overlayClass.ShowOverlay(this.overlayHandle), "ShowOverlay");
   }
 
+  /** Process-local handle, for presenting through the native presenter. */
+  getHandle(): bigint {
+    if (!this.overlayHandle) throw new Error("OpenVR overlay not initialized");
+    return this.overlayHandle;
+  }
+
   setTextureHandle(textureHandle: number) {
     if (!Number.isInteger(textureHandle) || textureHandle <= 0) {
       throw new Error(`Invalid OpenGL texture handle: ${textureHandle}`);
