@@ -248,7 +248,10 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
     return {
       backgroundColor: tokenBackground(face.colorToken, pressed),
       borderColor: held ? COLOR.outline : tokenBorderColor(face.colorToken, pressed),
-      borderWidth: held ? HELD_BORDER_WIDTH : pressed ? 2 : 1,
+      // Border width is a flex property: changing it re-lays out the whole keyboard root. Hover
+      // flips on every key a ray crosses (and ~20 times a second on a resting ray's jitter), so
+      // only the rare latch and hold states change it; hover and press change colours alone.
+      borderWidth: baseBorderWidth,
       transformScaleX: value > 0 ? 1 + (KEY_CLICK_SCALE - 1) * value : undefined,
       transformScaleY: value > 0 ? 1 + (KEY_CLICK_SCALE - 1) * value : undefined,
       transformTranslateZ: value > 0 ? KEY_DEPRESS_Z * value : undefined,
