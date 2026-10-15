@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { type Anchored, captureRenderAnchor } from "./overlayRenderTracking.ts";
 import type { InstancedBufferAttribute, Material, Object3D } from "three";
 import { collectUikitRootContextsFromObject } from "../submodules/threewebxrwebgpudeno/local-uikit/raylibUikitSceneRoots.ts";
 import { Component } from "../submodules/threewebxrwebgpudeno/local-uikit/components/component.ts";
@@ -14,7 +15,7 @@ export type WebXRRaythreeUiOrderInfo = {
   patchIndex: number;
 };
 
-export type WebXRRaythreeUiPanelSnapshot = {
+export type WebXRRaythreeUiPanelSnapshot = Anchored & {
   worldMatrix: Float32Array;
   data: Float32Array;
   clipping: Float32Array;
@@ -69,7 +70,7 @@ export type WebXRRaythreeUiImageUserData = {
   opacity?: number;
 };
 
-export type WebXRRaythreeUiImageSnapshot = WebXRRaythreeUiImageUserData & {
+export type WebXRRaythreeUiImageSnapshot = WebXRRaythreeUiImageUserData & Anchored & {
   worldMatrix: Float32Array;
   /**
    * uikit's z-order for this node, on the same terms as a panel's. The UI pass
@@ -86,7 +87,7 @@ export type WebXRRaythreeUiImageSnapshot = WebXRRaythreeUiImageUserData & {
   rootIndex: number;
 };
 
-export type WebXRRaythreeUiTextSnapshot = {
+export type WebXRRaythreeUiTextSnapshot = Anchored & {
   worldMatrix: Float32Array;
   text: string;
   color: [number, number, number, number];
@@ -230,7 +231,12 @@ export function extractWebXRRaythreeUi(scene: THREE.Scene): WebXRRaythreeUiSnaps
       if (mesh == null || !mesh.visible) {
         return;
       }
+      const start = snapshot.panels.length;
       maybeCollectPanels(mesh, snapshot.panels, rootIndex);
+      for (let i = start; i < snapshot.panels.length; i++) {
+        const panel = snapshot.panels[i];
+        panel.renderAnchor = captureRenderAnchor(rootCtx.component, panel.worldMatrix);
+      }
     });
   }
 
@@ -386,6 +392,7 @@ function maybeCollectImage(
   target.push({
     ...metadata,
     worldMatrix: new Float32Array(object.matrixWorld.elements),
+    renderAnchor: captureRenderAnchor(object, object.matrixWorld.elements),
     orderInfo: readOrderInfo(object),
     renderOrder: Number(
       (object as Object3D & { renderOrder?: number }).renderOrder ?? 0,
@@ -417,6 +424,7 @@ function maybeCollectText(
   }
   target.push({
     worldMatrix: new Float32Array(object.matrixWorld.elements),
+    renderAnchor: captureRenderAnchor(object, object.matrixWorld.elements),
     text: metadata.text,
     color: metadata.color,
     fontSize: metadata.fontSize,

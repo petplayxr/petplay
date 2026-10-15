@@ -421,7 +421,7 @@ function drawLatestFrame(renderer: WebXRRaythreeRaylibRenderer): void {
     PostMan.PostMessage({
       target: state.webxrTarget,
       type: "WEBXRVIEWFRAMEACK",
-      payload: { actorId: state.id, seq: renderedSeq },
+      payload: { actorId: state.id, seq: renderedSeq, delivery: latestPayload?.delivery },
     });
   }
 }

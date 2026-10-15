@@ -791,7 +791,7 @@ function SpatialRootOrigin(
     group.matrixWorldNeedsUpdate = true;
   });
   return (
-    <group ref={ref} matrixAutoUpdate={false}>
+    <group ref={ref} matrixAutoUpdate={false} userData={{ renderTrackingAnchor: tracked ? originId : undefined }}>
       {children}
     </group>
   );

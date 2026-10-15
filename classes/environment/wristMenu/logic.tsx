@@ -442,12 +442,14 @@ export function WristMenuControllerHud({ actorId }: { actorId?: string | null })
         }}
       />
       <XRSpace space="grip-space">
+        <group userData={{ renderTrackingAnchor: hostHandedness ? `${hostHandedness}-hand` : undefined }}>
         <WristMenuPanel
           hostHandedness={hostHandedness}
           transform={transform}
           attachedToController
           actorId={actorId}
         />
+        </group>
       </XRSpace>
     </>
   );

@@ -285,8 +285,8 @@ function startCaptureServer(): void {
   }
 }
 
-// A checkout spawns this module directly, so `import.meta.main` holds there; a compiled build
-// dispatches it into this process instead, where it does not. `IS_CHILD` alone decides which
+// Both checkout and compiled builds dispatch this module after process startup setup.
+// `IS_CHILD` alone decides which
 // process this is — only the spawned child is ever handed the argument.
 if (IS_CHILD) {
   startCaptureServer();

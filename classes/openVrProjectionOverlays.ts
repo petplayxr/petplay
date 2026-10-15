@@ -198,6 +198,12 @@ export class OpenVrProjectionOverlays {
     return true;
   }
 
+  /** Process-local handles for the native presenter; never sent through IPC. */
+  getHandles(): readonly [bigint, bigint] {
+    if (this.eyes.length !== 2) throw new Error("projection overlays not initialized");
+    return [this.eyes[0].handle, this.eyes[1].handle];
+  }
+
   hide() {
     if (!this.visible) {
       return;

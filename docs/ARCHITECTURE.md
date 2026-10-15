@@ -58,7 +58,8 @@ graph TD
 | `petplay-screen-streamer` | portal/WGC capture, injects input | Rust helper; started and restarted by `ScreenCapturer` (`classes/ScreenCapturer/scclass.ts:211-225`) |
 
 A child process is the same program, started two ways. In a checkout the parent runs it through the
-Deno CLI (`deno run -A … <script>`); a compiled build has no CLI to run a module with, so it re-execs
+Deno CLI through `classes/petplayChildEntry.ts`, which sets Linux process identity/scheduling
+then dispatches the child module; a compiled build has no CLI to run a module with, so it re-execs
 its own binary with `--petplay-run-module=<href>` plus the child's arguments and imports the module
 out of its embedded snapshot (`classes/childModule.ts`, which also keeps the two forms' argv
 identical). `IPCWorker` receives that launcher at boot (`setWorkerChildArgs`,
@@ -532,3 +533,23 @@ Findings from writing this doc, all traceable to code:
 - **Snapshots only cover `RELOAD`**, not `REBOOT`, and most actors have no `__SNAPSHOT__` at all.
 - **Native aborts are outside JS control**: a segfault in a thread worker takes the process with it;
   `utils/dev-runner.ts` exists to keep the log from such a crash.
+
+## Linux scheduling identity
+
+The host and child startup entries call `initializeLinuxScheduling`
+(`classes/linuxScheduling.ts`). Linux runtime processes identify themselves as
+`petplay`, and the SteamVR watcher as `petplay-watch`, instead of retaining the
+Deno executable's generic comm name. They also set OS argv[0] to `ppvr`,
+which ananicy-cpp uses before comm when matching rules. Startup normalizes inherited idle threads and requests nice 0
+for idle/normal threads with positive niceness; intentional batch/realtime
+policies and stronger boosts remain unchanged. Only the current process's
+threads are touched. Permission failures are reported without aborting startup.
+Other platforms skip this setup. `resources/linux/petplay.rules` is an optional
+admin policy for machines whose limits deny that correction; the app does not
+install system rules or elevate itself.
+
+WebXR invokes the scheduling setup on each worker-module load, including hot
+reload. Three bounded startup rechecks catch delayed priority changes without
+a permanent polling loop. The argv[0] update validates the original allocation
+and preserves remaining arguments and executable discovery. See
+`resources/linux/README.md` for the ananicy naming correction and validation.

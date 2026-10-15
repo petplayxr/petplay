@@ -15,3 +15,6 @@ tests/openvr_raylib_overlay_probe/native_timing.lib
 tests/openvr_raylib_overlay_probe/native_timing.obj
 .codex-runlogs/
 _scratch/
+
+# Built locally by deno task overlay:presenter:build
+/resources/libpetplay_overlay_presenter.so

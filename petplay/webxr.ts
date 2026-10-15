@@ -1,4 +1,5 @@
-import { actorState, PostMan } from "../submodules/stageforge/mod.ts";
+import { initializeLinuxScheduling } from "../classes/linuxScheduling.ts";
+import { actorState, PostMan, resolveActorId, System } from "../submodules/stageforge/mod.ts";
 import { LogChannel } from "@mommysgoodpuppy/logchannel";
 import * as OpenVR from "../submodules/OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
 import * as THREE from "three";
@@ -22,6 +23,8 @@ import {
   type NativeOpenVrRaylibDebugFrame,
   WebXROverlayRaylib,
 } from "../classes/webxrOverlayRaylib.ts";
+import { OverlayAssetCache, OverlaySceneCredit, type SceneDelivery } from "../classes/overlaySceneDelivery.ts";
+import { encodeOverlayScene, OVERLAY_SCENE_WIRE_FORMAT } from "../classes/overlaySceneWire.ts";
 import { FpsCounter } from "../classes/fpsCounter.ts";
 import { formatFrameStability, FrameStabilityTracker } from "../classes/frameStability.ts";
 import { IntervalMetric, type IntervalMetricSample } from "../classes/intervalMetric.ts";
@@ -31,12 +34,7 @@ import {
   type WebXRRaythreeRenderPayload,
   WebXRRaythreeSceneBridge,
 } from "../classes/webxrRaythreeScene.ts";
-import type {
-  AssetBatch,
-  GeometryAsset,
-  MaterialAsset,
-  TextureAsset,
-} from "../submodules/raythree/src/ir.ts";
+import type { AssetBatch } from "../submodules/raythree/src/ir.ts";
 import { getKeyboardLocaleInfo } from "../classes/environment/keyboard/keyboardLocale.ts";
 import { claimWebXrOverlayKeys } from "../classes/webXrOverlayKeyClaim.ts";
 import {
@@ -65,6 +63,9 @@ import { getSettings, isSettingKey, loadSettings, setSetting } from "../classes/
 import { pushToast, type ToastInput } from "../classes/environment/toastStore.ts";
 import { batteryStore } from "../classes/environment/batteryStore.ts";
 import { readOpenVrBatteries } from "../classes/openVrBattery.ts";
+
+// Re-run for each new actor worker, including hot reload without a process restart.
+initializeLinuxScheduling();
 
 const WEBXR_SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -179,6 +180,8 @@ type SupportedSessionMode = "immersive-vr" | "immersive-ar";
 export type OverlayRenderMode = "webgpu" | "raylib" | "both";
 
 type StartWebXRPayload = {
+  /** Experimental render/present child process; defaults to the legacy in-worker renderer. */
+  decoupledRenderer?: boolean;
   width?: number;
   height?: number;
   title?: string;
@@ -241,10 +244,11 @@ const state = actorState({
   raylibProjectionOverlays: null as OpenVrProjectionOverlays | null,
   raylibProjectionOverlayEnabled: raylibProjectionOverlayDefault,
   /**
-   * Per projection present: [ms since vsync, vsyncs elapsed since this frame was paced]. A ring
+   * Per projection present: [ms since vsync, vsyncs elapsed since this frame was paced,
+   * display frame index, compositor frame index (or -1 without the timing probe)]. A ring
    * of the last 2000, for checking where presents land against the compositor's latch.
    */
-  raylibPresentPhase: [] as [number, number][],
+  raylibPresentPhase: [] as [number, number, number, number][],
   /**
    * When projection presents may land, in ms after the vsync the frame was paced on. The
    * compositor latches overlay state ~7 ms into each frame for the next vsync
@@ -381,6 +385,9 @@ const state = actorState({
   nominalHmdDisplayHz: null as number | null,
   raythreeSceneBridge: new WebXRRaythreeSceneBridge(),
   lastStartPayload: null as StartWebXRPayload | null,
+  decoupledRenderer: false,
+  renderOwner: null as string | null,
+  renderOwnerStatus: null as unknown,
   /**
    * Extra renderers of this scene, keyed by actor id (see [desktopView](desktopView.ts)):
    * each gets the same IR payload the in-worker raylib overlay rasterizes, and
@@ -453,6 +460,7 @@ new PostMan(
     },
     STARTWEBXR: (payload: StartWebXRPayload | null) => {
       state.lastStartPayload = payload ?? null;
+      state.decoupledRenderer = payload?.decoupledRenderer ?? Deno.args.some((arg) => arg === "--webxr-decoupled-renderer" || arg === "--webxr-decoupled-renderer=1");
       state.desktopViewControlAllowed = payload?.desktopViewControlEnabled ??
         false;
       // A registered IR view may have asked for camera control; its grant has to
@@ -538,6 +546,14 @@ new PostMan(
           }
 
           let onBeforeExternalControllerApply: (() => void) | undefined;
+          if (state.decoupledRenderer) {
+            onBeforeExternalControllerApply = () => {
+              state.nativeRaylibPacer?.paceToDisplayAndRefreshPoses();
+              state.host?.updateDirectOpenVrInputs(state.nativeRaylibPacer?.getCachedHmdEmulation() ?? null,
+                getNativeRaylibControllerPose(OpenVR.TrackedControllerRole.TrackedControllerRole_LeftHand),
+                getNativeRaylibControllerPose(OpenVR.TrackedControllerRole.TrackedControllerRole_RightHand));
+            };
+          }
           state.controllerSharedStateSab = null;
 
           const runControllerStaleChecks = (
@@ -586,7 +602,7 @@ new PostMan(
             state.lastControllerSabWriteSeq = writeSeq;
           };
 
-          if (state.controllerActor) {
+          if (state.controllerActor && !state.decoupledRenderer) {
             const sab = new SharedArrayBuffer(CONTROLLER_SAB_BYTE_LENGTH);
             initControllerStateSab(sab);
             try {
@@ -679,10 +695,11 @@ new PostMan(
             alpha: payload?.alpha,
             skipWebGpuXrDraw: overlayMode === "raylib" && !payload?.debugWindow,
             nominalHmdDisplayHz: payload?.hmdDisplayFrequencyHz ?? null,
+            externalFramePacing: state.decoupledRenderer ? false : undefined,
             useOpenVrOverlayFramePacing: includesRaylibOverlay(overlayMode) && !payload?.debugWindow
               ? false
               : undefined,
-            disableOpenVrHmdPose: state.raylibOpenVrPacedRaythree,
+            disableOpenVrHmdPose: state.decoupledRenderer || state.raylibOpenVrPacedRaythree,
             onBeforeExternalControllerApply: onBeforeExternalControllerApply,
             onInProcessControllerFrame: onInProcessControllerFrame,
           });
@@ -757,6 +774,18 @@ new PostMan(
       state.host?.setDesktopViewOffset(nextOffset);
       return nextOffset;
     },
+    /** Decoupled renderer only: reprojected per-eye overlays, or the head-locked panorama. */
+    SETPRESENTMODE: async (mode: "projection" | "panorama") => {
+      if (mode !== "projection" && mode !== "panorama") throw new Error(`Unknown present mode ${mode}`);
+      state.raylibProjectionOverlayEnabled = mode === "projection";
+      if (state.renderOwner) {
+        await PostMan.PostMessage({ target: state.renderOwner, type: "SETPRESENTMODE", payload: mode }, true);
+      }
+      return mode;
+    },
+    OVERLAYRENDERSTATUS: (payload: { actorId: string; status: unknown }) => {
+      if (payload.actorId === state.renderOwner) state.renderOwnerStatus = payload.status;
+    },
     STOPWEBXR: async (_payload: void) => {
       return await stopWebXR();
     },
@@ -766,6 +795,11 @@ new PostMan(
      */
     REPAIRWEBXR: async (payload: { reason?: string; restart?: boolean } | null) => {
       const reason = payload?.reason ?? "operator request";
+      if (state.decoupledRenderer) {
+        await stopRenderOwner();
+        await startRenderOwner();
+        return { applied: "renderer-process-restart", ...getPresentationStatus() };
+      }
       if (payload?.restart === true) {
         await restartRenderingStack(reason);
         return { applied: "restart", ...getPresentationStatus() };
@@ -790,6 +824,11 @@ new PostMan(
         acked: 0,
         dropped: 0,
         lastAckAt: 0,
+        credit: new OverlaySceneCredit(payload?.wireFormat === OVERLAY_SCENE_WIRE_FORMAT ? 2 : 1),
+        compactWire: payload?.wireFormat === OVERLAY_SCENE_WIRE_FORMAT,
+        lastWireBytes: 0,
+        lastEncodeMs: 0,
+        lastSentSceneFrame: -1,
       });
       // The view asked for camera control, so grant what STARTWEBXR gatekeeps for
       // the legacy desktop surface: an observer that may nudge the shared view.
@@ -822,15 +861,21 @@ new PostMan(
       }
       return getWebXrViewsStatus();
     },
-    /** One rendered frame for a view: the next payload may be shipped. */
-    WEBXRVIEWFRAMEACK: (payload: { actorId?: string } | null) => {
+    /** Consumer owns this delivery's dependencies; return bounded transport credit. */
+    WEBXRVIEWFRAMEACK: (payload: { actorId?: string; delivery?: SceneDelivery } | null) => {
       const view = payload?.actorId == null ? null : state.views.get(payload.actorId);
       if (view == null) {
         return getWebXrViewsStatus();
       }
-      view.inFlight = false;
+      if (!view.credit.acknowledge(payload?.delivery)) return getWebXrViewsStatus();
+      view.inFlight = view.credit.busy;
       view.acked += 1;
       view.lastAckAt = Date.now();
+      // A scene may have been extracted and skipped while this delivery held credit.
+      // Publish its current state now, rather than wait for a further simulation tick.
+      if (state.decoupledRenderer && (state.host?.getStatus().frameCount ?? -1) > view.lastSentSceneFrame) {
+        publishViewOnlyFrame(true);
+      }
       return getWebXrViewsStatus();
     },
   } as const,
@@ -1000,6 +1045,7 @@ let overlayFrameFailureBackoffMs = OVERLAY_FRAME_FAILURE_BACKOFF_MS;
  * stopped drawing is re-shown, then rebuilt.
  */
 function startPresentationWatch(): void {
+  if (state.decoupledRenderer) return;
   if (presentationWatch.running) {
     return;
   }
@@ -1201,12 +1247,17 @@ globalThis.addEventListener("unload", () => {
 
 /** Extra renderer of this scene: its own process, its own rate, no local scene. */
 type WebXrViewChannel = {
+  compactWire: boolean;
+  lastWireBytes: number;
+  lastEncodeMs: number;
+  lastSentSceneFrame: number;
   label: string;
+  credit: OverlaySceneCredit;
   /** The view drives `SETDESKTOPVIEWOFFSET` for the shared viewpoint. */
   cameraControl: boolean;
-  /** False until a full asset batch has been shipped (see [viewPrimingPayload]). */
+  /** False until the first dependency-complete asset delivery has been shipped. */
   primed: boolean;
-  /** One payload in flight; further frames are dropped, not queued. */
+  /** All transport credits occupied; further frames are skipped, not queued. */
   inFlight: boolean;
   sent: number;
   acked: number;
@@ -1215,6 +1266,7 @@ type WebXrViewChannel = {
 };
 
 type RegisterWebXrViewPayload = {
+  wireFormat?: string;
   actorId?: string;
   label?: string;
   cameraControl?: boolean;
@@ -1237,7 +1289,12 @@ function getWebXrViewsStatus() {
     acked: view.acked,
     dropped: view.dropped,
     inFlight: view.inFlight,
+    inFlightCount: view.credit.inFlight,
+    expiredReceipts: view.credit.expired,
     lastAckAt: view.lastAckAt,
+    compactWire: view.compactWire,
+    lastWireBytes: view.lastWireBytes,
+    lastEncodeMs: view.lastEncodeMs,
   }));
 }
 
@@ -1250,48 +1307,11 @@ function getWebXrViewsStatus() {
  * renderer's asset cache already holds, and it is what a new view needs before
  * its first real frame.
  */
-const viewAssetCache: {
-  geometries: Map<number, GeometryAsset>;
-  materials: Map<number, MaterialAsset>;
-  textures: Map<number, TextureAsset>;
-} = {
-  geometries: new Map(),
-  materials: new Map(),
-  textures: new Map(),
-};
+const viewAssetCache = new OverlayAssetCache();
+let viewDeliveryError: string | null = null;
 
-function rememberViewAssets(batch: AssetBatch): void {
-  for (const asset of batch.geometries) viewAssetCache.geometries.set(asset.id, asset);
-  for (const asset of batch.materials) viewAssetCache.materials.set(asset.id, asset);
-  for (const asset of batch.textures) viewAssetCache.textures.set(asset.id, asset);
-}
+function rememberViewAssets(batch: AssetBatch): void { viewAssetCache.remember(batch); }
 
-function cachedViewAssets(): AssetBatch {
-  return {
-    geometries: [...viewAssetCache.geometries.values()],
-    materials: [...viewAssetCache.materials.values()],
-    textures: [...viewAssetCache.textures.values()],
-  };
-}
-
-/**
- * First frame for a view: the live frame with the whole asset union attached, and
- * the scene's own background colour (the overlay path keeps its transparent one,
- * because it composites over the real world).
- */
-function viewPrimingPayload(
-  base: WebXRRaythreeRenderPayload,
-  background: [number, number, number, number],
-): WebXRRaythreeRenderPayload {
-  const assets = cachedViewAssets();
-  return {
-    frame: base.frame,
-    background,
-    leftEye: { ...base.leftEye, assets },
-    rightEye: { ...base.rightEye, assets },
-    ui: base.ui,
-  };
-}
 
 /**
  * Hands one extracted frame to each registered view.
@@ -1307,35 +1327,42 @@ function publishRaythreeFrameToViews(
   payload: WebXRRaythreeRenderPayload,
   background: [number, number, number, number],
 ): void {
+  // Once a delta is rejected, later snapshots cannot be dependency-complete. Require a
+  // producer restart rather than resume with references to the discarded asset.
+  if (viewDeliveryError) return;
   // Accumulate unconditionally: a view that registers later needs the assets
   // that were emitted (and consumed by the in-worker renderer) before it existed.
-  rememberViewAssets(payload.leftEye.assets);
+  try { rememberViewAssets(payload.leftEye.assets); } catch (error) { viewDeliveryError = String(error); return; }
   if (state.views.size === 0) {
     return;
   }
-  let priming: WebXRRaythreeRenderPayload | null = null;
   for (const [actorId, view] of state.views) {
+    if (view.credit.reclaimExpired() > 0) view.inFlight = view.credit.busy;
     if (view.inFlight) {
       view.dropped += 1;
       continue;
     }
-    view.inFlight = true;
+    const prepared = view.credit.prepare(viewAssetCache);
+    if (!prepared) continue;
+    view.inFlight = view.credit.busy;
     view.sent += 1;
-    if (!view.primed) {
-      view.primed = true;
-      priming ??= viewPrimingPayload(payload, background);
-      PostMan.PostMessage({
-        target: actorId,
-        type: "WEBXRVIEWFRAME",
-        payload: priming,
-      });
-      continue;
+    view.lastSentSceneFrame = payload.frame.frameCount;
+    view.primed = true;
+    const extraction = { ...payload.leftEye, assets: prepared.assets };
+    const outgoing: WebXRRaythreeRenderPayload = {
+      ...payload,
+      background: view.label === "projection-renderer" ? [0, 0, 0, 0] : background,
+      delivery: prepared.delivery, leftEye: extraction, rightEye: extraction,
+    };
+    if (view.compactWire) {
+      const start = performance.now();
+      const packet = encodeOverlayScene(outgoing);
+      view.lastEncodeMs = performance.now() - start;
+      view.lastWireBytes = packet.data.length;
+      PostMan.PostMessage({ target: actorId, type: "WEBXRVIEWFRAMEPACKET", payload: packet });
+    } else {
+      PostMan.PostMessage({ target: actorId, type: "WEBXRVIEWFRAME", payload: outgoing });
     }
-    PostMan.PostMessage({
-      target: actorId,
-      type: "WEBXRVIEWFRAME",
-      payload,
-    });
   }
 }
 
@@ -1363,6 +1390,8 @@ function getWebXRStatus() {
     uploadedFrames: state.uploadedFrames,
     nominalHmdDisplayHz: state.nominalHmdDisplayHz,
     views: getWebXrViewsStatus(),
+    independentRenderer: { enabled: state.decoupledRenderer, actor: state.renderOwner, status: state.renderOwnerStatus },
+    viewDelivery: { assetVersion: viewAssetCache.version, bytes: viewAssetCache.bytes, error: viewDeliveryError },
     presentation: getPresentationStatus(),
     // The scene's keyboard renders in this worker, so its locale is this worker's.
     keyboardLocale: getKeyboardLocaleInfo(),
@@ -1410,6 +1439,7 @@ function startBatteryPoll(): void {
 }
 
 async function stopWebXR(): Promise<true> {
+  await stopRenderOwner();
   if (batteryPoll != null) {
     clearInterval(batteryPoll);
     batteryPoll = null;
@@ -1650,8 +1680,46 @@ function buildOverlayName(
   return baseName ? `${baseName} ${suffix}` : undefined;
 }
 
+async function startRenderOwner() {
+  if (state.renderOwner) return;
+  const actor = await PostMan.create("./overlayRenderOwner.ts", import.meta.url, { worker: "process" });
+  state.renderOwner = resolveActorId(actor);
+  const config = state.lastStartPayload;
+  await PostMan.PostMessage({
+    target: state.renderOwner,
+    type: "STARTOVERLAYRENDERER",
+    payload: {
+      webxrTarget: state.id,
+      overlayKey: `${config?.overlayKey ?? "petplay.webxr"}.independent.${Deno.pid}`,
+      overlayName: config?.overlayName,
+      eyeSize: Number(Deno.args.find((arg) => arg.startsWith("--webxr-raylib-eye-size="))?.split("=")[1] ?? 3560),
+      presentMode: state.raylibProjectionOverlayEnabled ? "projection" : "panorama",
+      overlayWidthInMeters: config?.overlayWidthInMeters,
+      overlayDistance: config?.overlayDistance,
+    },
+  }, true);
+}
+async function stopRenderOwner() {
+  const id = state.renderOwner;
+  if (!id) return;
+  state.renderOwner = null;
+  state.renderOwnerStatus = null;
+  try {
+    await Promise.race([
+      PostMan.PostMessage({ target: id, type: "STOPOVERLAYRENDERER", payload: null }, true),
+      wait(3000),
+    ]);
+  } finally {
+    state.views.delete(id);
+    PostMan.PostMessage({ target: System, type: "MURDER", payload: id });
+  }
+}
+
 async function initializeOverlay(payload: StartWebXRPayload | null) {
-  if (!payload?.overlayPointer) {
+  if (!payload?.overlayPointer) return;
+  if (state.decoupledRenderer) {
+    if ((payload?.overlayRenderMode ?? "raylib") !== "raylib") throw new Error("Decoupled renderer requires raylib-only mode");
+    await startRenderOwner();
     return;
   }
   // Keys are claimed per host process and ghost overlays from dead instances are
@@ -1766,13 +1834,13 @@ function initializeRaylibOpenVrPacer(
     payload.vrCompositorPointer ?? null,
     true,
     false,
-    "vsync",
+    state.decoupledRenderer ? "fast" : "vsync",
     "raylib-pacer",
   );
   if (!state.nativeRaylibPacer) {
     throw new Error(`failed to create OpenVR pacer for ${label}`);
   }
-  if (raylibOverlayFrameSync && payload.overlayPointer) {
+  if (!state.decoupledRenderer && raylibOverlayFrameSync && payload.overlayPointer) {
     state.nativeRaylibPacer.enableOverlayFrameSync(payload.overlayPointer);
     LogChannel.log("webxrv2", `[webxr] ${label} paces on IVROverlay::WaitFrameSync`);
   }
@@ -1864,10 +1932,17 @@ async function awaitProjectionPresentWindow(
       if (phase) elapsed = sincePacedVsync(phase);
     }
   }
+  // A timer wake or scheduler stall can carry the wait past the entire window.
+  if (elapsed > window.maxMs) {
+    state.raylibPresentDropped++;
+    return false;
+  }
   if (phase) {
     state.raylibPresentPhase.push([
       phase.msSinceVsync,
       Number(phase.frameIndex - vsyncFrameIndex),
+      Number(phase.frameIndex),
+      state.compositorTimingProbe ? (pacer.readCompositorFrameTiming(0)?.frameIndex ?? -1) : -1,
     ]);
     if (state.raylibPresentPhase.length > 2000) state.raylibPresentPhase.shift();
   }
@@ -2038,10 +2113,23 @@ function hasAnyOverlayMode(): boolean {
  * that drives it, so views must not starve without a runtime. Paced by the host's
  * XR rAF: one extraction per new host frame.
  */
-function publishViewOnlyFrame(): boolean {
+function anyViewAcceptsScene(): boolean {
+  let accepts = false;
+  for (const view of state.views.values()) {
+    if (view.credit.reclaimExpired() > 0) view.inFlight = view.credit.busy;
+    if (!view.inFlight) accepts = true;
+  }
+  return accepts;
+}
+
+function publishViewOnlyFrame(force = false): boolean {
   if (!state.host || state.views.size === 0) return false;
   const frameCount = state.host.getStatus().frameCount;
-  if (frameCount <= state.lastViewOnlyHostFrameCount) return false;
+  if (!force && frameCount <= state.lastViewOnlyHostFrameCount) return false;
+  // With every view still owing a receipt the scene would be extracted and encoded only to be
+  // dropped; that was a quarter of the worker's garbage. A returned credit republishes the latest
+  // frame (WEBXRVIEWFRAMEACK), and a later pump tick still sees this frame as unsent.
+  if (!force && !anyViewAcceptsScene()) return false;
   const sourceFrame = state.host.captureShadowFrame();
   const sceneContext = state.host.getRaythreeSceneContext();
   if (!sourceFrame || !sceneContext) return false;

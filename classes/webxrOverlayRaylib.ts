@@ -87,8 +87,7 @@ function getRaylibNativeEyeSize(): number {
   return 3560;
 }
 
-function getRaylibNativeEyeSizeCandidates(): number[] {
-  const preferred = getRaylibNativeEyeSize();
+function getRaylibNativeEyeSizeCandidates(preferred = getRaylibNativeEyeSize()): number[] {
   const candidates = [preferred, 2048, 1536, 1280, 1024, 768, 512];
   return [
     ...new Set(candidates.filter((v) => v <= preferred || v === preferred)),
@@ -172,6 +171,13 @@ export class WebXROverlayRaylib {
   /** Result of the last {@link requestEyeDiagnostics} sample; read over the agent REPL. */
   lastEyeDiagnostics: unknown = null;
 
+  constructor(private readonly requestedEyeSize?: number) {
+    if (requestedEyeSize != null &&
+      (!Number.isInteger(requestedEyeSize) || requestedEyeSize < 64 || requestedEyeSize > 4096)) {
+      throw new Error("Eye size must be 64..4096");
+    }
+  }
+
   initialize(name = "WebXR Overlay") {
     if (this.windowInitialized) {
       return;
@@ -215,15 +221,21 @@ export class WebXROverlayRaylib {
 
     LogChannel.log(
       "webxrv2",
-      `[webxr] raylib compositor ready hidden=yes context=${CONTEXT_WINDOW_WIDTH}x${CONTEXT_WINDOW_HEIGHT} eye=${getRaylibNativeEyeSize()}x${getRaylibNativeEyeSize()} max`,
+      `[webxr] raylib compositor ready hidden=yes context=${CONTEXT_WINDOW_WIDTH}x${CONTEXT_WINDOW_HEIGHT} eye=${(this.requestedEyeSize ?? getRaylibNativeEyeSize())}x${(this.requestedEyeSize ?? getRaylibNativeEyeSize())} max`,
     );
     LogChannel.log(
       "webxrv2",
       `[webxr] raylib combine shader locs lookRotation=${this.lookRotationLocation} halfFov=${this.halfFovLocation} outputUvScale=${this.outputUvScaleLocation} outputUvOffset=${this.outputUvOffsetLocation}`,
     );
 
-    const eye = getRaylibNativeEyeSize();
+    const eye = (this.requestedEyeSize ?? getRaylibNativeEyeSize());
     this.ensureTexture(eye, eye, eye, eye);
+  }
+
+  /** New producer epoch: never resolve recycled asset IDs through the previous scene cache. */
+  resetSceneAssets(): void {
+    this.sceneRenderer?.dispose();
+    this.sceneRenderer = new WebXRRaythreeRaylibRenderer();
   }
 
   getTextureHandle(): number {
@@ -411,7 +423,7 @@ export class WebXROverlayRaylib {
       this.unloadTargets();
     }
 
-    for (const eye of getRaylibNativeEyeSizeCandidates()) {
+    for (const eye of getRaylibNativeEyeSizeCandidates(this.requestedEyeSize)) {
       if (this.tryEnsureTexture(eye, eye, eye, eye)) {
         if (this.resolvedEyeSize !== eye) {
           this.resolvedEyeSize = eye;
@@ -434,7 +446,11 @@ export class WebXROverlayRaylib {
   /** @returns wall ms breakdown; `left+right+combine` may slightly exceed `total` (timer overhead). */
   renderRaythreeFrame(
     payload: WebXRRaythreeRenderPayload,
-    options: { skipCombine?: boolean } = {},
+    options: {
+      skipCombine?: boolean;
+      cameras?: Pick<WebXRRaythreeRenderPayload["frame"],
+        "leftEyeViewMatrix" | "rightEyeViewMatrix" | "leftEyeProjectionMatrix" | "rightEyeProjectionMatrix">;
+    } = {},
   ): {
     totalMs: number;
     leftMs: number;
@@ -467,7 +483,7 @@ export class WebXROverlayRaylib {
     uiPanelDrawn: number;
     uiTextDrawn: number;
   } {
-    const eye = this.resolvedEyeSize ?? getRaylibNativeEyeSize();
+    const eye = this.resolvedEyeSize ?? (this.requestedEyeSize ?? getRaylibNativeEyeSize());
     const renderT0 = performance.now();
     this.checkGlHealth();
     this.rebuildRenderTargetsIfRequested();
@@ -495,8 +511,8 @@ export class WebXROverlayRaylib {
         payload.leftEye,
         payload.background,
         {
-          projectionMatrix: payload.frame.leftEyeProjectionMatrix,
-          viewMatrix: payload.frame.leftEyeViewMatrix,
+          projectionMatrix: (options.cameras ?? payload.frame).leftEyeProjectionMatrix,
+          viewMatrix: (options.cameras ?? payload.frame).leftEyeViewMatrix,
         },
         `frame=${payload.frame.frameCount} eye=left`,
         payload.ui,
@@ -507,8 +523,8 @@ export class WebXROverlayRaylib {
       );
       this.drawDebugLeftControllerCube(
         payload.frame,
-        payload.frame.leftEyeProjectionMatrix,
-        payload.frame.leftEyeViewMatrix,
+        (options.cameras ?? payload.frame).leftEyeProjectionMatrix,
+        (options.cameras ?? payload.frame).leftEyeViewMatrix,
       );
       return result;
     });
@@ -520,8 +536,8 @@ export class WebXROverlayRaylib {
         payload.rightEye,
         payload.background,
         {
-          projectionMatrix: payload.frame.rightEyeProjectionMatrix,
-          viewMatrix: payload.frame.rightEyeViewMatrix,
+          projectionMatrix: (options.cameras ?? payload.frame).rightEyeProjectionMatrix,
+          viewMatrix: (options.cameras ?? payload.frame).rightEyeViewMatrix,
         },
         `frame=${payload.frame.frameCount} eye=right`,
         payload.ui,
@@ -533,8 +549,8 @@ export class WebXROverlayRaylib {
       );
       this.drawDebugLeftControllerCube(
         payload.frame,
-        payload.frame.rightEyeProjectionMatrix,
-        payload.frame.rightEyeViewMatrix,
+        (options.cameras ?? payload.frame).rightEyeProjectionMatrix,
+        (options.cameras ?? payload.frame).rightEyeViewMatrix,
       );
       return result;
     });
@@ -672,7 +688,7 @@ export class WebXROverlayRaylib {
     rightMs: number;
     combineMs: number;
   } {
-    const eye = this.resolvedEyeSize ?? getRaylibNativeEyeSize();
+    const eye = this.resolvedEyeSize ?? (this.requestedEyeSize ?? getRaylibNativeEyeSize());
     const renderT0 = performance.now();
     this.checkGlHealth();
     this.rebuildRenderTargetsIfRequested();
@@ -870,7 +886,7 @@ export class WebXROverlayRaylib {
     this.renderTargetRebuildRequested = false;
     LogChannel.log("webxrv2", "[webxr] rebuilding raylib render targets on request");
     this.unloadTargets();
-    const eye = this.resolvedEyeSize ?? getRaylibNativeEyeSize();
+    const eye = this.resolvedEyeSize ?? (this.requestedEyeSize ?? getRaylibNativeEyeSize());
     this.ensureTexture(eye, eye, eye, eye);
   }
 

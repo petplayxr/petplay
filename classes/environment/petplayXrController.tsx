@@ -117,7 +117,8 @@ const HudPointerRayModel = forwardRef<Object3D, HudRayModelOptions & { pointer: 
         new MeshBasicMaterial({
           transparent: true,
           toneMapped: false,
-          depthTest: true,
+          // Aim feedback must remain visible over the screen receiving the ray.
+          depthTest: false,
           depthWrite: false,
         }),
       [],
@@ -174,7 +175,7 @@ function HudPointerCursorModel(
         transparent: true,
         opacity: 0.9,
         toneMapped: false,
-        depthTest: true,
+        depthTest: false,
         depthWrite: false,
       }),
     [color],
@@ -205,7 +206,7 @@ function HudPointerCursorModel(
       renderOrder={renderOrder}
       ref={ref}
       material={material as never}
-      userData={{ raythreeHudOverUi: true }}
+      userData={{ raythreeHudOverUi: true, renderTrackingAnchor: "world" }}
       {...({ pointerEvents: "none" } as Record<string, unknown>)}
     >
       <circleGeometry args={[1, 20]} />
@@ -237,6 +238,7 @@ function PetplayDefaultXRInputSourceRayPointer(props: DefaultXRInputSourceRayPoi
   const rayOpts = spreadable(rayModelOptions);
   return (
     <XRSpace ref={ref} space="target-ray-space">
+      <group userData={{ renderTrackingAnchor: `${handedness}-ray` }}>
       {rayModelOptions !== false && (
         <HudPointerRayModel
           pointer={pointer}
@@ -246,6 +248,7 @@ function PetplayDefaultXRInputSourceRayPointer(props: DefaultXRInputSourceRayPoi
         />
       )}
       {cursorModelOptions !== false && <HudPointerCursorModel pointer={pointer} />}
+      </group>
     </XRSpace>
   );
 }
@@ -299,6 +302,20 @@ function HandOriginSpace() {
   return <XRSpace ref={ref} space="grip-space" />;
 }
 
+/** Tag the actual grip-space parent, preserving the controller model's local calibration. */
+function RenderTrackedControllerModel(props: React.ComponentProps<typeof XRControllerModel>) {
+  const state = useXRInputSourceStateContext();
+  const ref = useRef<Object3D>(null);
+  useFrame(() => {
+    const root = ref.current?.parent;
+    const hand = state.inputSource.handedness;
+    if (root && (hand === "left" || hand === "right")) {
+      root.userData.renderTrackingAnchor = `${hand}-hand`;
+    }
+  });
+  return <XRControllerModel {...props} ref={ref} />;
+}
+
 /**
  * Hit-capped aim beam, select ray, teleport, and both grip-sphere and laser grab on squeeze.
  * Inner `CombinedPointer` picks one active grab (sphere when in range, else aim-ray grab).
@@ -331,7 +348,7 @@ export function PetplayDefaultXRController(props: DefaultXRControllerOptions) {
       <HandOriginSpace />
       {modelOptions !== false && (
         <Suspense>
-          <XRControllerModel {...spreadable(modelOptions)} />
+          <RenderTrackedControllerModel {...spreadable(modelOptions)} />
         </Suspense>
       )}
       {grabPointerOptions !== false && (

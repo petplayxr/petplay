@@ -70,6 +70,15 @@ So the compositor takes in overlay updates at a point in its frame, and a presen
 that point can be displayed with its texture and pose from different frames. Presents must land at a
 **consistent** point, clear of that latch.
 
+Binary analysis and indexed live traces now show the mechanism: the compositor copies the
+projection pose into its scene graph under one shared lock, then reads the current texture ring
+under another lock when building render records. The measured gap was 0.24–0.26 ms at the median,
+up to 2.13 ms, and producer updates crossed it. The `0x201` notification is an overlay event,
+not a texture-switch command. Also, pooled GL source textures do **not** establish distinct
+SteamVR shared images: the trace saw one constant shared-image handle per eye. Image reuse and
+GPU synchronization remain open. See
+[`markdown/projection-overlay-re/compositor-snapshot.md`](../markdown/projection-overlay-re/compositor-snapshot.md).
+
 ### Where the latch is
 
 `IVRCompositor::GetFrameTiming` reports the compositor's own phases, measured from its frame start.
@@ -108,6 +117,11 @@ reprojecting the last frame, so static content stays perfectly world-locked and 
 (hands, lasers) holds still for one frame. Presenting it late would land on the latch, which is the
 judder. A dropped frame keeps its eye targets: they are not the ones on screen, so the next frame
 draws into them.
+
+The present gate checks the deadline both before and after waiting for the window to open.
+Without the second check, a scheduler stall admitted starts at 20.9–23.9 ms even though the
+window closed at 17 ms. This bounds submission start; the texture and transform calls still
+need time to finish before the next pose snapshot.
 
 ### Eye targets: a pool of three pairs
 
@@ -154,6 +168,20 @@ regardless of the sim. `petplay/desktopView.ts` is already a separate-process IR
 dormant `webxrOverlay` actor was a second-process IR presenter. A render-only loop that finishes
 within ~4 ms of vsync could also present *before* the latch and show frames one vsync sooner (~13 ms
 of prediction). That needs a ~3 ms render, so it is a goal, not a given.
+
+The follow-up RE separates that throughput improvement from correctness. SteamVR queues a
+Vulkan copy after the source GL work; its final-image completion semaphores were absent from
+the observed compositor's Vulkan wait list. Public `AcquireOverlayView` can pin the current
+ring image, but re-acquisition moves that process's pin and can allow an older view to change.
+Mirror access lock/unlock are no-ops in this build, and the current `GetFrameTiming` record
+advances before GPU completion. A follow-up transparent-bank experiment confirms independent
+image pins across overlay handles, but interrupted Show/Hide sequences publish both banks,
+neither bank, or different banks for the two eyes. None of these facts establishes safe
+retirement or coherent stereo publication by itself.
+The intended public-API solution needs completed immutable generations, coherent stereo
+publication, and verified retirement. A fixed window or another thread alone cannot guarantee
+those under arbitrary load. Details and reproducible probes are in
+[`ownership-and-publication.md`](../markdown/projection-overlay-re/ownership-and-publication.md).
 
 ## `WaitFrameSync` as the pacer
 

@@ -1,5 +1,6 @@
 import { LogChannel } from "@mommysgoodpuppy/logchannel";
 import * as THREE from "three";
+import { captureTextBatchTransforms, textBatchTransformsMatch } from "./uiTextBatchTransforms.ts";
 import raylib, * as raylibBindings from "../submodules/raylib_ts_bindings_deno/raylib_bindings.ts";
 import type {
   ExtractionResult,
@@ -343,6 +344,7 @@ export class WebXRRaythreeRaylibRenderer {
     {
       mesh: DynamicNativeMesh;
       texts: WebXRRaythreeUiSnapshot["texts"];
+      worldMatrices: Float64Array;
     }
   >();
   private textBatchPoolPos = new Float32Array(0);
@@ -1942,7 +1944,8 @@ export class WebXRRaythreeRaylibRenderer {
     const sameSnapshot = cached !== undefined &&
       cached.mesh.vertexCount === totalV &&
       cached.texts.length === texts.length &&
-      texts.every((text, index) => cached.texts[index] === text);
+      texts.every((text, index) => cached.texts[index] === text) &&
+      textBatchTransformsMatch(texts, cached.worldMatrices);
     if (cached !== undefined && sameSnapshot) {
       if (this.uiTextBatchShader.mvpLoc >= 0) {
         raylib.H.SetShaderValueMatrix(
@@ -2003,7 +2006,7 @@ export class WebXRRaythreeRaylibRenderer {
       this.textBatchPoolN,
       this.textBatchPoolC,
     );
-    this.uiTextBatchMeshes.set(batchKey, { mesh, texts });
+    this.uiTextBatchMeshes.set(batchKey, { mesh, texts, worldMatrices: captureTextBatchTransforms(texts) });
     if (this.uiTextBatchShader.mvpLoc >= 0) {
       raylib.H.SetShaderValueMatrix(
         this.uiTextBatchShader.shader,

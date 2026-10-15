@@ -48,7 +48,7 @@ export function ConstantControllerAimBeam(
       <meshBasicMaterial
         color={threeColor}
         toneMapped={false}
-        depthTest
+        depthTest={false}
         depthWrite={false}
         transparent={!opaque}
         opacity={opacity}

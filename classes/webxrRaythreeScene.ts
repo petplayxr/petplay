@@ -6,10 +6,12 @@
  *   this process. It must run wherever the Three.js `Object3D` tree lives
  *   (the webxr worker); it cannot be moved by sending “the scene” because
  *   `Object3D` is not `structuredClone`able.
- * - **Raylib** (`WebXROverlayRaylib.renderExtraction`): now runs synchronously
- *   from this payload in the same webxr overlay pump iteration.
+ * - **Raylib** consumes the payload either in the legacy webxr pump or in the
+ *   independent render/present child, which supplies its own current eye cameras.
  */
 import * as THREE from "three";
+import { anchoredLowerers } from "./overlayRenderTracking.ts";
+import type { SceneDelivery } from "./overlaySceneDelivery.ts";
 import { type ExtractionResult, RaythreeExtractor } from "../submodules/raythree/src/lib.ts";
 import type { WebXRShadowFrame } from "./webxrhost.ts";
 import type { IntervalMetric } from "./intervalMetric.ts";
@@ -24,6 +26,8 @@ export type WebXRRaythreeBuildProbes = {
 };
 
 export type WebXRRaythreeRenderPayload = {
+  delivery?: SceneDelivery;
+  renderGripOffsets?: Partial<Record<"left" | "right", Float32Array>>;
   frame: WebXRShadowFrame;
   background: [number, number, number, number];
   leftEye: ExtractionResult;
@@ -32,13 +36,14 @@ export type WebXRRaythreeRenderPayload = {
 };
 
 export type WebXRRaythreeSceneContext = {
+  renderGripOffsets?: Partial<Record<"left" | "right", Float32Array>>;
   scene: object;
   leftCamera: object;
   rightCamera: object;
 };
 
 export class WebXRRaythreeSceneBridge {
-  private readonly extractor = new RaythreeExtractor();
+  private readonly extractor = new RaythreeExtractor({ lowerers: anchoredLowerers() });
 
   buildPayload(
     context: WebXRRaythreeSceneContext,
@@ -77,6 +82,7 @@ export class WebXRRaythreeSceneBridge {
     probes?.ui.record(performance.now() - t3);
 
     return {
+      renderGripOffsets: context.renderGripOffsets,
       frame,
       background: options?.includeBackground === true
         ? getSceneBackgroundColor(context.scene)

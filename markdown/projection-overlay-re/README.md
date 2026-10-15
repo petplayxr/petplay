@@ -4,6 +4,11 @@
 story, corrected findings, GPU and VRChat results, and remaining limitations. The notes below
 and linked follow-ups retain the individual experiments and build-specific address details.
 
+Implementation direction: [independent IR renderer and event-driven presenter plan](decoupled-render-present-plan.md).
+An [opt-in first implementation](independent-renderer-implementation.md) now separates scene
+execution from rendering and publication. It is not the default presenter; image ownership,
+full-scene validation, and lifecycle gates remain.
+
 Goal: know exactly when and how `vrcompositor` takes in an overlay's texture and its
 projection transform, so PetPlay's projection overlays (`docs/PROJECTION_OVERLAYS.md`) can be
 presented without mixed-frame judder by design rather than by an empirically tuned window.
@@ -145,3 +150,15 @@ and why API publication generations do not prove which pixels the GPU sampled.
 - `latch.ts`, `ft.ts`: runtime vtable dumps / `WaitLatchSync` probe via `libopenvr_api`.
 - `Decomp.java`: Ghidra headless post-script; `DECOMP_ADDRS`/`DECOMP_OUT` env. Ghidra marks
   `0x3f2e60` (lock guard) no-return wrongly, which truncates callers; read objdump there.
+
+## Overlay draw order (2026-10-15, live uprobe)
+
+`DrawOverlays` (`0x187370`, once per eye) draws a set ordered by comparator `0x23bbb0` over items
+built in `0x23f180`: (1) `+0x13c` category, 0 = scene-process overlays drawn first unless flagged
+`SortWithNonSceneOverlays`; (2) `+0x144` sort order ascending; (3) `+0x124` HMD distance
+descending, which is `FLT_MAX` for projection overlays (render type `+0x130` = 2); (4) id.
+Probed live with PetPlay's projection overlays at sort order 20 and two display quads at 0: all
+category 1, projection drawn last in every pass (`0x185420` quad ×2, then `0x183af0` projection).
+Display screens showing "on top" of the projection is therefore PetPlay's own image being
+transparent there (the depth-only display stand-in in `displayInstance/ui.tsx`), not compositor
+order. Note that removing a uprobe event clears the trace buffer: copy the trace first.

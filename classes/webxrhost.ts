@@ -117,6 +117,8 @@ type StartOptions = {
    * the old synthetic rAF only.
    */
   useOpenVrOverlayFramePacing?: boolean;
+  /** Explicitly disable the old renderer-driven simulation tick for independent consumers. */
+  externalFramePacing?: boolean;
   /**
    * When true, WebXRHost does not independently sample OpenVR HMD poses. The external overlay loop
    * owns sampling and its shared DirectOpenVrInputSource snapshot still drives IWER/R3F tracking.
@@ -1067,6 +1069,7 @@ export class WebXRHost {
   private readonly raylibDebugControllerCube = getWebxrRaylibControllerDebugEnabled();
   /** App-wide single source of OpenVR HMD + controller pose (allocation-free). */
   private readonly directOpenVrInputSource = new DirectOpenVrInputSource();
+  private renderGripOffsets: Partial<Record<"left" | "right", Float32Array>> = {};
   private directRaylibOpenVrHmdPoseLogged = false;
   private emulatedControllerApplyPrevWallAt = 0;
   private readonly emulatedControllerPosLeft = new THREE.Vector3();
@@ -1175,8 +1178,8 @@ export class WebXRHost {
     this.alphaEnabled = options.alpha ?? this.sessionMode === "immersive-ar";
     const useOverlayPacing = options.useOpenVrOverlayFramePacing !== false;
     // Detect raylib mode: if OpenVR pacer is disabled but we have OpenVR pointers, raylib will drive timing
-    this.useExternalPacerTiming = !useOverlayPacing &&
-      (this.vrSystemPointer != null || this.vrCompositorPointer != null);
+    this.useExternalPacerTiming = options.externalFramePacing ?? (!useOverlayPacing &&
+      (this.vrSystemPointer != null || this.vrCompositorPointer != null));
     const crashOnDrop = getCrashOnDroppedFrameMode();
     this.crashOnDroppedXrRaf = crashOnDrop.xrRaf;
     this.crashOnDroppedXrRafStrict = crashOnDrop.xrRafStrict;
@@ -1306,6 +1309,13 @@ export class WebXRHost {
         options: Record<string, unknown>,
       ) => XrDeviceBridge;
       const metaQuest3 = iwerModule.metaQuest3;
+      // Preserve the same target-ray-to-grip calibration for independent render tracking.
+      const layout = (metaQuest3 as { controllerConfig?: { layout?: Partial<Record<"left" | "right", { gripOffsetMatrix?: ArrayLike<number> }>> } }).controllerConfig?.layout;
+      this.renderGripOffsets = {};
+      for (const hand of ["left", "right"] as const) {
+        const offset = layout?.[hand]?.gripOffsetMatrix;
+        if (offset) this.renderGripOffsets[hand] = new Float32Array(offset);
+      }
 
       this.xrDevice = new XRDevice(metaQuest3, {
         stereoEnabled: true,
@@ -1850,6 +1860,7 @@ export class WebXRHost {
   }
 
   getRaythreeSceneContext(): {
+    renderGripOffsets: Partial<Record<"left" | "right", Float32Array>>;
     scene: THREE.Scene;
     leftCamera: THREE.Camera;
     rightCamera: THREE.Camera;
@@ -1872,6 +1883,7 @@ export class WebXRHost {
       return null;
     }
     return {
+      renderGripOffsets: this.renderGripOffsets,
       scene,
       leftCamera,
       rightCamera,
