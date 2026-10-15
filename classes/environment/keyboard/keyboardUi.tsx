@@ -540,6 +540,65 @@ export function KeyboardRowView(
   );
 }
 
+export type KeyboardRowGapProps = {
+  /** The row below the gap; the gap is split into segments matching its cells. */
+  faces: RowItem[];
+  keyWidth: number;
+  keyPadding: number;
+  pixelSize: number;
+  activate: (face: NormalizedKeyFace) => void;
+};
+
+/**
+ * The dead strip between two rows, split column by column so a ray that falls in it types the
+ * key directly below the hit. One handler for the whole strip typed the row's first key wherever
+ * the ray landed: Caps Lock when aiming between the top letter row and the home row.
+ */
+export function KeyboardRowGap(
+  { faces, keyWidth, keyPadding, pixelSize, activate }: KeyboardRowGapProps,
+) {
+  const segment = (key: string, width: number, face: NormalizedKeyFace | null) => (
+    <Container
+      key={key}
+      pixelSize={pixelSize}
+      minWidth={width}
+      minHeight={keyPadding}
+      {...(face == null ? {} : {
+        onPointerDown: (event: { pointerType?: string }) => {
+          if (event.pointerType === "grab") return;
+          activate(face);
+        },
+      })}
+      {...LAYOUT_CHROME}
+    />
+  );
+  const segments: React.ReactNode[] = [];
+  for (let i = 0; i < faces.length; i++) {
+    const cell = faces[i]!;
+    // Under a spacer sits a tall key from the row above (ISO Enter), which covers this strip.
+    const face = "spacer" in cell && cell.spacer ? null : cell as NormalizedKeyFace;
+    // Same rule as the row's own horizontal gaps: a gap belongs to the key after it.
+    if (i > 0) segments.push(segment(`g-${i}`, keyPadding, face));
+    segments.push(
+      segment(
+        `c-${i}`,
+        face == null ? keyWidth * (cell as { width: number }).width : keyWidth * face.widthMul,
+        face,
+      ),
+    );
+  }
+  return (
+    <Container
+      pixelSize={pixelSize}
+      flexDirection="row"
+      height={keyPadding}
+      {...LAYOUT_CHROME}
+    >
+      {segments}
+    </Container>
+  );
+}
+
 export type KeyboardColumnShellProps = {
   pixelSize?: number;
   keyPadding: number;
@@ -821,9 +880,6 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
 
     const makeColumn = (rows: RowItem[][], columnId: string) => {
       // Avoid flex `gap` in the column: same “white gap quads” issue as `gapColumn` on rows.
-      const firstKeyOfRow = (row: RowItem[]): NormalizedKeyFace | null =>
-        (row.find((cell) => !("spacer" in cell && cell.spacer)) as NormalizedKeyFace | undefined) ??
-          null;
       const colChildren: React.ReactNode[] = rows.flatMap((r, i) => {
         const rowView = (
           <KeyboardRowView
@@ -860,25 +916,14 @@ export const KeyboardFromJson = forwardRef<THREE.Object3D, KeyboardFromJsonProps
         if (i === 0) {
           return [rowView];
         }
-        const below = firstKeyOfRow(r);
         return [
-          <Container
+          <KeyboardRowGap
             key={`${columnId}-v-gap-${i}`}
+            faces={r}
+            keyWidth={keyWidth}
+            keyPadding={keyPadding}
             pixelSize={pixelSize}
-            minHeight={keyPadding}
-            minWidth={1}
-            alignSelf="stretch"
-            {
-              // Row gaps are dead space otherwise: a ray that falls between two
-              // rows types the first key of the row it lands in.
-              ...(below == null ? {} : {
-                onPointerDown: (event: { pointerType?: string }) => {
-                  if (event.pointerType === "grab") return;
-                  activateFace(below);
-                },
-              })
-            }
-            {...LAYOUT_CHROME}
+            activate={activateFace}
           />,
           rowView,
         ];

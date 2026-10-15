@@ -245,6 +245,40 @@ export const steps: PlaytestStep[] = [
     },
   },
   {
+    name: "row-gap-types-key-below",
+    run: async (ctx) => {
+      // A ray between two rows used to type the lower row's first key: Caps Lock between T and G.
+      const t = ctx.textObject(keyboard(ctx), "t");
+      const g = ctx.textObject(keyboard(ctx), "g");
+      if (!ctx.expect(t && g, "the keyboard has t and g keys")) return;
+      const point = worldOf(t!).position.lerp(worldOf(g!).position, 0.5);
+      const from = new THREE.Vector3(0, 0, 0.6).applyQuaternion(worldOf(keyboard(ctx)).quaternion)
+        .add(point);
+      const events: KeyboardLogicEvent[] = [];
+      const stop = onKeyboardEvent((event) => events.push(event));
+      try {
+        aim(ctx, "left", from, point);
+        await ctx.settle();
+        ctx.t.input.left.trigger = true;
+        await ctx.frames(2);
+        ctx.t.input.left.trigger = false;
+        await ctx.settle();
+        ctx.t.parkLeftHand();
+        await ctx.frames(3);
+      } finally {
+        stop();
+      }
+      const typed = events.map((event) =>
+        event.kind === "key" ? event.char ?? `<${event.scanCodeHex}>` : `${event.modifier}`
+      );
+      ctx.note(`between t and g: ${typed.join(" ")}`);
+      ctx.expect(
+        typed.length === 1 && (typed[0] === "g" || typed[0] === "t"),
+        `the gap types a neighbouring key, not the row's first (got ${typed.join(" ")})`,
+      );
+    },
+  },
+  {
     name: "legends-fit",
     run: (ctx) => {
       legendsFit(ctx);
