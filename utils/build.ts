@@ -20,6 +20,14 @@ if (target != null && target !== "aarch64-unknown-linux-gnu") {
 }
 const output = target ? "dist/petplay-aarch64" : "dist/petplay";
 
+const webxr = await new Deno.Command(Deno.execPath(), {
+  args: ["task", "build:webxr"],
+  stdin: "inherit",
+  stdout: "inherit",
+  stderr: "inherit",
+}).output();
+if (!webxr.success) throw new Error(`WebXR runtime build failed (${webxr.code})`);
+
 await Deno.mkdir("dist", { recursive: true });
 const captureHelper = await buildNative(nativeBuildTarget(target));
 
@@ -41,6 +49,8 @@ const args = [
   "./classes/",
   "--include",
   "./resources/",
+  "--include",
+  "./submodules/threewebxrwebgpudeno/submodules/iwer/packages/iwer/build/",
   "--include",
   captureHelper,
   "--include",

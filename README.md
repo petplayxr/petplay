@@ -34,7 +34,7 @@ Usage:
 deno run -A utils/preconf.ts
 deno install --allow-import
 deno task build:native   # source/dev capture helper; requires Rust
-deno task build          # builds the capture helper, then compiles PetPlay into dist/
+deno task build          # builds WebXR and the capture helper, then compiles into dist/
 ```
 
 `utils/build.ts` wraps `deno compile` and branches only where Deno itself does not: `--icon` is
@@ -43,6 +43,9 @@ Windows-only (it is rejected outright on Linux), and `dist/` keeps the output cl
 launcher boots straight into `dev`, so runtime flags still apply — `./dist/petplay --novr`,
 `./dist/petplay --novr --desktop`, and so on. It is compiled with `--env-file`, so run it from a
 directory with the `.env` it should use.
+
+Release builds require Node.js 20+ and pnpm 10.33.4 for the pinned WebXR runtime, plus Rust for
+the capture helper. These tools are only needed when building from source.
 
 On Linux, native capture builds require `pkg-config`, Clang, PipeWire development headers and
 D-Bus development headers (Ubuntu: `libpipewire-0.3-dev libdbus-1-dev`). Windows builds use the
@@ -80,7 +83,7 @@ deno task dev
 Nested WebXR dependencies require their generated checkout artifacts once after cloning:
 
 ```bash
-(cd submodules/threewebxrwebgpudeno/submodules/iwer && NODE_ENV=development npm install --include=dev --production=false && NODE_ENV=development npm run build)
+deno task build:webxr
 (cd submodules/threewebxrwebgpudeno/submodules/uikit && pnpm install --filter @pmndrs/uikit... --ignore-scripts && pnpm --filter @pmndrs/uikit generate)
 ```
 

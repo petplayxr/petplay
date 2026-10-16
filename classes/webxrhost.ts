@@ -48,7 +48,7 @@ import {
   useFrame as useR3FFrame,
 } from "npm:@react-three/fiber@10.0.0-alpha.5/webgpu";
 // @ts-ignore no types for vendored JS build output
-import * as iwerModule from "../submodules/threewebxrwebgpudeno/submodules/iwer/build/iwer.module.js";
+import * as iwerModule from "../submodules/threewebxrwebgpudeno/submodules/iwer/packages/iwer/build/iwer.module.js";
 
 // External pacer pulses are coalesced by sequence number, not queued. Under VR
 // load the IWER rAF that consumes the latest pulse can legitimately arrive more

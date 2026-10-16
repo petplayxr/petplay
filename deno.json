@@ -66,6 +66,7 @@
     "keyb": "deno run -A petplay/keyboardViewer.tsx ",
     "keyb:reset": "deno run -A petplay/resetKeyboard.ts",
     "build:native": "deno run -A utils/build-native.ts",
+    "build:webxr": "cd submodules/threewebxrwebgpudeno/submodules/iwer && pnpm install --frozen-lockfile --filter iwer... --ignore-scripts && pnpm run build",
     "build": {
       "command": "deno run -A utils/build.ts"
     },

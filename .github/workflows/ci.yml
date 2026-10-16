@@ -24,6 +24,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
       - run: deno task preconf
       - run: deno install --allow-import
       - run: deno task check
@@ -31,6 +34,7 @@ jobs:
       - run: deno test -A --no-check classes utils
       - name: Install desktop smoke dependencies
         run: sudo apt-get update && sudo apt-get install -y xvfb xauth libglfw3 libgl1-mesa-dri libasound2t64
+      - run: deno task build:webxr
       - name: Playtest with software OpenGL
         run: xvfb-run -a deno task playtest smoke --port=4095
         env:
@@ -77,6 +81,9 @@ jobs:
       - name: Install Linux capture build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y pkg-config clang libpipewire-0.3-dev libdbus-1-dev
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
       - run: deno task preconf
       - run: deno install --allow-import
       - run: deno task build ${{ matrix.args }}
