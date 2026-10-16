@@ -235,3 +235,25 @@ be treated as an IPCWorker-owned process.
 From PetPlay: `deno task driver:build` or `deno task driver:test`. SteamVR remains stopped.
 The submodule initially uses a local sibling repository; no remote repository is created or
 published by this work. Previous renderer-side motion-probe work remains a separate change.
+
+
+## Externally owned proxy milestone
+
+The live driver connection is now implemented, with the same ownership model as Iroh's
+existing-actor proxies. The driver establishes identity during provider Init and announces it
+on a private user-only Unix-domain socket. PetPlay imports it via `attachOpenVrDriverProxy`;
+there is no actor INIT/LOADED on attachment. Stageforge now records external ownership,
+generalizes proxy attachment, routes replies, and detaches external connections during murder
+or graph reboot without sending shutdown to the peer. Reload requires explicit reattachment.
+
+The socket was chosen over WebSocket for the first Linux transport: Stageforge's message
+semantics remain the same, while framing is bounded newline-delimited JSON. File permissions,
+peer UID checks and an exclusive owner lock protect the local endpoint. IPC parsing runs on
+a dedicated pthread-backed Zig thread; Cleanup joins it before context release. libc is now
+required for safe threading inside a foreign process; no C++ runtime or adapter is needed.
+
+The actual shared library and real Stageforge router pass offline socket tests for stable
+identity/state across detach/reattach, pending callback rejection, prompt cleanup while connected,
+owner contention and insecure-directory refusal. This is verified in a mock vrserver process,
+not a SteamVR session. Physical HMD remains off. No synthetic devices, automatic startup,
+SteamVR driver registration or network publishing are added by this milestone.

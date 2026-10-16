@@ -5,6 +5,7 @@ import {
   encodeWebSocketWorkerMessage,
 } from "../submodules/stageforge/src/lib/webSocketWorkerCodec.ts";
 import { createStdioActorWorker } from "../submodules/petplay_ovrdriver/integration/stdio-worker.ts";
+import { testNativeDriverProxy } from "./petplay-ovrdriver-proxy-test.ts";
 import { fromFileUrl } from "@std/path";
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -88,4 +89,5 @@ try {
 } finally {
   if (id) await postal.murder(id);
 }
+await testNativeDriverProxy();
 Deno.exit(0);
