@@ -20,6 +20,17 @@ export type WebXrHostPolyfillOptions = {
   openVrVsyncDrivesRaf?: boolean;
   /** @default false */
   manual?: boolean;
+  /**
+   * Locks the timer to the headset: each frame starts `phaseMs` after a vsync, at most once per
+   * vsync. A free-running `pollIntervalMs` timer overshoots under load (~68 Hz against 75 Hz),
+   * so a few display frames per second got no new scene and worker-driven motion stuttered.
+   * Falls back to `pollIntervalMs` while the clock is unavailable.
+   */
+  vsyncClock?: {
+    sample: () => { msSinceVsync: number; frameIndex: bigint } | null;
+    periodMs: number;
+    phaseMs: number;
+  };
 };
 
 type QueuedRaf = { id: number; cb: RafCallback; cancelled: boolean };
@@ -74,6 +85,36 @@ export function installSharedAbortReason(): void {
   };
 }
 
+/**
+ * Schedules callbacks for the next `phaseMs`-after-vsync moment after the last vsync that ran a
+ * frame. Callbacks requested before a frame fires share it, like a browser animation frame;
+ * callbacks requested while it runs go to a later vsync, even when the vsync estimate jitters.
+ */
+export function vsyncLockedScheduler(
+  clock: NonNullable<WebXrHostPolyfillOptions["vsyncClock"]>,
+  fallbackMs: number,
+): (run: () => void) => number {
+  let fired: bigint | null = null;
+  return (run) => {
+    const now = clock.sample();
+    if (!now) return setTimeout(run, fallbackMs) as unknown as number;
+    let vsync = now.frameIndex;
+    let delay = clock.phaseMs - now.msSinceVsync;
+    if (delay < 0) {
+      vsync++;
+      delay += clock.periodMs;
+    }
+    if (fired !== null && vsync <= fired) {
+      delay += Number(fired + 1n - vsync) * clock.periodMs;
+      vsync = fired + 1n;
+    }
+    return setTimeout(() => {
+      if (fired === null || vsync > fired) fired = vsync;
+      run();
+    }, Math.max(0, delay)) as unknown as number;
+  };
+}
+
 export function installWebXRHostPolyfills(
   width: number,
   height: number,
@@ -120,8 +161,11 @@ export function installWebXRHostPolyfills(
       if (entry) entry.cancelled = true;
     }) as unknown;
   } else {
+    const schedule = rafOptions.vsyncClock
+      ? vsyncLockedScheduler(rafOptions.vsyncClock, delayMs)
+      : (run: () => void) => setTimeout(run, delayMs) as unknown as number;
     (globalAny as Record<string, unknown>).requestAnimationFrame = ((cb: RafCallback): number => {
-      return setTimeout(() => cb(performance.now()), delayMs) as unknown as number;
+      return schedule(() => cb(performance.now()));
     }) as unknown;
 
     (globalAny as Record<string, unknown>).cancelAnimationFrame = ((id: number): void => {

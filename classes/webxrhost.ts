@@ -336,6 +336,11 @@ function getR3fSchedulerTimingEnabled(): boolean {
 }
 
 const DEFAULT_XRAF_STRICT_INTERVAL_MULT = 1.12;
+/**
+ * Timer-driven XR frames start this long after vsync, so a typical frame (~4 ms) has published
+ * its scene well before the decoupled renderer samples poses just after the next vsync.
+ */
+const TIMER_RAF_VSYNC_PHASE_MS = 4;
 
 /**
  * Tunes `xr-raf-strict` (default ~1.12 = first noticeable gap vs nominal refresh).
@@ -1083,6 +1088,28 @@ export class WebXRHost {
   private readonly tempEmulatedControllerPosTarget = new THREE.Vector3();
   private readonly tempEmulatedControllerRawDelta = new THREE.Vector3();
 
+  /**
+   * When neither the OpenVR overlay pacer nor an external loop drives frames (the decoupled
+   * renderer), the rAF timer still needs the headset's vsync or it drifts below display rate.
+   */
+  private createTimerVsyncClock(periodMs: number): WebXrHostPolyfillOptions["vsyncClock"] {
+    if (this.openVrOverlayPacer != null || this.useExternalPacerTiming) return undefined;
+    const sampler = tryCreateOpenVrOverlayFramePacer(
+      this.vrSystemPointer,
+      null,
+      true,
+      false,
+      "vsync",
+      "webxrhost-raf-clock",
+    );
+    if (sampler == null) return undefined;
+    return {
+      sample: () => sampler.sampleVsyncPhase(),
+      periodMs,
+      phaseMs: TIMER_RAF_VSYNC_PHASE_MS,
+    };
+  }
+
   async start(options: StartOptions = {}) {
     if (this.running) {
       return;
@@ -1236,6 +1263,7 @@ export class WebXRHost {
       pollIntervalMs: actualPollIntervalMs,
       openVrVsyncDrivesRaf: this.openVrOverlayPacer != null,
       manual: this.useExternalPacerTiming,
+      vsyncClock: this.createTimerVsyncClock(rafPolyfillIntervalMs),
     };
     installWebXRHostPolyfills(this.width, this.height, polyfill);
     LogChannel.log(
@@ -1310,7 +1338,11 @@ export class WebXRHost {
       ) => XrDeviceBridge;
       const metaQuest3 = iwerModule.metaQuest3;
       // Preserve the same target-ray-to-grip calibration for independent render tracking.
-      const layout = (metaQuest3 as { controllerConfig?: { layout?: Partial<Record<"left" | "right", { gripOffsetMatrix?: ArrayLike<number> }>> } }).controllerConfig?.layout;
+      const layout = (metaQuest3 as {
+        controllerConfig?: {
+          layout?: Partial<Record<"left" | "right", { gripOffsetMatrix?: ArrayLike<number> }>>;
+        };
+      }).controllerConfig?.layout;
       this.renderGripOffsets = {};
       for (const hand of ["left", "right"] as const) {
         const offset = layout?.[hand]?.gripOffsetMatrix;
