@@ -161,6 +161,11 @@ export class OverlaySceneInbox {
     };
   }
 
+  /** Replay the retained baseline after a GPU consumer reset (e.g. a diagnostic scene). */
+  invalidateAdoptedAssets(): void {
+    this.adopted = 0;
+  }
+
   markAdopted(frame: { epoch: string | null; assetVersion: number }): void {
     if (frame.epoch === this.epoch) this.adopted = Math.max(this.adopted, frame.assetVersion);
   }

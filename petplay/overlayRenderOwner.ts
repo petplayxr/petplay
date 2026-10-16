@@ -22,6 +22,8 @@ import {
   type OverlayScenePacket,
 } from "../classes/overlaySceneWire.ts";
 import { wait } from "../classes/utils.ts";
+import { OverlayWristMotionProbe } from "../classes/overlayWristMotionProbe.ts";
+import { motionProbeFrame, OverlayMotionProbe } from "../classes/overlayMotionProbe.ts";
 import { OverlaySceneInbox } from "../classes/overlaySceneDelivery.ts";
 
 /**
@@ -33,7 +35,7 @@ import { OverlaySceneInbox } from "../classes/overlaySceneDelivery.ts";
 export type PresentMode = "projection" | "panorama";
 type PanoramaPacing = "vsync" | "frame-sync" | "presenter";
 type Start = {
-  webxrTarget: string;
+  webxrTarget?: string;
   overlayKey?: string;
   overlayName?: string;
   eyeSize?: number;
@@ -83,7 +85,14 @@ const state = actorState({
    * puts every frame on the same one, as the in-worker renderer did by running the sim first.
    */
   panoramaPresentMinMs: 0,
+  /** Diagnostic only: match projection's alternating submitted source images. */
+  panoramaTextureRotation: false,
+  lastRenderImages: null as { left: number; right: number; output: number } | null,
   lastPresent: null as unknown,
+  motionProbe: false,
+  wristMotionProbe: false,
+  /** Anchored items per tracking space in the last rendered scene. */
+  anchorSpaces: {} as Record<string, number>,
   /** `GetEyeToHeadTransform` per eye (column-major), as the render eye views use it. */
   eyeToHead: null as { left: number[]; right: number[] } | null,
   lastRenderTracking: null as { head: number[]; predictedSecondsToPhotons: number } | null,
@@ -98,6 +107,33 @@ let receivedStream: string | null = null;
 let receivedSequence = 0;
 let receivedAt = 0;
 let inbox = new OverlaySceneInbox();
+let motionProbe: OverlayMotionProbe | null = null;
+let wristProbe: OverlayWristMotionProbe | null = null;
+// Open only for the native-controller diagnostic; shared with Vulkan capture's
+// CLOCK_MONOTONIC domain. Ordinary rendering keeps no extra FFI clock calls.
+function createProbeClock() {
+  const library = Deno.dlopen(
+    "libc.so.6",
+    {
+      clock_gettime: { parameters: ["i32", "buffer"], result: "i32" },
+    } as const,
+  );
+  const time = new BigInt64Array(2);
+  return {
+    close: () => library.close(),
+    now: () => {
+      if (library.symbols.clock_gettime(1, time)) throw new Error("Probe CLOCK_MONOTONIC failed");
+      return Number(time[0]) + Number(time[1]) / 1e9;
+    },
+  };
+}
+let probeClock: ReturnType<typeof createProbeClock> | null = null;
+let probeStartMs = 0;
+let probeDurationMs = 0;
+let probeHead: THREE.Matrix4 | null = null;
+let probeGeneration = 0;
+// Bounded, diagnostic-only CPU publication log. It does not measure compositor consumption.
+const probeRows: Record<string, unknown>[] = [];
 const runtime = new OpenVrRuntime("PetPlay independent renderer");
 function health() {
   return { ...state, pid: Deno.pid, latestSceneFrame: latest?.frame.frameCount ?? null };
@@ -109,7 +145,7 @@ new PostMan(
     __HEALTH__: () => health(),
     STARTOVERLAYRENDERER: (options: Start) => {
       if (loop) throw new Error("Renderer already started; stop it before reconfiguration");
-      state.webxrTarget = options.webxrTarget;
+      state.webxrTarget = options.webxrTarget ?? null;
       state.presentMode = options.presentMode ?? "projection";
       state.stopRequested = false;
       state.error = null;
@@ -150,10 +186,51 @@ new PostMan(
       return health();
     },
     GETPANORAMAPHASE: () => panoramaPhase.slice(),
+    SETWRISTMOTIONPROBE: (enabled: boolean) => {
+      if (motionProbe) throw new Error("Disable isolated motion probe first");
+      wristProbe = enabled ? new OverlayWristMotionProbe() : null;
+      state.wristMotionProbe = enabled;
+      if (enabled) inbox.invalidateAdoptedAssets();
+      probeClock?.close();
+      probeClock = enabled ? createProbeClock() : null;
+      return { enabled, scope: "Full scene with wrist marker and render-generation tag" };
+    },
+    GETWRISTMOTIONPROBE: () => ({ enabled: !!wristProbe, rows: wristProbe?.rows.slice() ?? [] }),
+    SETMOTIONPROBE: (
+      options: { enabled: boolean; durationMs?: number; nativeController?: boolean },
+    ) => {
+      if (options.enabled && wristProbe) throw new Error("Disable full-scene wrist probe first");
+      probeClock?.close();
+      probeClock = options.enabled && options.nativeController ? createProbeClock() : null;
+      if (options.enabled) {
+        const duration = options.durationMs ?? 30000;
+        if (!Number.isFinite(duration) || duration < 100 || duration > 60000) {
+          throw new Error("Probe duration must be 100..60000 ms");
+        }
+        // Use established optics if available; no IR-time camera or hand pose is used.
+        motionProbe = new OverlayMotionProbe(
+          latest?.frame ?? motionProbeFrame(256),
+          options.nativeController ?? false,
+        );
+        probeStartMs = performance.now();
+        probeDurationMs = duration;
+        probeHead = null;
+        probeGeneration = 0;
+        probeRows.length = 0;
+      } else motionProbe = null;
+      state.motionProbe = !!motionProbe;
+      return health();
+    },
+    GETMOTIONPROBE: () => ({
+      scope: "CPU render/publication only; compositor capture required to measure delivery",
+      active: state.motionProbe,
+      rows: probeRows.slice(),
+    }),
     SETRENDERERDEBUG: (value: {
       panoramaExtraPredictionFrames?: number;
       panoramaPacing?: PanoramaPacing;
       panoramaPresentMinMs?: number;
+      panoramaTextureRotation?: boolean;
       freezeScene?: boolean;
       freezeRendering?: boolean;
       projectionMode?: "headset" | "scene-compatible";
@@ -161,6 +238,8 @@ new PostMan(
       state.panoramaExtraPredictionFrames = value.panoramaExtraPredictionFrames ??
         state.panoramaExtraPredictionFrames;
       state.panoramaPresentMinMs = value.panoramaPresentMinMs ?? state.panoramaPresentMinMs;
+      state.panoramaTextureRotation = value.panoramaTextureRotation ??
+        state.panoramaTextureRotation;
       if (value.panoramaPacing != null) {
         if (!["vsync", "frame-sync", "presenter"].includes(value.panoramaPacing)) {
           throw new Error("Unknown panorama pacing");
@@ -296,8 +375,11 @@ async function run(options: Start) {
     const lookRotationMatrix = new THREE.Matrix4();
     const zFlip = new THREE.Matrix4().makeScale(1, 1, -1);
     let shownLeft = 0;
+    let shownPanorama = 0;
     let registeredAt = performance.now();
     let activeEpoch: string | null = null;
+    let activeProbe: OverlayMotionProbe | null = null;
+    let activeWristProbe: OverlayWristMotionProbe | null = null;
     let lastReportAt = 0;
     state.running = true;
     register();
@@ -311,9 +393,25 @@ async function run(options: Start) {
         register();
         registeredAt = performance.now();
       }
+      if (motionProbe && performance.now() - probeStartMs > probeDurationMs) {
+        motionProbe = null;
+        state.motionProbe = false;
+      }
+      const probe = motionProbe;
+      const wrist = wristProbe;
+      if (wrist !== activeWristProbe) {
+        inbox.invalidateAdoptedAssets();
+        activeWristProbe = wrist;
+      }
+      if (probe !== activeProbe) {
+        renderer.resetSceneAssets();
+        inbox.invalidateAdoptedAssets();
+        activeEpoch = null;
+        activeProbe = probe;
+      }
       const scene = inbox.current();
-      const payload = scene?.payload;
-      if (!scene || !payload || state.freezeRendering) {
+      const payload = probe?.payload ?? scene?.payload;
+      if (!payload || state.freezeRendering) {
         await wait(10);
         continue;
       }
@@ -331,6 +429,7 @@ async function run(options: Start) {
           overlays.initialize({ key: overlayKey, name: overlayName, sortOrder: 20 });
         }
         shownLeft = 0;
+        shownPanorama = 0;
         activeMode = state.presentMode;
       }
       const panoramaMode = activeMode === "panorama";
@@ -346,16 +445,21 @@ async function run(options: Start) {
         }
         pacer.paceToDisplayAndRefreshPoses();
       }
-      const syncPhase = panoramaMode ? pacer.sampleVsyncPhase() : null;
+      const syncPhase = pacer.sampleVsyncPhase();
       const hmd = pacer.getCachedHmdEmulation();
       if (!hmd) {
         state.trackingInvalid++;
         await wait(10);
         continue;
       }
-      const head = new THREE.Matrix4().fromArray(hmd.matrix);
+      const sampleMs = performance.now();
+      const sampleMonotonicSeconds = probeClock?.now();
+      const predictionMs = pacer.getLastPredictedSecondsToPhotons() * 1000;
+      const sampledHead = new THREE.Matrix4().fromArray(hmd.matrix);
+      if (probe && !probeHead) probeHead = sampledHead.clone();
+      const head = probe ? probeHead! : sampledHead;
       state.lastRenderTracking = {
-        head: Array.from(hmd.matrix),
+        head: head.toArray(),
         predictedSecondsToPhotons: pacer.getLastPredictedSecondsToPhotons(),
       };
       writeStereoRenderViews(head, leftEye, rightEye, cameras);
@@ -369,31 +473,71 @@ async function run(options: Start) {
         cameras.leftEyeProjectionMatrix[i] = projections.leftEyeProjectionMatrix[i];
         cameras.rightEyeProjectionMatrix[i] = projections.rightEyeProjectionMatrix[i];
       }
-      const anchors: RenderAnchors = { head: hmd.matrix };
-      for (
-        const [hand, role] of [[
-          "left",
+      let probeSample = probe?.sample(
+        sampleMs - probeStartMs + predictionMs,
+        head,
+        ++probeGeneration,
+      );
+      if (probe?.nativeController && probeSample) {
+        const index = system.GetTrackedDeviceIndexForControllerRole(
           OpenVR.TrackedControllerRole.TrackedControllerRole_LeftHand,
-        ], ["right", OpenVR.TrackedControllerRole.TrackedControllerRole_RightHand]] as const
-      ) {
-        const index = system.GetTrackedDeviceIndexForControllerRole(role);
+        );
         const pose = pacer.getCachedTrackedDevicePose(index);
-        if (pose) {
-          const resolved = tip.resolve(index, pose);
-          setRenderHandAnchors(anchors, hand, resolved.matrix, payload.renderGripOffsets?.[hand]);
+        if (!pose) throw new Error("Motion image probe requires a valid left controller");
+        // Deliberately use the raw device transform: matches the native relative-quad
+        // baseline without introducing render-model tip offsets or IR-time input.
+        probeSample = {
+          x: pose.matrix[12],
+          anchors: { head: head.elements, "right-ray": pose.matrix },
+        };
+      }
+      const anchors: RenderAnchors = probeSample?.anchors ?? { head: hmd.matrix };
+      if (!probe) {
+        for (
+          const [hand, role] of [[
+            "left",
+            OpenVR.TrackedControllerRole.TrackedControllerRole_LeftHand,
+          ], ["right", OpenVR.TrackedControllerRole.TrackedControllerRole_RightHand]] as const
+        ) {
+          const index = system.GetTrackedDeviceIndexForControllerRole(role);
+          const pose = pacer.getCachedTrackedDevicePose(index);
+          if (pose) {
+            const resolved = tip.resolve(index, pose);
+            setRenderHandAnchors(anchors, hand, resolved.matrix, payload.renderGripOffsets?.[hand]);
+          }
         }
       }
-      state.resolvedAnchors = resolveRenderAnchors(payload, anchors);
+      state.anchorSpaces = {};
+      state.resolvedAnchors = resolveRenderAnchors(payload, anchors, state.anchorSpaces);
       if (!renderer.useEyeTargetsOtherThan([shownLeft])) {
         throw new Error("No eligible render targets");
       }
-      renderer.renderRaythreeFrame(payload, {
-        skipCombine: !panoramaMode,
-        cameras,
-        lookRotation,
-      });
-      inbox.markAdopted(scene);
+      if (
+        panoramaMode && state.panoramaTextureRotation &&
+        !renderer.useOutputTargetOtherThan([shownPanorama])
+      ) {
+        throw new Error("No eligible panorama output targets");
+      }
+      const wristMarker = wrist?.marker(payload, { ...cameras, ...headsetProjections });
+      const restoreWristTag = wrist?.append(payload, head);
+      const renderStartMs = performance.now();
+      const publishedBefore = state.publishedFrames;
+      try {
+        renderer.renderRaythreeFrame(payload, {
+          skipCombine: !panoramaMode,
+          cameras,
+          lookRotation,
+        });
+      } finally {
+        restoreWristTag?.();
+      }
+      const renderEndMs = performance.now();
+      if (!probe && scene) inbox.markAdopted(scene);
       state.renderFrameId++;
+      const renderedEyes = renderer.getEyeTextureHandles();
+      state.lastRenderImages = renderedEyes
+        ? { ...renderedEyes, output: renderer.getTextureHandle() }
+        : null;
       if (panoramaMode) {
         const texture = renderer.getTextureHandle();
         if (!panoramaReady) {
@@ -411,6 +555,7 @@ async function run(options: Start) {
         }
         panorama.setTextureHandle(texture);
         const presenterPaced = state.panoramaPacing === "presenter";
+        let published = true;
         if (vsyncPaced && syncPhase) {
           for (;;) {
             const now = pacer.sampleVsyncPhase();
@@ -425,13 +570,14 @@ async function run(options: Start) {
           state.lastPresent = { mode: "panorama-presenter", ...result };
           if (result.waitResult === OpenVR.OverlayError.VROverlayError_TimedOut) {
             state.waitTimeouts++;
+            published = false;
           } else if (result.error) {
             throw new Error(`Panorama publication failed: ${JSON.stringify(result)}`);
           }
         } else if (!panorama.present()) throw new Error("Panorama texture rejected");
         else state.lastPresent = { mode: "panorama", texture };
         const presentPhase = pacer.sampleVsyncPhase();
-        if (syncPhase && presentPhase) {
+        if (published && syncPhase && presentPhase) {
           panoramaPhase.push([
             syncPhase.msSinceVsync,
             presentPhase.msSinceVsync,
@@ -440,7 +586,10 @@ async function run(options: Start) {
           ]);
           if (panoramaPhase.length > 600) panoramaPhase.shift();
         }
-        state.publishedFrames++;
+        if (published) {
+          shownPanorama = texture;
+          state.publishedFrames++;
+        }
       } else {
         const textures = renderer.getEyeTextureHandles();
         if (!textures) throw new Error("Missing eye targets");
@@ -454,7 +603,54 @@ async function run(options: Start) {
           state.publishedFrames++;
         }
       }
-      if (performance.now() - lastReportAt > 500) {
+      if (wrist && wrist.rows.length < 10000) {
+        const phase = pacer.sampleVsyncPhase();
+        wrist.rows.push({
+          generation: wrist.generation,
+          sampleMonotonicSeconds,
+          publicationMonotonicSeconds: probeClock?.now(),
+          predictionMs,
+          marker: wristMarker,
+          head: head.toArray(),
+          leftProjection: Array.from(headsetProjections.leftEyeProjectionMatrix),
+          sourceLeftProjection: Array.from(cameras.leftEyeProjectionMatrix),
+          sampleVsync: syncPhase ? String(syncPhase.frameIndex) : null,
+          samplePhaseMs: syncPhase?.msSinceVsync,
+          publicationVsync: phase ? String(phase.frameIndex) : null,
+          publicationPhaseMs: phase?.msSinceVsync,
+          renderStartMs,
+          renderEndMs,
+          published: state.publishedFrames > publishedBefore,
+          textures: state.lastRenderImages,
+        });
+      }
+      if (probe && probeRows.length < 10000) {
+        const endPhase = pacer.sampleVsyncPhase();
+        probeRows.push({
+          generation: probeGeneration,
+          hmdActivity: system.GetTrackedDeviceActivityLevel(OpenVR.k_unTrackedDeviceIndex_Hmd),
+          sampleVsync: syncPhase ? String(syncPhase.frameIndex) : null,
+          samplePhaseMs: syncPhase?.msSinceVsync,
+          publicationVsync: endPhase ? String(endPhase.frameIndex) : null,
+          publicationPhaseMs: endPhase?.msSinceVsync,
+          mode: activeMode,
+          pacing: panoramaMode ? state.panoramaPacing : "presenter",
+          sampleMs,
+          sampleMonotonicSeconds,
+          publicationMonotonicSeconds: probeClock?.now(),
+          elapsedMs: sampleMs - probeStartMs,
+          predictionMs,
+          targetMs: sampleMs - probeStartMs + predictionMs,
+          x: probeSample!.x,
+          renderStartMs,
+          renderEndMs,
+          publicationEndMs: performance.now(),
+          published: state.publishedFrames > publishedBefore,
+          textures: state.lastRenderImages,
+          present: state.lastPresent,
+        });
+      }
+      if (state.webxrTarget && performance.now() - lastReportAt > 500) {
         PostMan.PostMessage({
           target: state.webxrTarget!,
           type: "OVERLAYRENDERSTATUS",
@@ -473,6 +669,12 @@ async function run(options: Start) {
       });
     }
     registered = false;
+    motionProbe = null;
+    wristProbe = null;
+    state.wristMotionProbe = false;
+    probeClock?.close();
+    probeClock = null;
+    state.motionProbe = false;
     latest = null;
     overlays?.cleanup();
     panorama?.cleanup();

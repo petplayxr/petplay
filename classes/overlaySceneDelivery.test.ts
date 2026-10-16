@@ -48,6 +48,11 @@ Deno.test("receipt credit coalesces scenes without losing assets before GPU adop
     inbox.current()!.payload.leftEye.assets.geometries.length === 0,
     "GPU adopted assets need not resend",
   );
+  inbox.invalidateAdoptedAssets();
+  assert(
+    inbox.current()!.payload.leftEye.assets.geometries.length === 2,
+    "GPU reset replays the retained full baseline without another producer update",
+  );
   inbox.receive(scene(3, batch(geometry(1, 1)), "producer-b"));
   inbox.markAdopted(latest);
   const restarted = inbox.current()!;

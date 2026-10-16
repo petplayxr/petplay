@@ -60,6 +60,8 @@ export function anchoredLowerers(): RenderLowerer[] {
 export function resolveRenderAnchors(
   payload: WebXRRaythreeRenderPayload,
   anchors: RenderAnchors,
+  /** Optional per-space tally of anchored items, resolved or not (tracking lost). */
+  spaceCounts?: Partial<Record<RenderAnchorSpace, number>>,
 ): number {
   let count = 0;
   const resolve = (
@@ -71,6 +73,7 @@ export function resolveRenderAnchors(
   ) => {
     const anchor = item.renderAnchor;
     if (!anchor) return;
+    if (spaceCounts) spaceCounts[anchor.space] = (spaceCounts[anchor.space] ?? 0) + 1;
     const tracked = anchors[anchor.space];
     // Hold last visual placement on tracking loss, matching the existing scene policy.
     if (!tracked) return;

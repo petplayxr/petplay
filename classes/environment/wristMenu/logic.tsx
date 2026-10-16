@@ -354,6 +354,21 @@ export function WristMenuPanel(
         position={offset?.position ?? [0, 0, 0]}
         quaternion={offset?.rotation ?? [0, 0, 0, 1]}
       >
+        {typeof Deno !== "undefined" && Deno.args.includes("--wrist-motion-probe") && attached && (
+          <mesh
+            position={[-0.20, 0.20, 0.03]}
+            userData={{ raythreeHudOverUi: true }}
+            {...({ pointerEvents: "none" } as Record<string, unknown>)}
+          >
+            <planeGeometry args={[0.10, 0.10]} />
+            <meshBasicMaterial
+              color={0xff00ff}
+              side={THREE.DoubleSide}
+              depthTest={false}
+              depthWrite={false}
+            />
+          </mesh>
+        )}
         <group userData={{ bridge: { kind: "skip" }, wristMenuActor: actorId ?? null }}>
           <GrabBox
             manipulationTargetRef={attached ? offsetRef : undefined}
@@ -442,13 +457,15 @@ export function WristMenuControllerHud({ actorId }: { actorId?: string | null })
         }}
       />
       <XRSpace space="grip-space">
-        <group userData={{ renderTrackingAnchor: hostHandedness ? `${hostHandedness}-hand` : undefined }}>
-        <WristMenuPanel
-          hostHandedness={hostHandedness}
-          transform={transform}
-          attachedToController
-          actorId={actorId}
-        />
+        <group
+          userData={{ renderTrackingAnchor: hostHandedness ? `${hostHandedness}-hand` : undefined }}
+        >
+          <WristMenuPanel
+            hostHandedness={hostHandedness}
+            transform={transform}
+            attachedToController
+            actorId={actorId}
+          />
         </group>
       </XRSpace>
     </>

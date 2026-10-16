@@ -156,6 +156,7 @@ export class WebXROverlayRaylib {
   /** Eye pairs besides the active one, for projection presents; see {@link useEyeTargetsOtherThan}. */
   private spareEyeTargets: [raylib.RenderTexture2D, raylib.RenderTexture2D][] = [];
   private outputTarget: raylib.RenderTexture2D | null = null;
+  private spareOutputTargets: raylib.RenderTexture2D[] = [];
   private combineShader: raylib.Shader | null = null;
   private sceneRenderer: WebXRRaythreeRaylibRenderer | null = null;
   private lookRotationLocation = -1;
@@ -284,6 +285,32 @@ export class WebXROverlayRaylib {
     this.spareEyeTargets[index] = [this.leftEyeTarget, this.rightEyeTarget];
     this.leftEyeTarget = left;
     this.rightEyeTarget = right;
+    return true;
+  }
+
+  /** Diagnostic parity with projection's source rotation; not a compositor retirement guarantee. */
+  useOutputTargetOtherThan(busyTextures: readonly number[]): boolean {
+    if (!this.outputTarget) return false;
+    if (!busyTextures.includes(this.outputTarget.texture.id)) return true;
+    let index = this.spareOutputTargets.findIndex((target) =>
+      !busyTextures.includes(target.texture.id)
+    );
+    if (index < 0) {
+      if (this.spareOutputTargets.length >= 2) return false;
+      const target = raylib.H.LoadRenderTexture(
+        this.outputTarget.texture.width,
+        this.outputTarget.texture.height,
+      );
+      if (!WebXROverlayRaylib.isRenderTargetValid(target)) {
+        raylib.H.UnloadRenderTexture(target);
+        return false;
+      }
+      raylib.H.SetTextureFilter(target.texture, raylib.TextureFilter.TEXTURE_FILTER_BILINEAR);
+      index = this.spareOutputTargets.push(target) - 1;
+    }
+    const next = this.spareOutputTargets[index];
+    this.spareOutputTargets[index] = this.outputTarget;
+    this.outputTarget = next;
     return true;
   }
 
@@ -865,6 +892,8 @@ export class WebXROverlayRaylib {
   }
 
   private unloadTargets() {
+    for (const target of this.spareOutputTargets) raylib.H.UnloadRenderTexture(target);
+    this.spareOutputTargets = [];
     for (const pair of this.spareEyeTargets) {
       for (const target of pair) raylib.H.UnloadRenderTexture(target);
     }
@@ -1054,6 +1083,29 @@ export class WebXROverlayRaylib {
       rect.h,
       RENDER_CANARY_STAGES[slot]!.color as unknown as raylib.Color,
     );
+  }
+
+  /** Blocking diagnostic readback. Never enable in a paced cadence measurement. */
+  readRenderTargetRgba(which: "left" | "right" | "output") {
+    const target = which === "left"
+      ? this.leftEyeTarget
+      : which === "right"
+      ? this.rightEyeTarget
+      : this.outputTarget;
+    if (!target) throw new Error(`Missing ${which} render target`);
+    const image = raylib.H.LoadImageFromTexture(target.texture);
+    try {
+      if (image.format !== 7) throw new Error(`Expected RGBA8 readback, got ${image.format}`);
+      const raw = image.data as unknown;
+      const pointer = typeof raw === "bigint" ? Deno.UnsafePointer.create(raw) : raw;
+      if (!pointer) throw new Error("Null readback image");
+      const data = new Uint8Array(new Deno.UnsafePointerView(pointer as Deno.PointerObject)
+        .getArrayBuffer(image.width * image.height * 4)).slice();
+      // GL storage order: row zero is the bottom, unlike most PNG readers.
+      return { width: image.width, height: image.height, data };
+    } finally {
+      raylib.H.UnloadImage(image);
+    }
   }
 
   /** Read back which canary squares actually survived in `target`. */
