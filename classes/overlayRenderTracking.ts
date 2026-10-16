@@ -26,21 +26,64 @@ export function setRenderHandAnchors(
 export function captureRenderAnchor(
   object: THREE.Object3D,
   worldMatrix: ArrayLike<number>,
+  /** Transform of `worldMatrix` relative to `object` (an instance matrix), if any. */
+  objectLocal?: ArrayLike<number>,
 ): RenderAnchor | undefined {
   for (let root: THREE.Object3D | null = object; root; root = root.parent) {
     const space = root.userData?.renderTrackingAnchor;
     if (space === "world") return undefined;
     if (!spaces.includes(space)) continue;
     if (Math.abs(root.matrixWorld.determinant()) < 1e-12) return undefined;
-    return {
-      space,
-      localMatrix: new Float64Array(
-        new THREE.Matrix4().copy(root.matrixWorld).invert()
-          .multiply(new THREE.Matrix4().fromArray(worldMatrix)).elements,
-      ),
-    };
+    return { space, localMatrix: localMatrixUnder(root, object, worldMatrix, objectLocal) };
   }
 }
+
+const chainHelper = new THREE.Matrix4();
+const checkHelper = new THREE.Matrix4();
+
+/**
+ * Prefer the product of local matrices below the anchor: it does not change while the anchor
+ * moves, so an unchanged scene keeps bit-identical anchor matrices (see fingerprintScene).
+ * Inverting the moving world matrix instead adds float noise every frame. Fall back to that
+ * when the chain does not reproduce `worldMatrix` (stale or externally set matrices).
+ */
+function localMatrixUnder(
+  root: THREE.Object3D,
+  object: THREE.Object3D,
+  worldMatrix: ArrayLike<number>,
+  objectLocal: ArrayLike<number> | undefined,
+): Float64Array {
+  const local = new THREE.Matrix4();
+  if (objectLocal) local.fromArray(objectLocal as number[]);
+  for (let node: THREE.Object3D | null = object; node && node !== root; node = node.parent) {
+    local.premultiply(node.matrix);
+  }
+  checkHelper.multiplyMatrices(root.matrixWorld, local);
+  let error = 0, scale = 0;
+  for (let i = 0; i < 16; i++) {
+    error = Math.max(error, Math.abs(checkHelper.elements[i]! - Number(worldMatrix[i])));
+    scale = Math.max(scale, Math.abs(Number(worldMatrix[i])));
+  }
+  if (error <= 1e-4 * Math.max(1, scale)) return new Float64Array(local.elements);
+  const inverted = chainHelper.copy(root.matrixWorld).invert()
+    .multiply(local.fromArray(worldMatrix as number[])).elements;
+  // uikit derives matrixWorld from layout, so its nodes take this path. Holding the previous
+  // result through rounding noise keeps them bit-identical while nothing moves.
+  const previous = objectLocal ? undefined : invertedLocals.get(object);
+  if (previous) {
+    let drift = 0, size = 1;
+    for (let i = 0; i < 16; i++) {
+      drift = Math.max(drift, Math.abs(previous[i]! - inverted[i]!));
+      size = Math.max(size, Math.abs(inverted[i]!));
+    }
+    if (drift <= 1e-9 * size) return previous.slice();
+  }
+  const result = new Float64Array(inverted);
+  if (!objectLocal) invertedLocals.set(object, result.slice());
+  return result;
+}
+
+const invertedLocals = new WeakMap<THREE.Object3D, Float64Array>();
 
 export function anchoredLowerers(): RenderLowerer[] {
   return createDefaultLowerers().map((lowerer) => ({

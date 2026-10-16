@@ -1,6 +1,11 @@
 import { LogChannel } from "@mommysgoodpuppy/logchannel";
 import * as THREE from "three";
 import { captureTextBatchTransforms, textBatchTransformsMatch } from "./uiTextBatchTransforms.ts";
+import {
+  captureTextBatchContent,
+  textBatchContentMatches,
+  UiTextGeometryInterner,
+} from "./uiTextSnapshotCache.ts";
 import raylib, * as raylibBindings from "../submodules/raylib_ts_bindings_deno/raylib_bindings.ts";
 import type {
   ExtractionResult,
@@ -49,7 +54,7 @@ const WEBXR_RAYTHREE_TEXT_FORCE_NON_INDEXED = false;
 
 /**
  * A/B: set `--webxr-raythree-ui-panel-force-unbatched=1` to draw each uikit
- * panel with `drawUiPanel` (original path) instead of `tryDrawUiPanelsBatched`.
+ * panel with `drawUiPanel` (original path) instead of the batched run (`drawUiPanelOp`).
  * - If the keyboard looks **correct** with this on, the bug is in the batch
  *   path (data texture, shader, or `gl_VertexID`).
  * - If it still looks **wrong**, suspect snapshot `panel.data` / clipping, or
@@ -163,9 +168,59 @@ type UiTextBatchShader = {
   mvpLoc: number;
 };
 
+/**
+ * Encoded bytes for long-lived raylib structs (shaders, meshes, materials). The bindings accept
+ * raw struct bytes, so hot draw calls skip re-encoding the same object on every call. Only for
+ * objects whose fields never change after creation; a replaced mesh is a new object.
+ */
+const structBytes = new WeakMap<object, raylibBindings.StructBytes>();
+function cachedStruct<T extends object>(
+  value: T,
+  def: { toBytes(value: T): Uint8Array },
+): raylibBindings.StructBytes<T> {
+  let bytes = structBytes.get(value);
+  if (bytes === undefined) {
+    bytes = def.toBytes(value);
+    structBytes.set(value, bytes);
+  }
+  return bytes;
+}
+
+/** Hot-path raylib calls with cached struct arguments. */
+const rlFast = {
+  SetShaderValue(
+    shader: raylibBindings.Shader,
+    loc: number,
+    value: raylibBindings.VoidPointer,
+    type: number,
+  ): void {
+    raylib.H.SetShaderValue(cachedStruct(shader, raylibBindings.Shader), loc, value, type);
+  },
+  SetShaderValueMatrix(
+    shader: raylibBindings.Shader,
+    loc: number,
+    mat: raylibBindings.StructLike<raylibBindings.Matrix>,
+  ): void {
+    raylib.H.SetShaderValueMatrix(cachedStruct(shader, raylibBindings.Shader), loc, mat);
+  },
+  DrawMesh(
+    mesh: raylibBindings.Mesh,
+    material: raylibBindings.Material,
+    transform: raylibBindings.StructLike<raylibBindings.Matrix>,
+  ): void {
+    raylib.H.DrawMesh(
+      cachedStruct(mesh, raylibBindings.Mesh),
+      cachedStruct(material, raylibBindings.Material),
+      transform,
+    );
+  },
+};
+
 type UiPanelBatchShader = {
   shader: raylibBindings.Shader;
   mvpLoc: number;
+  /** First data-texture row of the run being drawn (runs share one frame texture). */
+  rowOffsetLoc: number;
   /** `texture0` (MAP_ALBEDO) — for debug; bound via `material.maps` + DrawMesh, not SetShaderValueTexture. */
   texture0Loc: number;
 };
@@ -179,6 +234,41 @@ type UiTextCpuGeometryCacheEntry = {
   geometry: MsdfCpuGeometry;
   version: number;
 };
+
+/**
+ * Quads for one batched panel run. Each run within a frame owns its slot, so a run never
+ * overwrites a buffer an earlier draw in the same frame still reads, and a slot's vertex count
+ * is stable from frame to frame. The second eye reuses the first eye's upload when the run holds
+ * the same panels in the same frame. Even and odd frames use separate slots.
+ */
+type UiPanelRunSlot = {
+  mesh: DynamicNativeMesh | null;
+  frame: number;
+  panels: WebXRRaythreeUiPanelSnapshot[];
+};
+
+/** Style rows for every batched panel of a frame: one texture, uploaded once per frame. */
+type UiPanelFrameData = {
+  bytes: Uint8Array | null;
+  texture: raylibBindings.Texture2D | null;
+  texH: number;
+  frame: number;
+  panels: WebXRRaythreeUiPanelSnapshot[];
+};
+
+/** Rows one frame texture may hold; runs past it draw per panel. */
+const UI_PANEL_FRAME_ROWS = 4096;
+
+type UiDrawOp =
+  | {
+    kind: "panels";
+    panels: WebXRRaythreeUiPanelSnapshot[];
+    drawn: WebXRRaythreeUiPanelSnapshot[];
+    rowOffset: number;
+    slot: UiPanelRunSlot | null;
+  }
+  | { kind: "image"; image: WebXRRaythreeUiSnapshot["images"][number] }
+  | { kind: "texts"; texts: WebXRRaythreeUiSnapshot["texts"] };
 
 type DynamicNativeMesh = NativeMesh & {
   vertexCount: number;
@@ -309,24 +399,8 @@ export class WebXRRaythreeRaylibRenderer {
     RenderInstance | InstancedRenderInstance
   > = [];
   /** Filled from the current view matrix per frame; `getWorldMatrixViewDepth` reads it (do not re-enter before a sort has finished). */
-  private readonly raylibMatrixScratch: raylibBindings.Matrix = {
-    m0: 1,
-    m1: 0,
-    m2: 0,
-    m3: 0,
-    m4: 0,
-    m5: 1,
-    m6: 0,
-    m7: 0,
-    m8: 0,
-    m9: 0,
-    m10: 1,
-    m11: 0,
-    m12: 0,
-    m13: 0,
-    m14: 0,
-    m15: 1,
-  };
+  private readonly raylibMatrixBytes = new Uint8Array(raylibBindings.Matrix.byteSize);
+  private readonly raylibMatrixFloats = new Float32Array(this.raylibMatrixBytes.buffer);
   private readonly uiMvpP = new THREE.Matrix4();
   private readonly uiMvpV = new THREE.Matrix4();
   private readonly uiMvpW = new THREE.Matrix4();
@@ -339,11 +413,15 @@ export class WebXRRaythreeRaylibRenderer {
   private readonly uiPanelBatchShader: UiPanelBatchShader;
   private readonly uiPanelBatchMaterialBytes: Uint8Array;
   private readonly uiPanelBatchMaterial: raylibBindings.Material;
+  private readonly uiTextGeometryInterner = new UiTextGeometryInterner();
+  private work = {
+    textGeometryBuilds: 0, textBatchRebuilds: 0, textBatchHits: 0, textVerticesUploaded: 0,
+  };
   private readonly uiTextBatchMeshes = new Map<
     string,
     {
       mesh: DynamicNativeMesh;
-      texts: WebXRRaythreeUiSnapshot["texts"];
+      content: ReturnType<typeof captureTextBatchContent>;
       worldMatrices: Float64Array;
     }
   >();
@@ -352,11 +430,11 @@ export class WebXRRaythreeRaylibRenderer {
   private textBatchPoolUv = new Float32Array(0);
   private textBatchPoolC = new Uint8Array(0);
   private textBatchPoolCap = 0;
-  private uiPanelDataBytes: Uint8Array | null = null;
-  private uiPanelDataTexture: raylibBindings.Texture2D | null = null;
-  private uiPanelDataTexH = 0;
   private uiPanelDataTexW = 9;
-  private uiPanelBatchMesh: DynamicNativeMesh | null = null;
+  private uiPanelRunSlots: UiPanelRunSlot[] = [];
+  private uiPanelFrameData: UiPanelFrameData[] = [];
+  /** Advanced once per stereo frame by `beginUiFrame`; scopes panel-run reuse to one frame. */
+  private uiFrame = 0;
   private uiPanelBatchPoolPos = new Float32Array(0);
   private uiPanelBatchPoolN = new Float32Array(0);
   private uiPanelBatchPoolUv = new Float32Array(0);
@@ -536,7 +614,7 @@ export class WebXRRaythreeRaylibRenderer {
   }
 
   /**
-   * `syncMs`: CPU + `UploadMesh` / material work when `assets.geometries` / `assets.materials` lists carry updates.
+   * `syncMs`: text-geometry interning plus CPU / `UploadMesh` / material work when `assets.geometries` / `assets.materials` lists carry updates.
    * `frameMs`: `DrawMesh` + UI at eye resolution (dominates when batch lists are ~empty every frame).
    */
   renderExtraction(
@@ -550,6 +628,10 @@ export class WebXRRaythreeRaylibRenderer {
     ui?: WebXRRaythreeUiSnapshot,
     options?: { skipAssetSync?: boolean },
   ): {
+    textGeometryBuilds: number;
+    textBatchRebuilds: number;
+    textBatchHits: number;
+    textVerticesUploaded: number;
     syncMs: number;
     frameMs: number;
     prepMs: number;
@@ -567,7 +649,12 @@ export class WebXRRaythreeRaylibRenderer {
     batchGeometries: number;
     batchMaterials: number;
   } {
+    this.work.textGeometryBuilds = 0;
+    this.work.textBatchRebuilds = 0;
+    this.work.textBatchHits = 0;
+    this.work.textVerticesUploaded = 0;
     const t0 = performance.now();
+    if (ui) this.uiTextGeometryInterner.intern(ui.texts);
     if (options?.skipAssetSync !== true) {
       this.syncAssets(extraction, debugContext);
     }
@@ -575,6 +662,7 @@ export class WebXRRaythreeRaylibRenderer {
     const phases = this.renderFrame(extraction.frame, background, matrices, ui);
     const t2 = performance.now();
     return {
+      ...this.work,
       syncMs: t1 - t0,
       frameMs: t2 - t1,
       prepMs: phases.prepMs,
@@ -636,15 +724,14 @@ export class WebXRRaythreeRaylibRenderer {
       this.unloadNativeMesh(entry.mesh);
     }
     this.uiTextBatchMeshes.clear();
-    if (this.uiPanelBatchMesh !== null) {
-      this.unloadNativeMesh(this.uiPanelBatchMesh);
-      this.uiPanelBatchMesh = null;
+    for (const slot of this.uiPanelRunSlots) {
+      if (slot.mesh !== null) this.unloadNativeMesh(slot.mesh);
     }
-    if (this.uiPanelDataTexture !== null) {
-      raylib.H.UnloadTexture(this.uiPanelDataTexture);
-      this.uiPanelDataTexture = null;
+    this.uiPanelRunSlots = [];
+    for (const data of this.uiPanelFrameData) {
+      if (data.texture !== null) raylib.H.UnloadTexture(data.texture);
     }
-    this.uiPanelDataBytes = null;
+    this.uiPanelFrameData = [];
     LogChannel.log("webxrv2", "[webxr] raylib scene dispose: shaders");
     raylib.H.UnloadShader(this.uiTextShader.shader);
     raylib.H.UnloadShader(this.uiTextBatchShader.shader);
@@ -883,7 +970,7 @@ export class WebXRRaythreeRaylibRenderer {
     textDrawn: number;
   } {
     const t0 = performance.now();
-    this.uiMvpP.fromArray(projectionMatrix as unknown as number[]);
+        this.uiMvpP.fromArray(projectionMatrix as unknown as number[]);
     this.uiMvpV.fromArray(viewMatrix as unknown as number[]);
     this.uiMvpPV.copy(this.uiMvpP).multiply(this.uiMvpV);
 
@@ -983,12 +1070,15 @@ export class WebXRRaythreeRaylibRenderer {
     let textDrawn = 0;
     let panelsMs = 0;
     let textMs = 0;
+    const ops: UiDrawOp[] = [];
+    const panelOp = (panels: WebXRRaythreeUiPanelSnapshot[]) => {
+      if (panels.length > 0) ops.push({ kind: "panels", panels, drawn: [], rowOffset: 0, slot: null });
+    };
     for (const rootIndex of rootIndicesByDepth) {
       const rootPanels = panelsByRoot.get(rootIndex) ?? [];
       const rootImages = imagesByRoot.get(rootIndex) ?? [];
       const rootTexts = textsByRoot.get(rootIndex) ?? [];
 
-      const panelsStart = performance.now();
       if (rootImages.length > 0) {
         // Placing an image in the draw order by sort key does not work: uikit
         // gives every panel the same order info and layers them by
@@ -1020,28 +1110,43 @@ export class WebXRRaythreeRaylibRenderer {
           if (matchingImages.length === 0) {
             continue;
           }
-          panelDrawn += this.drawUiPanelRun(
-            rootPanels.slice(runStart, panelIndex + 1),
-            this.uiMvpPV,
-          );
+          panelOp(rootPanels.slice(runStart, panelIndex + 1));
           runStart = panelIndex + 1;
           for (const pending of matchingImages) {
-            this.drawUiImage(pending.item, this.uiMvpPV);
+            ops.push({ kind: "image", image: pending.item });
           }
         }
-        panelDrawn += this.drawUiPanelRun(rootPanels.slice(runStart), this.uiMvpPV);
+        panelOp(rootPanels.slice(runStart));
         // An image matching no panel still draws, on top, rather than vanishing
         // silently — a visible wrong result beats an invisible one.
         for (const pending of pendingImages) {
           if (!pending.placed) {
-            this.drawUiImage(pending.item, this.uiMvpPV);
+            ops.push({ kind: "image", image: pending.item });
           }
         }
       } else {
-        panelDrawn += this.drawUiPanelRun(rootPanels, this.uiMvpPV);
+        panelOp(rootPanels);
       }
-      panelsMs += performance.now() - panelsStart;
+      ops.push({ kind: "texts", texts: rootTexts });
+    }
 
+    const panelsStart = performance.now();
+    this.prepareUiPanelRuns(ops);
+    panelsMs += performance.now() - panelsStart;
+    for (const op of ops) {
+      if (op.kind === "panels") {
+        const start = performance.now();
+        panelDrawn += this.drawUiPanelOp(op, this.uiMvpPV);
+        panelsMs += performance.now() - start;
+        continue;
+      }
+      if (op.kind === "image") {
+        const start = performance.now();
+        this.drawUiImage(op.image, this.uiMvpPV);
+        panelsMs += performance.now() - start;
+        continue;
+      }
+      const rootTexts = op.texts;
       const textStart = performance.now();
       // One batch per font within the root: a batch binds a single atlas, so
       // runs from different fonts cannot share one. Grouping keeps batching in
@@ -1086,29 +1191,6 @@ export class WebXRRaythreeRaylibRenderer {
     };
   }
 
-  /** Draw a contiguous panel-order run as one batch, with a safe per-panel fallback. */
-  private drawUiPanelRun(
-    panels: WebXRRaythreeUiSnapshot["panels"],
-    projView: THREE.Matrix4,
-  ): number {
-    if (panels.length === 0) {
-      return 0;
-    }
-    const batched = WEBXR_RAYTHREE_UI_PANEL_FORCE_UNBATCHED
-      ? null
-      : this.tryDrawUiPanelsBatched(panels, projView);
-    if (batched !== null) {
-      return batched;
-    }
-    let drawn = 0;
-    for (const panel of panels) {
-      if (this.drawUiPanel(panel, projView)) {
-        drawn++;
-      }
-    }
-    return drawn;
-  }
-
   private setUiShaderMvp(
     shader: raylibBindings.Shader,
     mvpLoc: number,
@@ -1123,7 +1205,7 @@ export class WebXRRaythreeRaylibRenderer {
       worldEl[i] = Number(world[i]);
     }
     this.uiMvp.copy(projView).multiply(this.uiMvpW);
-    raylib.H.SetShaderValueMatrix(
+    rlFast.SetShaderValueMatrix(
       shader,
       mvpLoc,
       this.matrixForDraw(this.uiMvp.elements),
@@ -1211,14 +1293,14 @@ export class WebXRRaythreeRaylibRenderer {
       computeUiDepthOffset(panel.orderInfo, panel.instanceIndex),
     );
     if (this.uiPanelShader.worldLoc >= 0) {
-      raylib.H.SetShaderValueMatrix(
+      rlFast.SetShaderValueMatrix(
         this.uiPanelShader.shader,
         this.uiPanelShader.worldLoc,
         this.matrixForDraw(panel.worldMatrix),
       );
     }
     if (this.uiPanelShader.clippingLoc >= 0) {
-      raylib.H.SetShaderValueMatrix(
+      rlFast.SetShaderValueMatrix(
         this.uiPanelShader.shader,
         this.uiPanelShader.clippingLoc,
         this.matrixForDraw(panel.clipping),
@@ -1309,7 +1391,7 @@ export class WebXRRaythreeRaylibRenderer {
     const world = image.worldMatrix;
 
     if (this.uiPanelShader.worldLoc >= 0) {
-      raylib.H.SetShaderValueMatrix(
+      rlFast.SetShaderValueMatrix(
         this.uiPanelShader.shader,
         this.uiPanelShader.worldLoc,
         this.matrixForDraw(world),
@@ -1319,7 +1401,7 @@ export class WebXRRaythreeRaylibRenderer {
       // Images are not scroll-clipped yet, so use planes that never cut. The
       // uniform persists between draws, so leaving it unset would inherit the
       // previous panel's clip rect and silently erase the image.
-      raylib.H.SetShaderValueMatrix(
+      rlFast.SetShaderValueMatrix(
         this.uiPanelShader.shader,
         this.uiPanelShader.clippingLoc,
         this.matrixForDraw(UI_IMAGE_NO_CLIP),
@@ -1346,7 +1428,7 @@ export class WebXRRaythreeRaylibRenderer {
   private drawUiQuad(
     worldMatrix: ArrayLike<number>,
   ): void {
-    raylib.H.DrawMesh(
+    rlFast.DrawMesh(
       this.uiPanelMesh.mesh,
       this.uiMaterial,
       this.matrixForDraw(worldMatrix),
@@ -1409,7 +1491,7 @@ export class WebXRRaythreeRaylibRenderer {
       projView,
       text.worldMatrix,
     );
-    raylib.H.DrawMesh(
+    rlFast.DrawMesh(
       mesh.mesh,
       this.uiTextMaterial,
       this.matrixForDraw(text.worldMatrix),
@@ -1506,7 +1588,7 @@ export class WebXRRaythreeRaylibRenderer {
         }
         setWireModeEnabled(true);
         try {
-          raylib.H.DrawMesh(
+          rlFast.DrawMesh(
             nativeMesh.mesh,
             material.material,
             this.matrixForDraw(worldMatrix),
@@ -1539,7 +1621,7 @@ export class WebXRRaythreeRaylibRenderer {
         raylib.H.EndBlendMode();
         raylib.H.BeginBlendMode(material.blendMode);
       }
-      raylib.H.DrawMesh(
+      rlFast.DrawMesh(
         nativeMesh.mesh,
         material.material,
         this.matrixForDraw(worldMatrix),
@@ -1660,59 +1742,51 @@ export class WebXRRaythreeRaylibRenderer {
     return -this.sortVector.z;
   }
 
-  /** Fills and returns `this.raylibMatrixScratch` — safe for one immediate FFI/DrawMesh use per call. */
-  private matrixForDraw(elements: ArrayLike<number>): raylibBindings.Matrix {
-    const m = this.raylibMatrixScratch;
-    m.m0 = Number(elements[0]);
-    m.m4 = Number(elements[4]);
-    m.m8 = Number(elements[8]);
-    m.m12 = Number(elements[12]);
-    m.m1 = Number(elements[1]);
-    m.m5 = Number(elements[5]);
-    m.m9 = Number(elements[9]);
-    m.m13 = Number(elements[13]);
-    m.m2 = Number(elements[2]);
-    m.m6 = Number(elements[6]);
-    m.m10 = Number(elements[10]);
-    m.m14 = Number(elements[14]);
-    m.m3 = Number(elements[3]);
-    m.m7 = Number(elements[7]);
-    m.m11 = Number(elements[11]);
-    m.m15 = Number(elements[15]);
-    return m;
+  /** Fills and returns shared matrix bytes: safe for one immediate FFI/DrawMesh use per call. */
+  private matrixForDraw(
+    elements: ArrayLike<number>,
+  ): raylibBindings.StructBytes<raylibBindings.Matrix> {
+    // raylib's Matrix fields are m0 m4 m8 m12 m1 m5 ... : column-major elements, row by row.
+    const f = this.raylibMatrixFloats;
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 4; col++) f[row * 4 + col] = Number(elements[col * 4 + row]);
+    }
+    return this.raylibMatrixBytes;
   }
 
-  private ensureUikitPanelDataTexture(rowCount: number): void {
+  /** Call once per stereo frame, before the first eye. */
+  beginUiFrame(): void {
+    this.uiFrame++;
+  }
+
+  private ensureUikitPanelDataTexture(slot: UiPanelFrameData, rowCount: number): void {
     const h = Math.max(rowCount, 1);
-    if (
-      this.uiPanelDataBytes !== null && h <= this.uiPanelDataTexH &&
-      this.uiPanelDataTexture !== null
-    ) {
+    if (slot.bytes !== null && h <= slot.texH && slot.texture !== null) {
       return;
     }
-    if (this.uiPanelDataTexture !== null) {
-      raylib.H.UnloadTexture(this.uiPanelDataTexture);
-      this.uiPanelDataTexture = null;
+    if (slot.texture !== null) {
+      raylib.H.UnloadTexture(slot.texture);
+      slot.texture = null;
     }
-    this.uiPanelDataTexH = h;
+    slot.texH = h;
     const w = this.uiPanelDataTexW;
     const fmt = raylib.PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32A32;
     const byteLen = Number(raylib.H.GetPixelDataSize(w, h, fmt));
     const bytes = new Uint8Array(byteLen);
-    this.uiPanelDataBytes = bytes;
+    slot.bytes = bytes;
     // `UnloadImage` frees `im.data` with raylib's allocator. JS heap pointers
     // (UnsafePointer.of(bytes)) must not be passed through — copy into MemAlloc.
     const heap = raylib.H.MemAlloc(byteLen);
     const heapAddr = voidPointerToBigint(heap);
     if (heapAddr === ZERO_POINTER) {
-      this.uiPanelDataBytes = null;
-      this.uiPanelDataTexH = 0;
+      slot.bytes = null;
+      slot.texH = 0;
       return;
     }
     const heapPtr = pointerFromAddress(heapAddr);
     if (heapPtr === null) {
-      this.uiPanelDataBytes = null;
-      this.uiPanelDataTexH = 0;
+      slot.bytes = null;
+      slot.texH = 0;
       return;
     }
     new Uint8Array(
@@ -1727,56 +1801,87 @@ export class WebXRRaythreeRaylibRenderer {
     };
     const imageHandle = raylibBindings.Image.createPointer(image);
     const im = imageHandle.read();
-    this.uiPanelDataTexture = raylib.H.LoadTextureFromImage(im);
+    slot.texture = raylib.H.LoadTextureFromImage(im);
     raylib.H.UnloadImage(im);
     raylib.H.SetTextureFilter(
-      this.uiPanelDataTexture,
+      slot.texture,
       raylibBindings.TextureFilter.TEXTURE_FILTER_POINT,
     );
     raylib.H.SetTextureWrap(
-      this.uiPanelDataTexture,
+      slot.texture,
       raylibBindings.TextureWrap.TEXTURE_WRAP_CLAMP,
     );
   }
 
   /**
-   * One `DrawMesh` for all uikit panel quads. Returns drawn count, `null` to fall back to per-panel draws.
+   * Upload this frame's batched panel runs: every run's style rows into one frame texture with a
+   * single upload, and each run's quads into its slot. The second eye of a frame reuses both
+   * when its runs hold the same panels.
    */
-  private tryDrawUiPanelsBatched(
-    panels: WebXRRaythreeUiPanelSnapshot[],
-    projView: THREE.Matrix4,
-  ): number | null {
-    const drawn: WebXRRaythreeUiPanelSnapshot[] = [];
-    for (const p of panels) {
-      if (!this.isUikitPanelCulled(p)) {
-        drawn.push(p);
+  private prepareUiPanelRuns(ops: UiDrawOp[]): void {
+    const parity = this.uiFrame & 1;
+    const data = this.uiPanelFrameData[parity] ??= {
+      bytes: null,
+      texture: null,
+      texH: 0,
+      frame: -1,
+      panels: [],
+    };
+    const all: WebXRRaythreeUiPanelSnapshot[] = [];
+    const runs: Extract<UiDrawOp, { kind: "panels" }>[] = [];
+    for (const op of ops) {
+      if (op.kind !== "panels") continue;
+      for (const p of op.panels) {
+        if (!this.isUikitPanelCulled(p)) op.drawn.push(p);
+      }
+      if (
+        WEBXR_RAYTHREE_UI_PANEL_FORCE_UNBATCHED || op.drawn.length === 0 ||
+        op.drawn.length > 255 || all.length + op.drawn.length > UI_PANEL_FRAME_ROWS
+      ) continue;
+      op.rowOffset = all.length;
+      for (const p of op.drawn) all.push(p);
+      runs.push(op);
+    }
+    if (all.length === 0) return;
+    const reuse = data.frame === this.uiFrame && data.texture !== null &&
+      data.panels.length === all.length && data.panels.every((p, i) => p === all[i]);
+    if (!reuse) {
+      this.ensureUikitPanelDataTexture(data, all.length);
+      const up = data.bytes && Deno.UnsafePointer.of(data.bytes as unknown as BufferSource);
+      if (!data.bytes || !data.texture || !up) return;
+      const f = new Float32Array(data.bytes.buffer, data.bytes.byteOffset, data.bytes.length / 4);
+      for (let i = 0; i < all.length; i++) {
+        packUikitPanelRow(f, i, all[i]!);
+      }
+      raylib.H.UpdateTexture(data.texture, up);
+      data.frame = this.uiFrame;
+      data.panels = all;
+      if (WEBXR_RAYTHREE_UI_PANEL_BATCH_DEBUG && !this.loggedUiPanelBatchDebugOnce) {
+        this.loggedUiPanelBatchDebugOnce = true;
+        LogChannel.log(
+          "webxrv2",
+          `[webxr] UI panel batch (one-shot): rows=${all.length} runs=${runs.length} ` +
+            `tex=${this.uiPanelDataTexW}x${data.texH} mvpLoc=${this.uiPanelBatchShader.mvpLoc} ` +
+            `rowOffsetLoc=${this.uiPanelBatchShader.rowOffsetLoc} ` +
+            `row0=[${Array.from(f.subarray(0, 16)).map((x) => x.toFixed(4)).join(", ")}]`,
+        );
       }
     }
-    if (drawn.length === 0) {
-      return 0;
+    for (let r = 0; r < runs.length; r++) {
+      const op = runs[r]!;
+      const slot = this.uiPanelRunSlots[r * 2 + parity] ??= { mesh: null, frame: -1, panels: [] };
+      const same = slot.frame === this.uiFrame && slot.mesh !== null &&
+        slot.panels.length === op.drawn.length && slot.panels.every((p, i) => p === op.drawn[i]);
+      if (!same) this.uploadUiPanelRunQuads(slot, op.drawn);
+      op.slot = slot;
     }
-    if (drawn.length > 255) {
-      return null;
-    }
-    this.ensureUikitPanelDataTexture(drawn.length);
-    if (this.uiPanelDataBytes === null || this.uiPanelDataTexture === null) {
-      return null;
-    }
-    const f = new Float32Array(
-      this.uiPanelDataBytes.buffer,
-      this.uiPanelDataBytes.byteOffset,
-      this.uiPanelDataBytes.length / 4,
-    );
-    for (let i = 0; i < drawn.length; i++) {
-      packUikitPanelRow(f, i, drawn[i]!);
-    }
-    const up = Deno.UnsafePointer.of(
-      this.uiPanelDataBytes as unknown as BufferSource,
-    );
-    if (up === null) {
-      return null;
-    }
-    raylib.H.UpdateTexture(this.uiPanelDataTexture, up);
+  }
+
+  /** Bake one run's world-space quads into its slot's mesh. */
+  private uploadUiPanelRunQuads(
+    slot: UiPanelRunSlot,
+    drawn: WebXRRaythreeUiPanelSnapshot[],
+  ): void {
     const vCount = 6 * drawn.length;
     this.ensureUiPanelBatchPool(vCount);
     const pos = this.uiPanelBatchPoolPos;
@@ -1812,16 +1917,27 @@ export class WebXRRaythreeRaylibRenderer {
         col[o4 + 3] = 255;
       }
     }
-    this.uiPanelBatchMesh = this.updateOrCreateDynamicMesh(
-      this.uiPanelBatchMesh,
-      vCount,
-      pos,
-      uv,
-      nrm,
-      col,
-    );
+    slot.mesh = this.updateOrCreateDynamicMesh(slot.mesh, vCount, pos, uv, nrm, col);
+    slot.frame = this.uiFrame;
+    slot.panels = drawn;
+  }
+
+  /** Draw a planned panel run: one `DrawMesh` when batched, per-panel draws otherwise. */
+  private drawUiPanelOp(
+    op: Extract<UiDrawOp, { kind: "panels" }>,
+    projView: THREE.Matrix4,
+  ): number {
+    const data = this.uiPanelFrameData[this.uiFrame & 1];
+    if (op.slot === null || op.slot.mesh === null || !data?.texture) {
+      let drawn = 0;
+      for (const panel of op.panels) {
+        if (this.drawUiPanel(panel, projView)) drawn++;
+      }
+      return drawn;
+    }
+    setShaderInt(this.uiPanelBatchShader.shader, this.uiPanelBatchShader.rowOffsetLoc, op.rowOffset);
     if (this.uiPanelBatchShader.mvpLoc >= 0) {
-      raylib.H.SetShaderValueMatrix(
+      rlFast.SetShaderValueMatrix(
         this.uiPanelBatchShader.shader,
         this.uiPanelBatchShader.mvpLoc,
         this.matrixForDraw(projView.elements as unknown as number[]),
@@ -1837,37 +1953,14 @@ export class WebXRRaythreeRaylibRenderer {
     writeMaterialMap(
       this.uiPanelBatchMaterialBytes,
       raylibBindings.MaterialMapIndex.MATERIAL_MAP_ALBEDO,
-      {
-        ...panelDataAlbedo,
-        texture: this.uiPanelDataTexture,
-        color: raylib.WHITE,
-      },
+      { ...panelDataAlbedo, texture: data.texture, color: raylib.WHITE },
     );
-    if (
-      WEBXR_RAYTHREE_UI_PANEL_BATCH_DEBUG && !this.loggedUiPanelBatchDebugOnce
-    ) {
-      this.loggedUiPanelBatchDebugOnce = true;
-      const fmt = raylib.PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32A32;
-      const row0h = f.subarray(0, 16);
-      const row1h = drawn.length > 1 ? f.subarray(36, 36 + 16) : null;
-      LogChannel.log(
-        "webxrv2",
-        "[webxr] UI panel batch (one-shot): " +
-          `drawn=${drawn.length} tex=${this.uiPanelDataTexW}x${this.uiPanelDataTexH} ` +
-          `format=${fmt} mvpLoc=${this.uiPanelBatchShader.mvpLoc} texture0Loc=${this.uiPanelBatchShader.texture0Loc} ` +
-          `vertexCount=${vCount} (vPanelId=gl_VertexID/6) ` +
-          `row0_16f_border_bg_brdrad=[${Array.from(row0h).map((x) => x.toFixed(4)).join(", ")}] ` +
-          (row1h != null
-            ? `row1_16f=[${Array.from(row1h).map((x) => x.toFixed(4)).join(", ")}]`
-            : "row1=—"),
-      );
-    }
-    raylib.H.DrawMesh(
-      this.uiPanelBatchMesh.mesh,
+    rlFast.DrawMesh(
+      op.slot.mesh.mesh,
       this.uiPanelBatchMaterial,
       this.matrixForDraw(this.identityMatrix16),
     );
-    return drawn.length;
+    return op.drawn.length;
   }
 
   private ensureUiPanelBatchPool(vertexCount: number): void {
@@ -1943,24 +2036,26 @@ export class WebXRRaythreeRaylibRenderer {
     const cached = this.uiTextBatchMeshes.get(batchKey);
     const sameSnapshot = cached !== undefined &&
       cached.mesh.vertexCount === totalV &&
-      cached.texts.length === texts.length &&
-      texts.every((text, index) => cached.texts[index] === text) &&
+      textBatchContentMatches(texts, cached.content) &&
       textBatchTransformsMatch(texts, cached.worldMatrices);
     if (cached !== undefined && sameSnapshot) {
+      this.work.textBatchHits++;
       if (this.uiTextBatchShader.mvpLoc >= 0) {
-        raylib.H.SetShaderValueMatrix(
+        rlFast.SetShaderValueMatrix(
           this.uiTextBatchShader.shader,
           this.uiTextBatchShader.mvpLoc,
           this.matrixForDraw(projView.elements as unknown as number[]),
         );
       }
-      raylib.H.DrawMesh(
+      rlFast.DrawMesh(
         cached.mesh.mesh,
         this.uiTextBatchMaterial,
         this.matrixForDraw(this.identityMatrix16),
       );
       return drawnCount;
     }
+    this.work.textBatchRebuilds++;
+    this.work.textVerticesUploaded += totalV;
     this.ensureTextBatchPool(totalV);
     let wx = 0;
     for (const t of texts) {
@@ -2006,15 +2101,17 @@ export class WebXRRaythreeRaylibRenderer {
       this.textBatchPoolN,
       this.textBatchPoolC,
     );
-    this.uiTextBatchMeshes.set(batchKey, { mesh, texts, worldMatrices: captureTextBatchTransforms(texts) });
+    this.uiTextBatchMeshes.set(batchKey, {
+      mesh, content: captureTextBatchContent(texts), worldMatrices: captureTextBatchTransforms(texts),
+    });
     if (this.uiTextBatchShader.mvpLoc >= 0) {
-      raylib.H.SetShaderValueMatrix(
+      rlFast.SetShaderValueMatrix(
         this.uiTextBatchShader.shader,
         this.uiTextBatchShader.mvpLoc,
         this.matrixForDraw(projView.elements as unknown as number[]),
       );
     }
-    raylib.H.DrawMesh(
+    rlFast.DrawMesh(
       mesh.mesh,
       this.uiTextBatchMaterial,
       this.matrixForDraw(this.identityMatrix16),
@@ -2033,6 +2130,7 @@ export class WebXRRaythreeRaylibRenderer {
     if (cached?.version === source.version) {
       return cached.geometry;
     }
+    this.work.textGeometryBuilds++;
     let geometry = buildMsdfGeometryCpu(
       source.positions,
       source.uvs,
@@ -2275,6 +2373,7 @@ function createUiPanelBatchShader(): UiPanelBatchShader {
   return {
     shader,
     mvpLoc: raylib.H.GetShaderLocation(shader, "mvp"),
+    rowOffsetLoc: raylib.H.GetShaderLocation(shader, "uRowOffset"),
     texture0Loc: raylib.H.GetShaderLocation(shader, "texture0"),
   };
 }
@@ -2612,7 +2711,7 @@ function setShaderVec2(
   if (pointer === null) {
     return;
   }
-  raylib.H.SetShaderValue(
+  rlFast.SetShaderValue(
     shader,
     location,
     pointer,
@@ -3351,11 +3450,25 @@ function setShaderVec3(
     return;
   }
   const vec = new Float32Array(value);
-  raylib.H.SetShaderValue(
+  rlFast.SetShaderValue(
     shader,
     location,
     Deno.UnsafePointer.of(vec),
     raylibBindings.ShaderUniformDataType.SHADER_UNIFORM_VEC3,
+  );
+}
+
+const shaderIntScratch = new Int32Array(1);
+function setShaderInt(shader: raylibBindings.Shader, location: number, value: number): void {
+  if (location < 0) {
+    return;
+  }
+  shaderIntScratch[0] = value;
+  rlFast.SetShaderValue(
+    shader,
+    location,
+    Deno.UnsafePointer.of(shaderIntScratch),
+    raylibBindings.ShaderUniformDataType.SHADER_UNIFORM_INT,
   );
 }
 
@@ -3368,7 +3481,7 @@ function setShaderFloat(
     return;
   }
   const scalar = new Float32Array([value]);
-  raylib.H.SetShaderValue(
+  rlFast.SetShaderValue(
     shader,
     location,
     Deno.UnsafePointer.of(scalar),
@@ -3385,7 +3498,7 @@ function setShaderVec4(
     return;
   }
   const vec = new Float32Array(value);
-  raylib.H.SetShaderValue(
+  rlFast.SetShaderValue(
     shader,
     location,
     Deno.UnsafePointer.of(vec),
@@ -3803,6 +3916,7 @@ in vec3 vertexPosition;
 in vec2 vertexTexCoord;
 in vec4 vertexColor;
 uniform mat4 mvp;
+uniform int uRowOffset;
 out vec2 fragUv;
 out vec3 vWorldPos;
 flat out int vPanelId;
@@ -3811,7 +3925,8 @@ void main() {
   vWorldPos = vertexPosition;
   // One batched tri-list quad = 6 non-indexed verts. Row in uPanelData must match
   // packed panel N (see packUikitPanelRow). Do not encode N in vertexColor (unreliable).
-  vPanelId = gl_VertexID / 6;
+  // Runs share one frame texture; uRowOffset is this run's first row.
+  vPanelId = uRowOffset + gl_VertexID / 6;
   gl_Position = mvp * vec4(vertexPosition, 1.0);
 }
 `;
@@ -3821,7 +3936,7 @@ in vec2 fragUv;
 in vec3 vWorldPos;
 flat in int vPanelId;
 out vec4 finalColor;
-/* Panel float data: bound via material albedo so DrawMesh glBindTexture runs (see tryDrawUiPanelsBatched). */
+/* Panel float data: bound via material albedo so DrawMesh glBindTexture runs (see drawUiPanelOp). */
 uniform sampler2D texture0;
 
 float min4(vec4 value) {

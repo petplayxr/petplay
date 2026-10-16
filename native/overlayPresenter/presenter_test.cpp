@@ -60,4 +60,19 @@ int main() {
   assert(pp_overlay_present(&api, 1, 2, 11, 22, views, frusta, 100, 1, stats) ==
              -2 &&
          calls.empty());
+  // Split phases: finish and publish need the context; wait touches only OpenVR.
+  assert(pp_overlay_finish(stats) == -2 && stats[4] == -2);
+  context = true;
+  calls.clear();
+  assert(pp_overlay_finish(stats) == 0 && (calls == std::vector<int>{-1}));
+  calls.clear();
+  wait_result = 34;
+  assert(pp_overlay_wait(&api, 100) == 34 && (calls == std::vector<int>{0}));
+  assert(pp_overlay_wait(&api, 0) == -1);
+  calls.clear();
+  assert(pp_overlay_publish(&api, 1, 2, 11, 22, views, frusta, 0, stats) == 0);
+  assert((calls == std::vector<int>{1, 2, 3, 4}) && stats[3] == 4);
+  calls.clear();
+  assert(pp_overlay_publish_texture(&api, 1, 11, stats) == 0 &&
+         (calls == std::vector<int>{1}) && stats[3] == 5);
 }

@@ -229,3 +229,189 @@ runs, native/capture changes and remaining scope. The marker measures the wrist 
 mesh renderer; it does not independently validate UI text-cache motion. Fixed synthetic head,
 analytic controller derivatives, reduced VRChat scene resolution and disabled Linux async
 reprojection remain substantial differences from the reported headset workload.
+
+## Real-HMD / synthetic-controller control (16 October)
+
+The synthetic driver can now register controllers independently of its synthetic
+HMD. `utils/petplay-ovrdriver-lab.py run --real-hmd` adds a scoped controller-only
+manifest alongside the existing physical drivers and preserves the normal headset
+display, async reprojection and power settings. The native ABI test verifies that
+this mode adds only two controllers, publishes no HMD poses or display vsync, does
+not block standby, and stops its sampling thread on cleanup.
+
+The Beyond ran at its normal 75 Hz with synthetic hands owning both controller
+roles. `utils/petplay-ovrdriver-hybrid-probe.ts --sweep` placed the rig once using
+the real headset's raw pose, then ran the same 0.35 Hz, ±12 cm analytic sweep with
+no yaw animation. The fixed `worldTranslationM` / `worldYawRad` placement matters:
+the synthetic lab's default coordinates placed hands above and behind the user in
+the real Lighthouse universe. The calibrated rig remains independent of subsequent
+head movement.
+
+With VRChat's home world and PetPlay's **full layout visibility** enabled (keyboard
+and the normal desktop displays), the user reported **rapid wrist shaking in
+panorama while holding the head still**. Native controller health and renderer
+health were valid; both synthetic hands were selected, the right-hand scene anchors
+were resolved, and the renderer reported no error. This reproduces the symptom
+without physical controller tracking noise. It does not identify the exact compositor
+phase or exclude controller prediction differences between real and synthetic drivers.
+The same-condition projection comparison also shook about as much, according to
+the user. This hybrid run therefore does **not** reproduce a panorama-only difference;
+it isolates shaking under the real headset/full workload with synthetic motion.
+
+These observations are headset feedback, not real-headset GPU image measurements.
+The existing fixed-head 960×960 synthetic capture/analyzer is not valid unchanged
+for the physical headset's image targets or a moving camera. Local setup and runtime
+snapshots are in ignored `logs/ovrdriver-lab/hybrid-*.json` files.
+
+An initial setup accidentally enabled desktop capture directly rather than the
+wrist menu's layout visibility. Those temporary test displays were removed; the
+reported reproduction was obtained after enabling the real scene visibility state,
+with its normal keyboard and displays. PetPlay also needed a restart after starting
+before SteamVR triggered a text-layout error; the accepted run has a populated scene
+and fresh right-hand anchors.
+
+Further in-person controls narrowed this result:
+
+- With synthetic hands stationary, head movement produced very little jitter.
+- Increasing the sweep from 0.35 Hz / ±12 cm to 1 Hz / ±20 cm made the movement
+  jitter more obvious. Plateau speed increases from about 0.19 to 0.89 m/s.
+- With VRChat and projection unchanged, disabling the **full UI visibility**
+  (keyboard/displays; the wrist remains visible) produced **almost no jitter even
+  at the faster speed**, according to the user.
+
+Thus the current reproduction is strongly dependent on full-UI visibility and
+moving hand imagery; it is not exclusive to panorama in this hybrid setup.
+Changing UI visibility changes scene drawing and desktop capture together, so this
+control alone does not identify GPU cost, CPU work, image reuse, or scene-delivery
+alignment as the cause. A full-UI-on control with scene adoption frozen, fresh
+tracking still enabled and the same fast sweep is the next separation.
+
+The full-UI-on frozen-scene control was almost smooth, and unfreezing restored the
+shaking; the user explicitly confirmed that keyboard/displays were visible for
+that reverse check. The native desktop host listed zero virtual display handles
+at that point despite its visibility/capture flags being true, so the exact native
+quad workload is not established for that part of the comparison. Keep this
+qualification: headset feedback establishes the visible full-UI condition, while
+native quad activity should be separately verified before attributing cost to it.
+
+This is evidence for scene adoption, scene-to-render transform consistency, or the
+work adoption triggers. It does not yet distinguish these possibilities: freezing
+scene adoption also avoids some decode/asset-update/rebuild work. A subsequent CPU
+probe compares wrist local matrices, world trajectories, and render/publication
+timing across live and frozen intervals. Its projected 960×960 fields must not be
+interpreted as real-headset image measurements.
+
+### CPU live/frozen capture on the real headset
+
+A continuous wrist probe captured 464 live-scene rows followed by 527 frozen-scene
+rows in approximately seven seconds per condition, with fresh tracking and the
+fast sweep throughout. Discarding 30 transition/warmup rows per condition:
+
+| CPU measure | Live scenes | Frozen scene |
+| --- | ---: | ---: |
+| Pose-sample interval p50 | 13.65 ms | 13.36 ms |
+| Pose-sample interval p95 | 24.51 ms | 15.49 ms |
+| Render-call wall time p95 | 8.32 ms | 6.24 ms |
+| Sample-to-publication-return p95 | 20.69 ms | 12.67 ms |
+| Wrist marker local-matrix variation | exactly zero | exactly zero |
+
+The marker's CPU world position also followed the native analytic trajectory in
+both conditions: after subtracting a fixed mount/room offset and excluding sweep
+reversals, p95 error along the sweep axis was approximately 0.057 mm live and
+0.066 mm frozen (maximum 1.39 / 1.06 mm). This uses each row's sample time plus
+prediction and the native controller epoch; it is a CPU sanity check, not an image
+or scanout latency measurement. It does not establish the stability of every text
+or UI instance.
+
+The stronger current lead is work triggered by live scene delivery/adoption
+causing irregular rendering/publication, rather than the wrist marker's local
+transform changing between scenes. The native direct-mode lab did not expose this
+real-headset timing behavior. Profile decoding/adoption, geometry/text/asset
+updates and publication waits in the real-HMD reproduction next; distinguish
+CPU stalls, GPU waits and compositor delivery before selecting a fix.
+
+The diagnostic adds a small frame-ID strip and therefore slightly changes draw
+workload; the subjective live/frozen comparison was reproduced before enabling it.
+The probe and freeze were disabled after capture; the fast synthetic sweep and
+full UI remain active for further testing. Raw CPU rows and setup snapshots remain
+local in ignored `logs/ovrdriver-lab/`.
+
+### Redundant text work confirmed and reduced
+
+Two text caches depended on object identity even though process scene decoding
+creates fresh objects. In live scenes, CPU glyph conversion rebuilt about 78.9
+geometries per rendered stereo frame (p95 101); the frozen scene rebuilt zero.
+Regular raythree geometry/material asset updates were already zero in this capture.
+
+`UiTextGeometryInterner` now retains unchanged decoded text geometry using exact
+buffer-content and revision checks, bounded to the latest scene. Text batches
+compare render content rather than snapshot object identity. Their existing owned
+world-matrix check remains, so fresh tracked-hand movement still rebuilds world-baked
+vertices. Opacity, glyph-buffer, revision and slot-order changes invalidate correctly.
+
+| Measured live-scene work | Before | After |
+| --- | ---: | ---: |
+| CPU text geometries built per stereo frame, mean | 78.87 | 0.002 |
+| Text batches rebuilt per stereo frame, mean | 3.57 | 2.10 |
+| Left-eye text CPU time, p95 | 2.34 ms | 0.57 ms |
+| Total render-call wall time, p95 | 6.08 ms | 4.71 ms |
+
+The user reported **some improvement, but still noticeable shaking**. Thus this
+removes demonstrated redundant work without resolving the full pacing problem.
+Decoding full snapshots still costs time; frames spanning two scene receipts had
+longer sample intervals, though that correlation alone does not establish causality.
+
+The four cache/transform tests pass with type checking. All twelve focused
+cache/scene-delivery/wire tests pass at runtime with `--no-check`; the imported
+application type graph still has its known unrelated errors (188 in the presenter
+check, none reported in the changed presenter/cache files).
+
+The presenter exposes bounded opt-in work counters through `SETRENDERWORKPROBE`
+and `GETRENDERWORKPROBE`, plus `PROFILECPU` for a 100..30000 ms in-process V8 CPU
+capture. `utils/petplay-overlay-cpu-profile.py` saves matched live/frozen profiles
+and frame counters locally and restores the previous freeze state. It opens no
+remote inspector endpoint. Profile samples around FFI need interpretation: native
+CPU execution, GPU waits and runtime waits cannot be separated by JS stacks alone.
+
+At the user's request, SteamVR's live `power.pauseCompositorOnStandby` was set false
+and `turnOffScreensTimeout` to 3600 seconds for this lab session, with successful
+API readback. The scoped launcher's original-settings backup restores these on exit.
+
+### V8 CPU profiles after the text-cache fix
+
+Matched 10-second presenter profiles were captured through Deno's working
+`node:inspector` / `Profiler` implementation, sampled at 1 ms. These remain local:
+`logs/ovrdriver-lab/cpu-profile/live.cpuprofile` and `frozen.cpuprofile`, with matching
+`*-work.json` counters. Live recording received 660 scenes and rendered 722 frames;
+frozen recording received zero scenes and rendered 743 frames. This verifies that
+profiling did not itself serialize away scene delivery. Recording restores live
+adoption afterwards, and no remote debugging listener is opened.
+
+Weighted stack samples showed approximately:
+
+| V8 sampled stack time | Live updates | Frozen scene |
+| --- | ---: | ---: |
+| `decodeOverlayScene`, inclusive | 1.20 s | absent |
+| Garbage collector | 226 ms | 51 ms |
+| `renderRaythreeFrame`, inclusive | 2.09 s | 1.87 s |
+| Native presenter call, inclusive | 5.62 s | 6.15 s |
+
+Inclusive rows overlap their descendant functions and are not additive. Native
+presenter samples include blocking GPU/runtime waits, not just CPU execution.
+Profiler start/stop also appeared in the sample stacks (about 0.52 / 0.33 s);
+those are instrumentation overhead, not an application optimization target.
+The profile is evidence for a substantial decoder/allocation cost; exact unprofiled
+frame timing still comes from the separate work/phase probes.
+
+`decodeOverlayScene` deserializes every complete V8/base64 scene packet. UI text
+geometry lives directly in `payload.ui.texts[].geometry`, outside the revisioned
+raythree `AssetBatch`. Even unchanged glyphs therefore cross the process boundary
+and allocate decoded buffers on each new snapshot. Renderer-side interning saves
+conversion and mesh work **after** that cost has already occurred.
+
+The next transport optimization should give UI glyph geometry a stable revisioned
+asset identity, retain it at the consumer, and send only actual geometry changes
+plus current transforms/UI state. It must preserve the current skipped-frame asset
+dependency and restart/baseline guarantees; switching serializers alone would not
+remove redundant unchanged data. Consider render-owned adoption/backpressure too,
+but do not infer causality solely from longer frames containing more receipts.

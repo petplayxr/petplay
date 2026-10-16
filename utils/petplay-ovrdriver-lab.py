@@ -120,7 +120,7 @@ def restore():
     print('Restored original settings and external-driver registrations; SteamVR remains off', flush=True)
 
 
-def prepare(direct_server=False, disable_async=False, driver_direct=False):
+def prepare(direct_server=False, disable_async=False, driver_direct=False, real_hmd=False):
     if running():
         raise RuntimeError('Stop SteamVR before starting a synthetic-only session')
     if BACKUP.exists():
@@ -138,6 +138,27 @@ def prepare(direct_server=False, disable_async=False, driver_direct=False):
     try:
         settings = json.loads(SETTINGS.read_text())
         vr = settings.setdefault('steamvr', {})
+        if real_hmd:
+            # A separate scoped manifest loads the controller provider without
+            # claiming display redirection or modifying the installed package.
+            hybrid = SESSION / 'controller-driver'
+            hybrid.mkdir(exist_ok=True)
+            for name in ('bin', 'resources'):
+                link = hybrid / name
+                if not link.exists():
+                    link.symlink_to(driver / name, target_is_directory=True)
+            manifest = json.loads((driver / 'driver.vrdrivermanifest').read_text())
+            manifest.update(alwaysActivate=True, redirectsDisplay=False)
+            atomic_write(hybrid / 'driver.vrdrivermanifest', (json.dumps(manifest, indent=2) + '\n').encode())
+            vr.pop('forcedDriver', None)
+            vr['activateMultipleDrivers'] = True
+            settings.setdefault('driver_petplay', {}).update(enable=True, syntheticHmd=False,
+                syntheticControllers=True, driverDirect=False, socketDirectory=str(SESSION / 'ipc'))
+            paths = json.loads(PATHS.read_text())
+            paths['external_drivers'] = list(dict.fromkeys([*paths.get('external_drivers', []), str(hybrid)]))
+            atomic_write(SETTINGS, (json.dumps(settings, indent=2) + '\n').encode())
+            atomic_write(PATHS, (json.dumps(paths, indent=2) + '\n').encode())
+            return
         vr.update(forcedDriver='petplay', activateMultipleDrivers=False,
                   displayDebug=not driver_direct, directMode=driver_direct, enableHomeApp=False,
                   allowFallbackMirrorWindowLinux=True)
@@ -193,6 +214,7 @@ def interrupted(signum, frame):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=('run', 'recover'))
+    parser.add_argument('--real-hmd', action='store_true', help='Keep physical headset/display configuration; add only synthetic controllers')
     parser.add_argument('--x11-compositor', action='store_true', help='Retry a failed compositor under X11 without Wayland display variables')
     parser.add_argument('--disable-fixes', action='store_true', help='Disable the existing SteamVR fixes layer for this compositor experiment only')
     parser.add_argument('--direct-server', action='store_true', help='Launch vrserver under vrenv directly, then X11 compositor; avoid the initial Wayland crash and autostart clients')
@@ -202,6 +224,8 @@ def main():
     parser.add_argument('--capture-layer', action='store_true', help='Enable the optional pure Zig producer-side readback layer for this compositor only')
     parser.add_argument('--seconds', type=float, default=30)
     args = parser.parse_args()
+    if args.real_hmd and (args.direct_server or args.driver_direct or args.disable_async or args.disable_fixes or args.capture_layer or args.renderdoc_layer or args.x11_compositor):
+        parser.error('--real-hmd uses the normal headset/compositor configuration and excludes synthetic display/capture options')
     if args.action == 'recover':
         restore()
         return
@@ -233,9 +257,9 @@ def main():
         raise RuntimeError("SteamVR must be off and pending recovery resolved before run")
     watcher = RuntimeLogWatch([STEAM / 'logs' / name for name in
                                ('vrcompositor.txt', 'vrcompositor-linux.txt')])
-    prepare(args.direct_server, args.disable_async, args.driver_direct)
+    prepare(args.direct_server, args.disable_async, args.driver_direct, args.real_hmd)
     try:
-        print(f'Synthetic-only session prepared; recovery: {BACKUP}', flush=True)
+        print(f'{"Real-HMD / synthetic-controller" if args.real_hmd else "Synthetic-only"} session prepared; recovery: {BACKUP}', flush=True)
         with (SESSION / 'launch.log').open('wb') as log:
             if args.direct_server:
                 env.pop('WAYLAND_DISPLAY', None)

@@ -17,11 +17,12 @@ import {
 import { WebXROverlayRaylib } from "../classes/webxrOverlayRaylib.ts";
 import type { WebXRRaythreeRenderPayload } from "../classes/webxrRaythreeScene.ts";
 import {
-  decodeOverlayScene,
+  OverlaySceneWireDecoder,
   OVERLAY_SCENE_WIRE_FORMAT,
   type OverlayScenePacket,
 } from "../classes/overlaySceneWire.ts";
 import { wait } from "../classes/utils.ts";
+import { setCurrentThreadNice } from "../classes/linuxScheduling.ts";
 import { OverlayWristMotionProbe } from "../classes/overlayWristMotionProbe.ts";
 import { motionProbeFrame, OverlayMotionProbe } from "../classes/overlayMotionProbe.ts";
 import { OverlaySceneInbox } from "../classes/overlaySceneDelivery.ts";
@@ -57,9 +58,39 @@ const state = actorState({
   resolvedAnchors: 0,
   receivedScenes: 0,
   lastDecodeMs: 0,
+  lastPacketBytes: 0,
   lastSceneIntervalMs: 0,
   freezeScene: false,
   freezeRendering: false,
+  /**
+   * Run the compositor frame-sync wait on an FFI worker thread instead of blocking the render
+   * thread in it. Scene messages that arrive during the wait are then handled during it, not
+   * between the next pose sample and its deadline.
+   */
+  asyncFrameWait: false,
+  /**
+   * Projection only. `frame-sync`: sample and render right after the previous publication, so
+   * the frame is shown one display frame after the vsync its poses are predicted for, and any
+   * message work queued during the blocking publication delays the next pose sample. `vsync`:
+   * sample at the vsync, as panorama does, publish at that frame's sync, and leave the idle time
+   * after publication for scene messages.
+   */
+  projectionPacing: "frame-sync" as "frame-sync" | "vsync",
+  /**
+   * Hold incoming scene packets undecoded and decode the newest at a fixed point in the frame,
+   * right after drawing, instead of whenever the message arrives. The receipt is sent on decode,
+   * so the producer still sends about one packet per rendered frame.
+   */
+  deferDecode: false,
+  /**
+   * Presenter paths: after the frame-sync wait, drop a frame that would reach the display a
+   * vsync later than its poses were predicted for, instead of submitting it late. The compositor
+   * reprojects the previous frame; the next frame samples fresh poses.
+   */
+  dropLateFrames: false,
+  /** Render thread niceness, read back after setting (null until set). */
+  renderThreadNice: null as { tid: number; nice: number; error?: string } | null,
+  droppedLateFrames: 0,
   // Preserve the established raster/publication calibration while asymmetric frusta are audited.
   // This chooses optical parameters only; render eye views remain independent of IR-time poses.
   projectionMode: "scene-compatible" as "headset" | "scene-compatible",
@@ -107,8 +138,27 @@ let receivedStream: string | null = null;
 let receivedSequence = 0;
 let receivedAt = 0;
 let inbox = new OverlaySceneInbox();
+let wireDecoder = new OverlaySceneWireDecoder();
 let motionProbe: OverlayMotionProbe | null = null;
 let wristProbe: OverlayWristMotionProbe | null = null;
+let workProbe = false;
+const workRows: Record<string, unknown>[] = [];
+/**
+ * Frame timeline probe: `[ms, kind, ...fields]` rows for loop phases and message handling, so a
+ * missed compositor frame can be attributed to render, GPU/compositor wait, decode or GC. Heap
+ * readings bracket each phase; a drop between two readings means a GC ran in between.
+ */
+let timeline: unknown[][] | null = null;
+const TIMELINE_LIMIT = 60000;
+function mark(kind: string, ...fields: unknown[]) {
+  if (timeline && timeline.length < TIMELINE_LIMIT) {
+    timeline.push([performance.now(), kind, Deno.memoryUsage().heapUsed, ...fields]);
+  }
+}
+/** Render thread's cumulative [on-CPU ns, runqueue-wait ns, timeslices] from schedstat. */
+function schedstat(): number[] {
+  return Deno.readTextFileSync("/proc/thread-self/schedstat").trim().split(" ").map(Number);
+}
 // Open only for the native-controller diagnostic; shared with Vulkan capture's
 // CLOCK_MONOTONIC domain. Ordinary rendering keeps no extra FFI clock calls.
 function createProbeClock() {
@@ -151,6 +201,8 @@ new PostMan(
       state.error = null;
       latest = null;
       inbox = new OverlaySceneInbox();
+      wireDecoder = new OverlaySceneWireDecoder();
+      pendingPacket = null;
       receivedStream = null;
       receivedSequence = 0;
       loop = run(options).catch((error) => {
@@ -173,10 +225,15 @@ new PostMan(
     WEBXRVIEWFRAME: receiveScene,
     WEBXRVIEWFRAMEPACKET: (packet: OverlayScenePacket) => {
       if (state.freezeScene) return;
-      const start = performance.now();
-      const payload = decodeOverlayScene(packet);
-      state.lastDecodeMs = performance.now() - start;
-      receiveScene(payload);
+      if (state.deferDecode) {
+        // Credit capacity is one, so a second packet before the drain is unexpected; keep
+        // both ordered rather than drop the older one's dependencies.
+        if (pendingPacket) decodePacket(pendingPacket);
+        pendingPacket = packet;
+        mark("stash", packet.data.length);
+        return;
+      }
+      decodePacket(packet);
     },
     SETPRESENTMODE: (mode: PresentMode) => {
       if (mode !== "projection" && mode !== "panorama") {
@@ -186,6 +243,30 @@ new PostMan(
       return health();
     },
     GETPANORAMAPHASE: () => panoramaPhase.slice(),
+    /** `durationMs`, or `{ durationMs, intervalUs }` for finer sampling than 1 ms. */
+    PROFILECPU: async (request: number | { durationMs: number; intervalUs?: number }) => {
+      const { captureCpuProfile } = await import("../classes/cpuProfile.ts");
+      return typeof request === "number"
+        ? await captureCpuProfile(request)
+        : await captureCpuProfile(request.durationMs, request.intervalUs);
+    },
+    SETRENDERWORKPROBE: (enabled: boolean) => {
+      workProbe = enabled;
+      workRows.length = 0;
+      return { enabled };
+    },
+    GETRENDERWORKPROBE: () => ({enabled: workProbe, rows: workRows.slice()}),
+    SETFRAMETIMELINE: (enabled: boolean) => {
+      timeline = enabled ? [] : null;
+      return { enabled };
+    },
+    /** Returns and clears collected rows; collection continues while enabled. */
+    TAKEFRAMETIMELINE: () => {
+      mark("take");
+      const rows = timeline ?? [];
+      if (timeline) timeline = [];
+      return rows;
+    },
     SETWRISTMOTIONPROBE: (enabled: boolean) => {
       if (motionProbe) throw new Error("Disable isolated motion probe first");
       wristProbe = enabled ? new OverlayWristMotionProbe() : null;
@@ -233,6 +314,11 @@ new PostMan(
       panoramaTextureRotation?: boolean;
       freezeScene?: boolean;
       freezeRendering?: boolean;
+      asyncFrameWait?: boolean;
+      deferDecode?: boolean;
+      dropLateFrames?: boolean;
+      renderThreadNice?: number;
+      projectionPacing?: "frame-sync" | "vsync";
       projectionMode?: "headset" | "scene-compatible";
     }) => {
       state.panoramaExtraPredictionFrames = value.panoramaExtraPredictionFrames ??
@@ -249,6 +335,20 @@ new PostMan(
       const wasFrozen = state.freezeScene;
       state.freezeScene = value.freezeScene ?? state.freezeScene;
       state.freezeRendering = value.freezeRendering ?? state.freezeRendering;
+      state.asyncFrameWait = value.asyncFrameWait ?? state.asyncFrameWait;
+      state.deferDecode = value.deferDecode ?? state.deferDecode;
+      state.dropLateFrames = value.dropLateFrames ?? state.dropLateFrames;
+      // Handlers run on the render loop's own thread, so this targets the render thread.
+      if (value.renderThreadNice != null) {
+        state.renderThreadNice = setCurrentThreadNice(value.renderThreadNice);
+      }
+      if (!state.deferDecode) drainPendingPacket();
+      if (value.projectionPacing != null) {
+        if (!["frame-sync", "vsync"].includes(value.projectionPacing)) {
+          throw new Error(`Unknown projection pacing ${value.projectionPacing}`);
+        }
+        state.projectionPacing = value.projectionPacing;
+      }
       if (value.projectionMode != null) {
         if (value.projectionMode !== "headset" && value.projectionMode !== "scene-compatible") {
           throw new Error("Unknown projection comparison mode");
@@ -270,6 +370,22 @@ new PostMan(
     },
   } as const,
 );
+let pendingPacket: OverlayScenePacket | null = null;
+function decodePacket(packet: OverlayScenePacket) {
+  mark("decode0", packet.data.length);
+  const start = performance.now();
+  const decoded = wireDecoder.decode(packet);
+  state.lastDecodeMs = performance.now() - start;
+  mark("decode1", decoded.stale);
+  state.lastPacketBytes = packet.data.length;
+  if (decoded.stale) acknowledge(decoded);
+  else receiveScene(decoded.payload);
+}
+function drainPendingPacket() {
+  const packet = pendingPacket;
+  pendingPacket = null;
+  if (packet) decodePacket(packet);
+}
 function receiveScene(payload: WebXRRaythreeRenderPayload) {
   // Hold credit while frozen; a new registration supplies a full baseline on resume.
   if (state.freezeScene) return;
@@ -283,7 +399,9 @@ function receiveScene(payload: WebXRRaythreeRenderPayload) {
   }
   // Persist dependencies before returning credit: a newer snapshot may replace this one
   // before drawing, including the scene that first introduced an asset.
+  mark("inbox0");
   inbox.receive(payload);
+  mark("inbox1");
   latest = payload;
   receivedStream = payload.delivery?.stream ?? null;
   receivedSequence = payload.delivery?.sequence ?? 0;
@@ -303,11 +421,13 @@ function register() {
       actorId: state.id,
       label: "projection-renderer",
       wireFormat: OVERLAY_SCENE_WIRE_FORMAT,
+      // Eye views and anchored items come from this renderer's own tracking.
+      ownsTracking: true,
     },
   });
   registered = true;
 }
-function acknowledge(payload: WebXRRaythreeRenderPayload) {
+function acknowledge(payload: Pick<WebXRRaythreeRenderPayload, "delivery">) {
   PostMan.PostMessage({
     target: state.webxrTarget!,
     type: "WEBXRVIEWFRAMEACK",
@@ -409,6 +529,8 @@ async function run(options: Start) {
         activeEpoch = null;
         activeProbe = probe;
       }
+      // Deferred packets normally drain after drawing; drain here only until a first scene.
+      if (!inbox.current()) drainPendingPacket();
       const scene = inbox.current();
       const payload = probe?.payload ?? scene?.payload;
       if (!payload || state.freezeRendering) {
@@ -433,11 +555,14 @@ async function run(options: Start) {
         activeMode = state.presentMode;
       }
       const panoramaMode = activeMode === "panorama";
-      // The panorama is head-locked, so it paces on the compositor's frame start like the old
-      // in-worker renderer; projection presents wait inside the native presenter instead.
-      const vsyncPaced = panoramaMode && state.panoramaPacing === "vsync";
+      // Vsync pacing starts each frame at the display vsync (panorama's default, projection's
+      // option); otherwise projection frames start right after the native presenter's wait.
+      const vsyncPaced = panoramaMode
+        ? state.panoramaPacing === "vsync"
+        : state.projectionPacing === "vsync";
       const pacer = vsyncPaced ? vsyncPacer : fastPacer;
       pacer.extraPredictionFrames = panoramaMode ? state.panoramaExtraPredictionFrames : 0;
+      mark("pace0");
       if (vsyncPaced) await pacer.paceToDisplayAndRefreshPosesYielding();
       else {
         if (panoramaMode && state.panoramaPacing === "frame-sync") {
@@ -446,6 +571,7 @@ async function run(options: Start) {
         pacer.paceToDisplayAndRefreshPoses();
       }
       const syncPhase = pacer.sampleVsyncPhase();
+      mark("sample", syncPhase ? Number(syncPhase.frameIndex) : null, syncPhase?.msSinceVsync);
       const hmd = pacer.getCachedHmdEmulation();
       if (!hmd) {
         state.trackingInvalid++;
@@ -520,10 +646,12 @@ async function run(options: Start) {
       }
       const wristMarker = wrist?.marker(payload, { ...cameras, ...headsetProjections });
       const restoreWristTag = wrist?.append(payload, head);
+      mark("render0", scene?.assetVersion ?? null, state.receivedScenes, ...(timeline ? schedstat() : []));
       const renderStartMs = performance.now();
       const publishedBefore = state.publishedFrames;
+      let renderWork: ReturnType<typeof renderer.renderRaythreeFrame>;
       try {
-        renderer.renderRaythreeFrame(payload, {
+        renderWork = renderer.renderRaythreeFrame(payload, {
           skipCombine: !panoramaMode,
           cameras,
           lookRotation,
@@ -532,7 +660,26 @@ async function run(options: Start) {
         restoreWristTag?.();
       }
       const renderEndMs = performance.now();
+      // A frame predicted for the vsync after its sample that would only be submitted after the
+      // following one shows stale poses; dropping it lets the compositor reproject instead.
+      const onTime = state.dropLateFrames
+        ? () => {
+          const now = pacer.sampleVsyncPhase();
+          return !syncPhase || !now || now.frameIndex - syncPhase.frameIndex < 2n;
+        }
+        : undefined;
+      mark(
+        "render1",
+        renderWork!.textBatchRebuilds,
+        renderWork!.textGeometryBuilds,
+        renderWork!.batchGeometries,
+        renderWork!.batchMaterials,
+        renderWork!.textVerticesUploaded,
+        ...(timeline ? schedstat() : []),
+      );
       if (!probe && scene) inbox.markAdopted(scene);
+      // After markAdopted: the drained scene's assets stay pending for the next frame.
+      drainPendingPacket();
       state.renderFrameId++;
       const renderedEyes = renderer.getEyeTextureHandles();
       state.lastRenderImages = renderedEyes
@@ -566,9 +713,14 @@ async function run(options: Start) {
           }
         }
         if (presenterPaced) {
-          const result = presenter.presentTexture(panorama.getHandle(), texture);
+          const result = state.asyncFrameWait && presenter.canWaitAsync
+            ? await presenter.presentTextureAsync(panorama.getHandle(), texture)
+            : presenter.presentTexture(panorama.getHandle(), texture, onTime);
           state.lastPresent = { mode: "panorama-presenter", ...result };
-          if (result.waitResult === OpenVR.OverlayError.VROverlayError_TimedOut) {
+          if ("dropped" in result && result.dropped) {
+            state.droppedLateFrames++;
+            published = false;
+          } else if (result.waitResult === OpenVR.OverlayError.VROverlayError_TimedOut) {
             state.waitTimeouts++;
             published = false;
           } else if (result.error) {
@@ -577,6 +729,18 @@ async function run(options: Start) {
         } else if (!panorama.present()) throw new Error("Panorama texture rejected");
         else state.lastPresent = { mode: "panorama", texture };
         const presentPhase = pacer.sampleVsyncPhase();
+        const presented = presenterPaced
+          ? state.lastPresent as { gpuFinishMs?: number; waitMs?: number; publicationMs?: number }
+          : {};
+        mark(
+          published ? "present" : "drop",
+          presentPhase ? Number(presentPhase.frameIndex) : null,
+          presentPhase?.msSinceVsync,
+          presented.gpuFinishMs,
+          presented.waitMs,
+          presented.publicationMs,
+          published ? 0 : -1,
+        );
         if (published && syncPhase && presentPhase) {
           panoramaPhase.push([
             syncPhase.msSinceVsync,
@@ -593,16 +757,38 @@ async function run(options: Start) {
       } else {
         const textures = renderer.getEyeTextureHandles();
         if (!textures) throw new Error("Missing eye targets");
-        const result = presenter.present(overlays.getHandles(), textures, cameras);
+        const result = state.asyncFrameWait && presenter.canWaitAsync
+          ? await presenter.presentAsync(overlays.getHandles(), textures, cameras)
+          : presenter.present(overlays.getHandles(), textures, cameras, onTime);
         state.lastPresent = result;
-        if (result.waitResult === OpenVR.OverlayError.VROverlayError_TimedOut) state.waitTimeouts++;
-        else if (result.error) {
+        const dropped = "dropped" in result && result.dropped;
+        if (dropped) state.droppedLateFrames++;
+        const phase = timeline ? pacer.sampleVsyncPhase() : null;
+        mark(
+          dropped ? "drop" : "present",
+          phase ? Number(phase.frameIndex) : null,
+          phase?.msSinceVsync,
+          result.gpuFinishMs,
+          result.waitMs,
+          result.publicationMs,
+          result.waitResult,
+        );
+        if (dropped) { /* the compositor keeps reprojecting the previous frame */ }
+        else if (result.waitResult === OpenVR.OverlayError.VROverlayError_TimedOut) {
+          state.waitTimeouts++;
+        } else if (result.error) {
           throw new Error(`Projection publication failed: ${JSON.stringify(result)}`);
         } else {
           shownLeft = textures.left;
           state.publishedFrames++;
         }
       }
+      if (workProbe && workRows.length < 2000) workRows.push({
+        sceneVersion: state.sceneVersion, freezeScene: state.freezeScene,
+        sampleMs, publicationEndMs: performance.now(), renderStartMs, renderEndMs,
+        decodeMs: state.lastDecodeMs, packetBase64Bytes: state.lastPacketBytes, receivedScenes: state.receivedScenes,
+        ...renderWork!,
+      });
       if (wrist && wrist.rows.length < 10000) {
         const phase = pacer.sampleVsyncPhase();
         wrist.rows.push({
@@ -651,6 +837,7 @@ async function run(options: Start) {
         });
       }
       if (state.webxrTarget && performance.now() - lastReportAt > 500) {
+        mark("status");
         PostMan.PostMessage({
           target: state.webxrTarget!,
           type: "OVERLAYRENDERSTATUS",
@@ -658,7 +845,9 @@ async function run(options: Start) {
         });
         lastReportAt = performance.now();
       }
+      mark("yield", ...(timeline ? schedstat() : []));
       await wait(0);
+      mark("resume", ...(timeline ? schedstat() : []));
     }
   } finally {
     if (registered && state.webxrTarget) {

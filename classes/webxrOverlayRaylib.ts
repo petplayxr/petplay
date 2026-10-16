@@ -501,6 +501,10 @@ export class WebXROverlayRaylib {
     renderDrawMs: number;
     batchGeometries: number;
     batchMaterials: number;
+    textGeometryBuilds: number;
+    textBatchRebuilds: number;
+    textBatchHits: number;
+    textVerticesUploaded: number;
     renderLeftSyncMs: number;
     renderLeftPrepMs: number;
     renderLeftOpaqueMs: number;
@@ -541,6 +545,7 @@ export class WebXROverlayRaylib {
       throw new Error("raylib compositor not initialized");
     }
 
+    sceneRenderer.beginUiFrame();
     const skipRightAssetSync = areNativeAssetBatchesIdenticalForSync(
       payload.leftEye.assets,
       payload.rightEye.assets,
@@ -626,6 +631,10 @@ export class WebXROverlayRaylib {
       renderDrawMs,
       batchGeometries,
       batchMaterials,
+      textGeometryBuilds: leftB.textGeometryBuilds + rightB.textGeometryBuilds,
+      textBatchRebuilds: leftB.textBatchRebuilds + rightB.textBatchRebuilds,
+      textBatchHits: leftB.textBatchHits + rightB.textBatchHits,
+      textVerticesUploaded: leftB.textVerticesUploaded + rightB.textVerticesUploaded,
       renderLeftSyncMs: leftB.syncMs,
       renderLeftPrepMs: leftB.prepMs,
       renderLeftOpaqueMs: leftB.opaqueMs,

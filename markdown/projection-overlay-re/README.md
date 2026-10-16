@@ -162,3 +162,8 @@ category 1, projection drawn last in every pass (`0x185420` quad ×2, then `0x18
 Display screens showing "on top" of the projection is therefore PetPlay's own image being
 transparent there (the depth-only display stand-in in `displayInstance/ui.tsx`), not compositor
 order. Note that removing a uprobe event clears the trace buffer: copy the trace first.
+
+## Performance investigation workflow
+
+See [the optimization runbook](optimization-workflow.md) for real-headset controls,
+work counters, Deno CPU profiling, interpretation, validation and recovery.

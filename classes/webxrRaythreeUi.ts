@@ -110,6 +110,9 @@ export type WebXRRaythreeUiTextSnapshot = Anchored & {
     uvs: Float32Array; // itemSize=2
     indices: Uint16Array | Uint32Array;
     version: number;
+    /** Stable producer geometry identity and monotonic snapshot revision for transport. */
+    id?: number;
+    revision?: number;
   };
 };
 
@@ -185,6 +188,7 @@ type TextGeometryCacheEntry = {
  * The WeakMap follows the Three geometry lifetime and cannot retain removed UI.
  */
 const textGeometryCache = new WeakMap<object, TextGeometryCacheEntry>();
+let nextTextGeometryId = 0;
 
 function hasPanelDataAttributes(
   geometry:
@@ -235,7 +239,14 @@ export function extractWebXRRaythreeUi(scene: THREE.Scene): WebXRRaythreeUiSnaps
       maybeCollectPanels(mesh, snapshot.panels, rootIndex);
       for (let i = start; i < snapshot.panels.length; i++) {
         const panel = snapshot.panels[i];
-        panel.renderAnchor = captureRenderAnchor(rootCtx.component, panel.worldMatrix);
+        panel.renderAnchor = captureRenderAnchor(
+          mesh,
+          panel.worldMatrix,
+          mesh.instanceMatrix.array.subarray(
+            panel.instanceIndex * 16,
+            panel.instanceIndex * 16 + 16,
+          ),
+        );
       }
     });
   }
@@ -463,6 +474,8 @@ function getTextGeometrySnapshot(
     ? rawIndices.slice()
     : new Uint32Array(Array.from(rawIndices));
   const snapshot = {
+    id: cached?.snapshot.id ?? ++nextTextGeometryId,
+    revision: (cached?.snapshot.revision ?? 0) + 1,
     positions: positionAttr.array instanceof Float32Array
       ? positionAttr.array.slice()
       : Float32Array.from(positionAttr.array),

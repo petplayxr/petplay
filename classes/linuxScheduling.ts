@@ -133,3 +133,25 @@ function applyLinuxScheduling(name: string): LinuxSchedulingStatus {
   }
   return status;
 }
+
+/**
+ * Set the calling thread's niceness (Linux; needs RLIMIT_NICE for negative values). For a
+ * latency-critical thread on a loaded machine. Returns the niceness read back, or an error.
+ */
+export function setCurrentThreadNice(nice: number): { tid: number; nice: number; error?: string } {
+  if (Deno.build.os !== "linux") return { tid: 0, nice: 0, error: "not linux" };
+  if (!Number.isInteger(nice) || nice < -20 || nice > 19) throw new Error("Invalid niceness");
+  const libc = Deno.dlopen("libc.so.6", {
+    gettid: { parameters: [], result: "i32" },
+    getpriority: { parameters: ["i32", "u32"], result: "i32" },
+    setpriority: { parameters: ["i32", "u32", "i32"], result: "i32" },
+  });
+  try {
+    const tid = libc.symbols.gettid();
+    const failed = libc.symbols.setpriority(0, tid, nice) !== 0;
+    const now = libc.symbols.getpriority(0, tid);
+    return failed ? { tid, nice: now, error: `setpriority(${nice}) denied` } : { tid, nice: now };
+  } finally {
+    libc.close();
+  }
+}

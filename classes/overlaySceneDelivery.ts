@@ -6,6 +6,8 @@ export type SceneDelivery = {
   stream: string;
   sequence: number;
   assetVersion: number;
+  /** Acknowledged independently by the compact UI-geometry transport. */
+  uiGeometryVersion?: number;
 };
 const kinds = ["geometries", "materials", "textures"] as const;
 type Kind = typeof kinds[number];

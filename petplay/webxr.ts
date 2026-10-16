@@ -24,7 +24,8 @@ import {
   WebXROverlayRaylib,
 } from "../classes/webxrOverlayRaylib.ts";
 import { OverlayAssetCache, OverlaySceneCredit, type SceneDelivery } from "../classes/overlaySceneDelivery.ts";
-import { encodeOverlayScene, OVERLAY_SCENE_WIRE_FORMAT } from "../classes/overlaySceneWire.ts";
+import { OverlaySceneWireEncoder, OVERLAY_SCENE_WIRE_FORMAT } from "../classes/overlaySceneWire.ts";
+import { fingerprintScene } from "../classes/overlaySceneFingerprint.ts";
 import { FpsCounter } from "../classes/fpsCounter.ts";
 import { formatFrameStability, FrameStabilityTracker } from "../classes/frameStability.ts";
 import { IntervalMetric, type IntervalMetricSample } from "../classes/intervalMetric.ts";
@@ -826,9 +827,14 @@ new PostMan(
         lastAckAt: 0,
         credit: new OverlaySceneCredit(payload?.wireFormat === OVERLAY_SCENE_WIRE_FORMAT ? 2 : 1),
         compactWire: payload?.wireFormat === OVERLAY_SCENE_WIRE_FORMAT,
+        wireEncoder: new OverlaySceneWireEncoder(),
         lastWireBytes: 0,
         lastEncodeMs: 0,
         lastSentSceneFrame: -1,
+        ownsTracking: payload?.ownsTracking === true,
+        lastFingerprint: null,
+        lastSentAt: 0,
+        unchangedSkipped: 0,
       });
       // The view asked for camera control, so grant what STARTWEBXR gatekeeps for
       // the legacy desktop surface: an observer that may nudge the shared view.
@@ -868,6 +874,7 @@ new PostMan(
         return getWebXrViewsStatus();
       }
       if (!view.credit.acknowledge(payload?.delivery)) return getWebXrViewsStatus();
+      if (view.compactWire && payload?.delivery) view.wireEncoder.acknowledge(payload.delivery);
       view.inFlight = view.credit.busy;
       view.acked += 1;
       view.lastAckAt = Date.now();
@@ -1248,6 +1255,7 @@ globalThis.addEventListener("unload", () => {
 /** Extra renderer of this scene: its own process, its own rate, no local scene. */
 type WebXrViewChannel = {
   compactWire: boolean;
+  wireEncoder: OverlaySceneWireEncoder;
   lastWireBytes: number;
   lastEncodeMs: number;
   lastSentSceneFrame: number;
@@ -1263,6 +1271,11 @@ type WebXrViewChannel = {
   acked: number;
   dropped: number;
   lastAckAt: number;
+  /** Samples its own head/hand tracking, so scenes differing only in that state are skipped. */
+  ownsTracking: boolean;
+  lastFingerprint: number | null;
+  lastSentAt: number;
+  unchangedSkipped: number;
 };
 
 type RegisterWebXrViewPayload = {
@@ -1270,7 +1283,11 @@ type RegisterWebXrViewPayload = {
   actorId?: string;
   label?: string;
   cameraControl?: boolean;
+  ownsTracking?: boolean;
 };
+
+/** A tracking-owning view still gets an unchanged scene this often: liveness and loss recovery. */
+const UNCHANGED_SCENE_KEEPALIVE_MS = 1000;
 
 /** True when any registered view drives the shared viewpoint. */
 function hasViewCameraControl(): boolean {
@@ -1295,6 +1312,8 @@ function getWebXrViewsStatus() {
     compactWire: view.compactWire,
     lastWireBytes: view.lastWireBytes,
     lastEncodeMs: view.lastEncodeMs,
+    ownsTracking: view.ownsTracking,
+    unchangedSkipped: view.unchangedSkipped,
   }));
 }
 
@@ -1336,17 +1355,31 @@ function publishRaythreeFrameToViews(
   if (state.views.size === 0) {
     return;
   }
+  // Scenes differing only in state a tracking-owning view replaces itself are not resent.
+  let fingerprint: number | undefined;
   for (const [actorId, view] of state.views) {
     if (view.credit.reclaimExpired() > 0) view.inFlight = view.credit.busy;
     if (view.inFlight) {
       view.dropped += 1;
       continue;
     }
+    if (view.ownsTracking) {
+      fingerprint ??= fingerprintScene(payload, viewAssetCache.version);
+      if (
+        fingerprint === view.lastFingerprint &&
+        performance.now() - view.lastSentAt < UNCHANGED_SCENE_KEEPALIVE_MS
+      ) {
+        view.unchangedSkipped += 1;
+        continue;
+      }
+    }
     const prepared = view.credit.prepare(viewAssetCache);
     if (!prepared) continue;
     view.inFlight = view.credit.busy;
     view.sent += 1;
     view.lastSentSceneFrame = payload.frame.frameCount;
+    view.lastFingerprint = fingerprint ?? null;
+    view.lastSentAt = performance.now();
     view.primed = true;
     const extraction = { ...payload.leftEye, assets: prepared.assets };
     const outgoing: WebXRRaythreeRenderPayload = {
@@ -1356,7 +1389,9 @@ function publishRaythreeFrameToViews(
     };
     if (view.compactWire) {
       const start = performance.now();
-      const packet = encodeOverlayScene(outgoing);
+      let packet;
+      try { packet = view.wireEncoder.encode(outgoing); }
+      catch (error) { viewDeliveryError = String(error); return; }
       view.lastEncodeMs = performance.now() - start;
       view.lastWireBytes = packet.data.length;
       PostMan.PostMessage({ target: actorId, type: "WEBXRVIEWFRAMEPACKET", payload: packet });
