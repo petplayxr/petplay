@@ -75,26 +75,6 @@ const state = actorState({
   freezeScene: false,
   freezeRendering: false,
   /**
-   * Run the compositor frame-sync wait on an FFI worker thread instead of blocking the render
-   * thread in it. Scene messages that arrive during the wait are then handled during it, not
-   * between the next pose sample and its deadline.
-   */
-  asyncFrameWait: false,
-  /**
-   * Projection only. `frame-sync`: sample and render right after the previous publication, so
-   * the frame is shown one display frame after the vsync its poses are predicted for, and any
-   * message work queued during the blocking publication delays the next pose sample. `vsync`:
-   * sample at the vsync, as panorama does, publish at that frame's sync, and leave the idle time
-   * after publication for scene messages.
-   */
-  projectionPacing: "frame-sync" as "frame-sync" | "vsync",
-  /**
-   * Hold incoming scene packets undecoded and decode the newest at a fixed point in the frame,
-   * right after drawing, instead of whenever the message arrives. The receipt is sent on decode,
-   * so the producer still sends about one packet per rendered frame.
-   */
-  deferDecode: false,
-  /**
    * Presenter paths: after the frame-sync wait, drop a frame that would reach the display a
    * vsync later than its poses were predicted for, instead of submitting it late. The compositor
    * reprojects the previous frame; the next frame samples fresh poses.
@@ -234,7 +214,6 @@ new PostMan(
       latest = null;
       inbox = new OverlaySceneInbox();
       wireDecoder = new OverlaySceneWireDecoder();
-      pendingPacket = null;
       receivedStream = null;
       receivedSequence = 0;
       loop = run(options).catch((error) => {
@@ -257,14 +236,6 @@ new PostMan(
     WEBXRVIEWFRAME: receiveScene,
     WEBXRVIEWFRAMEPACKET: (packet: OverlayScenePacket) => {
       if (state.freezeScene) return;
-      if (state.deferDecode) {
-        // Credit capacity is one, so a second packet before the drain is unexpected; keep
-        // both ordered rather than drop the older one's dependencies.
-        if (pendingPacket) decodePacket(pendingPacket);
-        pendingPacket = packet;
-        mark("stash", packet.data.length);
-        return;
-      }
       decodePacket(packet);
     },
     SETPRESENTMODE: (mode: PresentMode) => {
@@ -346,11 +317,8 @@ new PostMan(
       panoramaTextureRotation?: boolean;
       freezeScene?: boolean;
       freezeRendering?: boolean;
-      asyncFrameWait?: boolean;
-      deferDecode?: boolean;
       dropLateFrames?: boolean;
       renderThreadNice?: number;
-      projectionPacing?: "frame-sync" | "vsync";
       projectionMode?: "headset" | "scene-compatible";
     }) => {
       state.panoramaExtraPredictionFrames = value.panoramaExtraPredictionFrames ??
@@ -367,19 +335,10 @@ new PostMan(
       const wasFrozen = state.freezeScene;
       state.freezeScene = value.freezeScene ?? state.freezeScene;
       state.freezeRendering = value.freezeRendering ?? state.freezeRendering;
-      state.asyncFrameWait = value.asyncFrameWait ?? state.asyncFrameWait;
-      state.deferDecode = value.deferDecode ?? state.deferDecode;
       state.dropLateFrames = value.dropLateFrames ?? state.dropLateFrames;
       // Handlers run on the render loop's own thread, so this targets the render thread.
       if (value.renderThreadNice != null) {
         state.renderThreadNice = setCurrentThreadNice(value.renderThreadNice);
-      }
-      if (!state.deferDecode) drainPendingPacket();
-      if (value.projectionPacing != null) {
-        if (!["frame-sync", "vsync"].includes(value.projectionPacing)) {
-          throw new Error(`Unknown projection pacing ${value.projectionPacing}`);
-        }
-        state.projectionPacing = value.projectionPacing;
       }
       if (value.projectionMode != null) {
         if (value.projectionMode !== "headset" && value.projectionMode !== "scene-compatible") {
@@ -402,7 +361,6 @@ new PostMan(
     },
   } as const,
 );
-let pendingPacket: OverlayScenePacket | null = null;
 function decodePacket(packet: OverlayScenePacket) {
   mark("decode0", packet.data.length);
   const start = performance.now();
@@ -412,11 +370,6 @@ function decodePacket(packet: OverlayScenePacket) {
   state.lastPacketBytes = packet.data.length;
   if (decoded.stale) acknowledge(decoded);
   else receiveScene(decoded.payload);
-}
-function drainPendingPacket() {
-  const packet = pendingPacket;
-  pendingPacket = null;
-  if (packet) decodePacket(packet);
 }
 function receiveScene(payload: WebXRRaythreeRenderPayload) {
   // Hold credit while frozen; a new registration supplies a full baseline on resume.
@@ -564,8 +517,6 @@ async function run(options: Start) {
         activeEpoch = null;
         activeProbe = probe;
       }
-      // Deferred packets normally drain after drawing; drain here only until a first scene.
-      if (!inbox.current()) drainPendingPacket();
       const scene = inbox.current();
       const payload = probe?.payload ?? scene?.payload;
       if (!payload || state.freezeRendering) {
@@ -590,11 +541,9 @@ async function run(options: Start) {
         activeMode = state.presentMode;
       }
       const panoramaMode = activeMode === "panorama";
-      // Vsync pacing starts each frame at the display vsync (panorama's default, projection's
-      // option); otherwise projection frames start right after the native presenter's wait.
-      const vsyncPaced = panoramaMode
-        ? state.panoramaPacing === "vsync"
-        : state.projectionPacing === "vsync";
+      // Vsync pacing starts each frame at the display vsync (panorama's default); otherwise
+      // frames start right after the previous presentation's wait.
+      const vsyncPaced = panoramaMode && state.panoramaPacing === "vsync";
       const pacer = vsyncPaced ? vsyncPacer : fastPacer;
       pacer.extraPredictionFrames = panoramaMode ? state.panoramaExtraPredictionFrames : 0;
       mark("pace0");
@@ -736,8 +685,6 @@ async function run(options: Start) {
         ...(timeline ? schedstat() : []),
       );
       if (!probe && scene) inbox.markAdopted(scene);
-      // After markAdopted: the drained scene's assets stay pending for the next frame.
-      drainPendingPacket();
       state.renderFrameId++;
       const renderedEyes = renderer.getEyeTextureHandles();
       state.lastRenderImages = renderedEyes
@@ -772,9 +719,7 @@ async function run(options: Start) {
         }
         if (presenterPaced) {
           const native = nativePresenter();
-          const result = state.asyncFrameWait && native.canWaitAsync
-            ? await native.presentTextureAsync(panorama.getHandle(), texture)
-            : native.presentTexture(panorama.getHandle(), texture, onTime);
+          const result = native.presentTexture(panorama.getHandle(), texture, onTime);
           state.lastPresent = { mode: "panorama-presenter", ...result };
           if ("dropped" in result && result.dropped) {
             state.droppedLateFrames++;
@@ -817,9 +762,7 @@ async function run(options: Start) {
         const textures = renderer.getEyeTextureHandles();
         if (!textures) throw new Error("Missing eye targets");
         const native = nativePresenter();
-        const result = state.asyncFrameWait && native.canWaitAsync
-          ? await native.presentAsync(overlays.getHandles(), textures, cameras)
-          : native.present(overlays.getHandles(), textures, cameras, onTime);
+        const result = native.present(overlays.getHandles(), textures, cameras, onTime);
         state.lastPresent = result;
         const dropped = "dropped" in result && result.dropped;
         if (dropped) state.droppedLateFrames++;

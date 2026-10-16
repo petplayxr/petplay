@@ -19,12 +19,6 @@ const symbols = {
   },
   // Split phases (optional: older builds lack them and keep the blocking path).
   pp_overlay_finish: { parameters: ["buffer"], result: "i32", optional: true },
-  pp_overlay_wait: {
-    parameters: ["pointer", "u32"],
-    result: "i32",
-    nonblocking: true,
-    optional: true,
-  },
   pp_overlay_wait_blocking: {
     name: "pp_overlay_wait",
     parameters: ["pointer", "u32"],
@@ -44,9 +38,8 @@ const symbols = {
 } as const;
 const WAIT_TIMEOUT_MS = 100;
 /**
- * GL finish and OpenVR submission stay on the context owner. The synchronous `present*` calls
- * also block that thread in `WaitFrameSync`; the `*Async` variants run only the wait on an FFI
- * worker thread, so scene messages and GC can use the wait instead of the next frame's budget.
+ * GL finish, the `WaitFrameSync` wait and OpenVR submission, all on the context owner's thread.
+ * (Running the wait on an FFI worker thread was tried and did not reduce pacing slips.)
  */
 export class OverlayPresenterNative {
   private readonly library: Deno.DynamicLibrary<typeof symbols>;
@@ -80,7 +73,7 @@ export class OverlayPresenterNative {
     writeEyeFromTracking(cameras.rightEyeViewMatrix, this.views.subarray(12));
     writeProjectionTangents(cameras.leftEyeProjectionMatrix, true, this.frusta.subarray(0, 4));
     writeProjectionTangents(cameras.rightEyeProjectionMatrix, true, this.frusta.subarray(4));
-    if (beforePublish && this.canWaitAsync) {
+    if (beforePublish && this.hasSplitPhases) {
       let error = this.finishAndWaitBlocking();
       if (!error && !beforePublish()) return { ...this.result(0, false), dropped: true };
       if (!error) error = this.publishProjection(handles, textures);
@@ -103,7 +96,7 @@ export class OverlayPresenterNative {
   }
   /** One overlay's texture through the same finish, frame-sync and publish sequence. */
   presentTexture(handle: bigint, texture: number, beforePublish?: () => boolean) {
-    if (beforePublish && this.canWaitAsync) {
+    if (beforePublish && this.hasSplitPhases) {
       let error = this.finishAndWaitBlocking();
       if (!error && !beforePublish()) return { ...this.result(0, false), dropped: true };
       if (!error) {
@@ -125,38 +118,11 @@ export class OverlayPresenterNative {
     );
     return { ...this.result(error, false), dropped: false };
   }
-  /** Whether the library exports the split phases the async variants need. */
-  get canWaitAsync(): boolean {
+  /** Whether the library exports the split phases that dropping late frames needs. */
+  private get hasSplitPhases(): boolean {
     const s = this.library.symbols;
-    return !!(s.pp_overlay_finish && s.pp_overlay_wait && s.pp_overlay_wait_blocking &&
-      s.pp_overlay_publish && s.pp_overlay_publish_texture);
-  }
-  /** `present` with the frame-sync wait off the context thread. */
-  async presentAsync(
-    handles: readonly [bigint, bigint],
-    textures: { left: number; right: number },
-    cameras: RenderCameras,
-  ) {
-    writeEyeFromTracking(cameras.leftEyeViewMatrix, this.views.subarray(0, 12));
-    writeEyeFromTracking(cameras.rightEyeViewMatrix, this.views.subarray(12));
-    writeProjectionTangents(cameras.leftEyeProjectionMatrix, true, this.frusta.subarray(0, 4));
-    writeProjectionTangents(cameras.rightEyeProjectionMatrix, true, this.frusta.subarray(4));
-    let error = await this.finishAndWait();
-    if (!error) error = this.publishProjection(handles, textures);
-    return this.result(error, error !== 0 && this.stats[3] > 0);
-  }
-  /** `presentTexture` with the frame-sync wait off the context thread. */
-  async presentTextureAsync(handle: bigint, texture: number) {
-    let error = await this.finishAndWait();
-    if (!error) {
-      error = this.library.symbols.pp_overlay_publish_texture!(
-        this.table,
-        handle,
-        texture,
-        this.stats,
-      );
-    }
-    return this.result(error, false);
+    return !!(s.pp_overlay_finish && s.pp_overlay_wait_blocking && s.pp_overlay_publish &&
+      s.pp_overlay_publish_texture);
   }
   private publishProjection(
     handles: readonly [bigint, bigint],
@@ -187,17 +153,7 @@ export class OverlayPresenterNative {
     if (wait) this.stats[4] = wait;
     return wait;
   }
-  private async finishAndWait(): Promise<number> {
-    const s = this.library.symbols;
-    const finished = s.pp_overlay_finish!(this.stats);
-    if (finished) return finished;
-    const start = performance.now();
-    const wait = await s.pp_overlay_wait!(this.table, WAIT_TIMEOUT_MS);
-    this.stats[1] = performance.now() - start;
-    this.stats[5] = wait;
-    if (wait) this.stats[4] = wait;
-    return wait;
-  }
+
   private result(error: number, partial: boolean) {
     return {
       error,
