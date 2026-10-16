@@ -3,7 +3,7 @@ import { createWindow, DwmWindow, getProcAddress } from "@gfx/dwm";
 import { flipVertical } from "./screenutils.ts";
 import { computeCursorQuad } from "./cursorComposite.ts";
 
-import { cstr } from "https://deno.land/x/dwm@0.3.4/src/platform/glfw/ffi.ts";
+import { cstr } from "./cString.ts";
 import { join } from "@std/path";
 
 /**

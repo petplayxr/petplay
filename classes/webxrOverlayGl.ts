@@ -1,6 +1,6 @@
 import * as gl from "https://deno.land/x/gluten@0.1.9/api/gl4.6.ts";
 import { createWindow, DwmWindow, getProcAddress } from "@gfx/dwm";
-import { cstr } from "https://deno.land/x/dwm@0.3.4/src/platform/glfw/ffi.ts";
+import { cstr } from "./cString.ts";
 import { LogChannel } from "@mommysgoodpuppy/logchannel";
 import type { MappedTextureReadback, StereoMappedTextureReadback } from "./webgpu.ts";
 import { WEBXR_VARGGLES_GLSL450_FRAGMENT } from "./webxrVargglesShader.ts";
