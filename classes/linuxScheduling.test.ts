@@ -1,7 +1,8 @@
 import { childProcessArgs } from "./childModule.ts";
 
 Deno.test({
-  name: "source child restores inherited idle scheduling and keeps child arguments",
+  name:
+    "source child restores inherited idle scheduling or reports denial and keeps child arguments",
   ignore: Deno.build.os !== "linux",
   async fn() {
     const dir = await Deno.makeTempDir({ prefix: "petplay-scheduling-" });
@@ -11,6 +12,7 @@ Deno.test({
         fixture,
         `const libc = Deno.dlopen("libc.so.6", {
           sched_getscheduler: { parameters: ["i32"], result: "i32" },
+          sched_setscheduler: { parameters: ["i32", "i32", "buffer"], result: "i32" },
           getpriority: { parameters: ["i32", "u32"], result: "i32" },
         });
         const policies = [...Deno.readDirSync("/proc/self/task")]
@@ -19,6 +21,7 @@ Deno.test({
           name: Deno.readTextFileSync("/proc/self/comm").trim(),
           argv0: new TextDecoder().decode(Deno.readFileSync("/proc/self/cmdline")).split("\\0")[0],
           policies, args: Deno.args, nice: libc.symbols.getpriority(0, 0),
+          canLeaveIdle: libc.symbols.sched_setscheduler(0, 0, new Int32Array([0])) === 0,
         }));
         libc.close();`,
       );
@@ -38,10 +41,18 @@ Deno.test({
       if (!result.success) throw new Error(new TextDecoder().decode(result.stderr));
       const report = JSON.parse(new TextDecoder().decode(result.stdout).trim());
       if (
-        report.name !== "petplay" || report.argv0 !== "ppvr" ||
-        report.policies.some((p: number) => p === 5)
+        report.name !== "petplay" || report.argv0 !== "ppvr"
       ) {
         throw new Error(`identity/idle recovery failed: ${JSON.stringify(report)}`);
+      }
+      const idleRemains = report.policies.some((p: number) => p === 5);
+      if (idleRemains && report.canLeaveIdle) {
+        throw new Error(`idle scheduling was recoverable: ${JSON.stringify(report)}`);
+      }
+      // RLIMIT_NICE/CAP_SYS_NICE can prevent leaving SCHED_IDLE at nice 16.
+      // The same direct syscall checks the host policy without skipping recovery assertions.
+      if (idleRemains && !/"deniedThreads":[1-9]/.test(new TextDecoder().decode(result.stderr))) {
+        throw new Error("scheduler denial was not reported");
       }
       if (JSON.stringify(report.args) !== JSON.stringify(["--fixture-arg"])) {
         throw new Error(`child arguments changed: ${JSON.stringify(report.args)}`);
