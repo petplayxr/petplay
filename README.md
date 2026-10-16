@@ -56,7 +56,7 @@ For a Steam Frame ARM64 build, run `deno task build --target=aarch64-unknown-lin
 `dist/petplay-aarch64`. This cross build leaves the developer machine's `.env` out; supply runtime
 settings on the headset. ARM64 builds require Zig 0.13.0 (`PETPLAY_ZIG` can select the binary);
 local cross builds also need `PETPLAY_RAYLIB_SYSROOT` pointing to target GLFW development
-libraries. Native ARM64 CI uses system GLFW development packages. See the
+libraries. Native ARM64 CI builds a test-only GLFW 3.4 fixture. See the
 [raylib build recipe](utils/native/raylib/README.md). The native helper builds and remaining hardware checks are in
 [docs/STEAM_FRAME.md](docs/STEAM_FRAME.md).
 
