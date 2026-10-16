@@ -465,7 +465,11 @@ function projection(system: OpenVR.IVRSystem, eye: OpenVR.Eye) {
 async function run(options: Start) {
   let renderer: WebXROverlayRaylib | null = null;
   let overlays: OpenVrProjectionOverlays | null = null;
-  let presenter: OverlayPresenterNative | null = null;
+  let presenter = null as OverlayPresenterNative | null;
+  // Panorama is the main mode and presents without it; load the native helper only for the
+  // projection path and `panoramaPacing: "presenter"`.
+  let overlayPointer: Deno.PointerValue = null;
+  const nativePresenter = () => presenter ??= new OverlayPresenterNative(overlayPointer!);
   let panorama: OpenVrOverlayTexture | null = null;
   try {
     const pointers = runtime.initialize({
@@ -489,8 +493,7 @@ async function run(options: Start) {
       "independent-panorama",
     );
     const tip = new OpenVrControllerTipPoseResolver(pointers.system!, pointers.renderModels!);
-    // Load the native helper before allocating graphics resources, so missing builds fail cleanly.
-    presenter = new OverlayPresenterNative(pointers.overlay!);
+    overlayPointer = pointers.overlay;
     renderer = new WebXROverlayRaylib(options.eyeSize);
     renderer.initialize(options.overlayName ?? "PetPlay independent renderer");
     const overlayKey = options.overlayKey ?? `petplay.independent.${Deno.pid}`;
@@ -566,7 +569,7 @@ async function run(options: Start) {
       if (activeMode !== state.presentMode) {
         if (state.presentMode === "panorama") {
           overlays.cleanup();
-          presenter.resetVisibility();
+          presenter?.resetVisibility();
         } else {
           panorama.cleanup();
           panoramaReady = false;
@@ -760,9 +763,10 @@ async function run(options: Start) {
           }
         }
         if (presenterPaced) {
-          const result = state.asyncFrameWait && presenter.canWaitAsync
-            ? await presenter.presentTextureAsync(panorama.getHandle(), texture)
-            : presenter.presentTexture(panorama.getHandle(), texture, onTime);
+          const native = nativePresenter();
+          const result = state.asyncFrameWait && native.canWaitAsync
+            ? await native.presentTextureAsync(panorama.getHandle(), texture)
+            : native.presentTexture(panorama.getHandle(), texture, onTime);
           state.lastPresent = { mode: "panorama-presenter", ...result };
           if ("dropped" in result && result.dropped) {
             state.droppedLateFrames++;
@@ -804,9 +808,10 @@ async function run(options: Start) {
       } else {
         const textures = renderer.getEyeTextureHandles();
         if (!textures) throw new Error("Missing eye targets");
-        const result = state.asyncFrameWait && presenter.canWaitAsync
-          ? await presenter.presentAsync(overlays.getHandles(), textures, cameras)
-          : presenter.present(overlays.getHandles(), textures, cameras, onTime);
+        const native = nativePresenter();
+        const result = state.asyncFrameWait && native.canWaitAsync
+          ? await native.presentAsync(overlays.getHandles(), textures, cameras)
+          : native.present(overlays.getHandles(), textures, cameras, onTime);
         state.lastPresent = result;
         const dropped = "dropped" in result && result.dropped;
         if (dropped) state.droppedLateFrames++;
