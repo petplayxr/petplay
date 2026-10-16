@@ -54,12 +54,16 @@ before using desktop capture; release builds do this automatically.
 
 For a Steam Frame ARM64 build, run `deno task build --target=aarch64-unknown-linux-gnu` to create
 `dist/petplay-aarch64`. This cross build leaves the developer machine's `.env` out; supply runtime
-settings on the headset. The native helper builds and remaining hardware checks are in
+settings on the headset. ARM64 builds require Zig 0.13.0 (`PETPLAY_ZIG` can select the binary);
+local cross builds also need `PETPLAY_RAYLIB_SYSROOT` pointing to target GLFW development
+libraries. Native ARM64 CI uses system GLFW development packages. See the
+[raylib build recipe](utils/native/raylib/README.md). The native helper builds and remaining hardware checks are in
 [docs/STEAM_FRAME.md](docs/STEAM_FRAME.md).
 
 CI checks types, runs unit tests and a software-OpenGL smoke playtest, and builds Windows x64,
-Linux x64 and **experimental Linux ARM64** artifacts. The ARM64 executable embeds its source-built capture helper but still needs native raylib;
-it is not a self-contained Frame release. Normal version-tag releases contain desktop builds only. See the
+Linux x64 and **experimental Linux ARM64** artifacts. The ARM64 executable embeds its source-built capture helper and raylib 5.5 (built with pinned
+Zig and external GLFW). It requires the Frame runtime’s GLFW/OpenGL/OpenVR libraries. Normal
+version-tag releases contain desktop builds only while device validation continues. See the
 [Frame testing runbook](docs/STEAM_FRAME_TESTING.md) for Quest/DroidFrame testing and known limits.
 Default [Steam Frame controller bindings](docs/STEAM_FRAME_CONTROLLERS.md) are included, alongside
 Oculus Touch and the separate DroidFrame engineering profile.

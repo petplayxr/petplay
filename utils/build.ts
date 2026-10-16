@@ -8,6 +8,7 @@
  * source directory on the OSes where the binary has no extension.
  */
 import { nativeBuildTarget } from "../classes/nativeBuildTarget.ts";
+import { buildRaylib } from "./build-raylib.ts";
 import { buildNative } from "./build-native.ts";
 
 const targetArg = Deno.args.find((arg) => arg.startsWith("--target="));
@@ -29,7 +30,11 @@ const webxr = await new Deno.Command(Deno.execPath(), {
 if (!webxr.success) throw new Error(`WebXR runtime build failed (${webxr.code})`);
 
 await Deno.mkdir("dist", { recursive: true });
-const captureHelper = await buildNative(nativeBuildTarget(target));
+const resolvedTarget = nativeBuildTarget(target);
+const captureHelper = await buildNative(resolvedTarget);
+const raylib = resolvedTarget === "aarch64-unknown-linux-gnu"
+  ? await buildRaylib(resolvedTarget, Deno.env.get("PETPLAY_RAYLIB_SYSROOT"))
+  : null;
 
 // Every directory holding a module that is spawned by URL at runtime has to be embedded as files:
 // actors are workers, and `{ worker: "process" }` children are dispatched into a module href. The
@@ -53,6 +58,7 @@ const args = [
   "./submodules/threewebxrwebgpudeno/submodules/iwer/packages/iwer/build/",
   "--include",
   captureHelper,
+  ...(raylib ? ["--include", raylib] : []),
   "--include",
   "./submodules/stageforge/",
   // Agent playtests are dynamically imported inside the compiled webxr worker too.

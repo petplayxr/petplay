@@ -34,10 +34,14 @@ export function getRaylibLibraryPath(base: string | URL = import.meta.url): stri
     return fromFileUrl(new URL("../resources/raylib.dll", base));
   }
   return firstExisting([
-    // The bundled library is x86-64; loading it in an ARM64 Deno process fails.
-    ...(Deno.build.arch === "aarch64"
-      ? []
-      : [fromFileUrl(new URL("../resources/libraylib.so", base))]),
+    fromFileUrl(
+      new URL(
+        Deno.build.arch === "aarch64"
+          ? "../dist/native/aarch64-unknown-linux-gnu/libraylib.so"
+          : "../resources/libraylib.so",
+        base,
+      ),
+    ),
     "/usr/lib/libraylib.so",
     "/usr/local/lib/libraylib.so",
   ]) ?? "libraylib.so";

@@ -1,7 +1,7 @@
 # Experimental Steam Frame builds and testing
 
 Updated 2026-10-16. The initial deliverable is a compiled Linux ARM64 artifact and regression
-coverage, not a self-contained release or physical Steam Frame certification.
+coverage. Raylib and capture helpers are embedded; physical Steam Frame certification is pending.
 
 ## CI artifacts
 
@@ -18,12 +18,13 @@ runs the smoke playtest under Xvfb/software OpenGL. It compiles three artifacts 
 Artifacts expire after seven days. Downloaded Linux executables may need `chmod +x` because
 GitHub artifact uploads do not preserve executable modes. The existing `v*` tag release workflow
 reuses these checks/builds before publishing the Windows/Linux x64 executables and `SHA256SUMS`.
-It does not attach the incomplete ARM64 executable to normal releases; ARM64 remains a clearly
-labelled CI artifact until raylib packaging is ready. Local changes to these workflows do
+ARM64 remains a clearly labelled experimental CI artifact while device validation continues;
+normal releases still publish desktop executables only. Local changes to these workflows do
 not run or publish them.
 
-The cross build omits the developer `.env`. ARM64 raylib remains an external input, selected
-through `PETPLAY_RAYLIB_LIBRARY`. The capture helper is now built from the pinned screen-streamer
+The cross build omits the developer `.env`. ARM64 raylib 5.5 is now source-built with pinned
+Zig 0.13.0, the official upstream recipe and a small external-GLFW patch, then embedded and
+selected automatically. `PETPLAY_RAYLIB_LIBRARY` remains an override. The capture helper is now built from the pinned screen-streamer
 submodule and embedded in the executable; `PETPLAY_SCREEN_STREAMER` can override it. The genuine Frame
 runtime supplies OpenVR and GLFW. See [the integration investigation](STEAM_FRAME.md) for native
 build details. The x86 binaries embedded in `resources/` are not ARM64 substitutes.
@@ -31,17 +32,23 @@ build details. The x86 binaries embedded in `resources/` are not ARM64 substitut
 | Component | Current ARM64 status |
 | --- | --- |
 | PetPlay executable | Cross-compiled by CI; application modules and resources embedded |
-| raylib 5.5 shared library | Built locally for ARM64 with external GLFW; not built or supplied by CI |
+| raylib 5.5 shared library | Built with Zig on the ARM64 runner, external GLFW/OpenGL 4.3; embedded |
 | screen-streamer capture/input helper | Source-built with Cargo in CI and embedded for each target |
 | GLFW / OpenGL / OpenVR | Supplied by the Frame runtime; use native ARM64 libraries |
 
 The earlier Quest test bundles reused `/home/ellie/git/steamframe-emu/bundle/libraylib.so` and
-`screen-streamer`; those runs predate source-built capture embedding. A downloadable ARM64 runtime
-bundle still needs a reproducible raylib build or pinned redistributable, its license, packaging
-and a launcher that selects it. End users should not need to compile dependencies. Local ARM64
-cross builds now also require a configured Cargo ARM64 linker/sysroot and pkg-config environment;
+`screen-streamer`; those runs predate source-built helper embedding. New executables embed both
+helpers and select ARM64 raylib automatically; end users do not compile them. GLFW/OpenGL/OpenVR
+remain supplied by the headset. The raylib license is included in resources. Local ARM64 cross
+builds require Zig 0.13.0 and `PETPLAY_RAYLIB_SYSROOT` for target GLFW, plus a configured Cargo
+ARM64 linker/sysroot and pkg-config environment;
 CI builds natively on an Ubuntu 24.04 ARM64 runner to avoid that cross-linking requirement. The optional experimental C++ overlay presenter is a separate opt-in
 build and was not used by the Quest runs.
+
+The ARM64 job also boots the compiled executable outside the checkout under Xvfb/Mesa, checks
+the scene, creates an OpenGL window/render texture through bundled raylib, executes the embedded
+capture helper’s version probe and checks shutdown. See the [raylib recipe](../utils/native/raylib/README.md).
+This is a software-rendering/package test; Frame GPU and live portal capture remain device gates.
 
 Native Frame controller defaults are documented in
 [Steam Frame controller bindings](STEAM_FRAME_CONTROLLERS.md).

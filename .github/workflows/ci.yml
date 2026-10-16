@@ -81,12 +81,30 @@ jobs:
       - name: Install Linux capture build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y pkg-config clang libpipewire-0.3-dev libdbus-1-dev
+      - name: Install ARM64 raylib build dependencies
+        if: runner.arch == 'ARM64'
+        run: sudo apt-get install -y libglfw3-dev xvfb xauth libgl1-mesa-dri
+      - uses: mlugg/setup-zig@v2
+        if: runner.arch == 'ARM64'
+        with:
+          version: 0.13.0
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.4
       - run: deno task preconf
       - run: deno install --allow-import
       - run: deno task build ${{ matrix.args }}
+      - name: Smoke test compiled ARM64 executable with bundled raylib
+        if: runner.arch == 'ARM64'
+        run: xvfb-run -a deno run -A utils/compiled-smoke.ts dist/petplay-aarch64
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+      - uses: actions/upload-artifact@v4
+        if: failure() && runner.arch == 'ARM64'
+        with:
+          name: arm64-smoke-failure-logs
+          path: _scratch/compiled-smoke-*/server.log
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
