@@ -5,7 +5,11 @@ import * as OpenVR from "../submodules/OpenVR_TS_Bindings_Deno/openvr_bindings.t
 import * as THREE from "three";
 import { selectActiveControllerIndex } from "../classes/openVrControllerSelection.ts";
 import { OpenVrControllerTipPoseResolver } from "../classes/openVrControllerTipPose.ts";
-import { setControllerDeviceFrameResolver } from "../classes/environment/controllerDeviceFrames.ts";
+import {
+  setControllerDeviceFrameResolver,
+  setFollowReleaseSender,
+  settleFollowRelease,
+} from "../classes/environment/controllerDeviceFrames.ts";
 import { wait } from "../classes/utils.ts";
 import { getDisplayMouseDiagnostics } from "../classes/environment/displayInstance/mouse.ts";
 import { OpenVrOverlayTexture } from "../classes/openVrOverlayTexture.ts";
@@ -389,6 +393,7 @@ const state = actorState({
   lastStartPayload: null as StartWebXRPayload | null,
   decoupledRenderer: false,
   renderOwner: null as string | null,
+  displayOverlayHostActor: null as string | null,
   renderOwnerStatus: null as unknown,
   /**
    * Extra renderers of this scene, keyed by actor id (see [desktopView](desktopView.ts)):
@@ -674,6 +679,7 @@ new PostMan(
 
           const onInProcessControllerFrame = undefined;
 
+          state.displayOverlayHostActor = payload?.displayOverlayHostActor ?? null;
           if (payload?.displayOverlayHostActor) {
             // Capture loss and recovery reach the headset as toasts.
             PostMan.PostMessage({
@@ -869,7 +875,15 @@ new PostMan(
       return getWebXrViewsStatus();
     },
     /** Consumer owns this delivery's dependencies; return bounded transport credit. */
-    WEBXRVIEWFRAMEACK: (payload: { actorId?: string; delivery?: SceneDelivery } | null) => {
+    FOLLOWRELEASED: (payload: { seq: number; pose: number[] | null }) => {
+      settleFollowRelease(payload.seq, payload.pose);
+    },
+    WEBXRVIEWFRAMEACK: (
+      payload: {
+        actorId?: string;
+        delivery?: SceneDelivery;
+      } | null,
+    ) => {
       const view = payload?.actorId == null ? null : state.views.get(payload.actorId);
       if (view == null) {
         return getWebXrViewsStatus();
@@ -1864,6 +1878,20 @@ function initializeRaylibOpenVrPacer(
     }
   }
   setControllerDeviceFrameResolver(resolveControllerDeviceFrame);
+  setFollowReleaseSender((space, seq) => {
+    // Screens attached to the controller freeze at once, in parallel with the renderer.
+    const deviceIndex = resolveControllerDeviceFrame(space)?.deviceIndex;
+    if (state.displayOverlayHostActor && deviceIndex != null) {
+      PostMan.PostMessage({
+        target: state.displayOverlayHostActor,
+        type: "FOLLOWRELEASE",
+        payload: { deviceIndex },
+      });
+    }
+    if (!state.decoupledRenderer || !state.renderOwner) return false;
+    PostMan.PostMessage({ target: state.renderOwner, type: "FOLLOWRELEASE", payload: { space, seq } });
+    return true;
+  });
   applyOpenVrEyeGeometry();
   LogChannel.log("webxrv2", `[webxr] ${label} init: creating OpenVR pacer`);
   state.nativeRaylibPacer = tryCreateOpenVrOverlayFramePacer(

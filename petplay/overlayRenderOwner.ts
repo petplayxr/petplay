@@ -17,9 +17,9 @@ import {
 import { WebXROverlayRaylib } from "../classes/webxrOverlayRaylib.ts";
 import type { WebXRRaythreeRenderPayload } from "../classes/webxrRaythreeScene.ts";
 import {
-  OverlaySceneWireDecoder,
   OVERLAY_SCENE_WIRE_FORMAT,
   type OverlayScenePacket,
+  OverlaySceneWireDecoder,
 } from "../classes/overlaySceneWire.ts";
 import { wait } from "../classes/utils.ts";
 import { setCurrentThreadNice } from "../classes/linuxScheduling.ts";
@@ -56,6 +56,14 @@ const state = actorState({
   waitTimeouts: 0,
   trackingInvalid: 0,
   resolvedAnchors: 0,
+  /** Tracked poses of the last rendered frame: what the user last saw. */
+  renderedAnchors: {} as Record<string, number[]>,
+  /**
+   * Released grabs (FOLLOWRELEASE): their carried items hold this pose, the last one shown, until
+   * a scene arrives without them, so letting go does not carry the window on with the hand while
+   * the worker's landed scene is in flight.
+   */
+  followFreeze: new Map<string, { pose: number[]; at: number }>(),
   receivedScenes: 0,
   lastDecodeMs: 0,
   lastPacketBytes: 0,
@@ -188,11 +196,25 @@ const runtime = new OpenVrRuntime("PetPlay independent renderer");
 function health() {
   return { ...state, pid: Deno.pid, latestSceneFrame: latest?.frame.frameCount ?? null };
 }
+/** A released grab whose landed scene never arrives stops holding after this long. */
+const FOLLOW_FREEZE_MAX_MS = 1000;
+
 new PostMan(
   state,
   {
     __INIT__: () => {},
     __HEALTH__: () => health(),
+    FOLLOWRELEASE: (payload: { space: string; seq: number }) => {
+      const pose = state.renderedAnchors[payload.space] ?? null;
+      if (pose) state.followFreeze.set(payload.space, { pose, at: performance.now() });
+      if (state.webxrTarget) {
+        PostMan.PostMessage({
+          target: state.webxrTarget,
+          type: "FOLLOWRELEASED",
+          payload: { seq: payload.seq, pose },
+        });
+      }
+    },
     STARTOVERLAYRENDERER: (options: Start) => {
       if (loop) throw new Error("Renderer already started; stop it before reconfiguration");
       state.webxrTarget = options.webxrTarget ?? null;
@@ -255,7 +277,7 @@ new PostMan(
       workRows.length = 0;
       return { enabled };
     },
-    GETRENDERWORKPROBE: () => ({enabled: workProbe, rows: workRows.slice()}),
+    GETRENDERWORKPROBE: () => ({ enabled: workProbe, rows: workRows.slice() }),
     SETFRAMETIMELINE: (enabled: boolean) => {
       timeline = enabled ? [] : null;
       return { enabled };
@@ -634,7 +656,27 @@ async function run(options: Start) {
         }
       }
       state.anchorSpaces = {};
-      state.resolvedAnchors = resolveRenderAnchors(payload, anchors, state.anchorSpaces);
+      const followAnchors: RenderAnchors = {};
+      for (const [space, freeze] of state.followFreeze) {
+        followAnchors[space as keyof RenderAnchors] = freeze.pose;
+      }
+      const followCounts: Partial<Record<string, number>> = {};
+      state.resolvedAnchors = resolveRenderAnchors(
+        payload,
+        anchors,
+        state.anchorSpaces,
+        followAnchors,
+        followCounts,
+      );
+      // A scene without carried items for a frozen space is the worker's landed one.
+      for (const [space, freeze] of state.followFreeze) {
+        if (!followCounts[space] || performance.now() - freeze.at > FOLLOW_FREEZE_MAX_MS) {
+          state.followFreeze.delete(space);
+        }
+      }
+      for (const [space, matrix] of Object.entries(anchors)) {
+        if (matrix) state.renderedAnchors[space] = Array.from(matrix);
+      }
       if (!renderer.useEyeTargetsOtherThan([shownLeft])) {
         throw new Error("No eligible render targets");
       }
@@ -646,7 +688,12 @@ async function run(options: Start) {
       }
       const wristMarker = wrist?.marker(payload, { ...cameras, ...headsetProjections });
       const restoreWristTag = wrist?.append(payload, head);
-      mark("render0", scene?.assetVersion ?? null, state.receivedScenes, ...(timeline ? schedstat() : []));
+      mark(
+        "render0",
+        scene?.assetVersion ?? null,
+        state.receivedScenes,
+        ...(timeline ? schedstat() : []),
+      );
       const renderStartMs = performance.now();
       const publishedBefore = state.publishedFrames;
       let renderWork: ReturnType<typeof renderer.renderRaythreeFrame>;
@@ -783,12 +830,20 @@ async function run(options: Start) {
           state.publishedFrames++;
         }
       }
-      if (workProbe && workRows.length < 2000) workRows.push({
-        sceneVersion: state.sceneVersion, freezeScene: state.freezeScene,
-        sampleMs, publicationEndMs: performance.now(), renderStartMs, renderEndMs,
-        decodeMs: state.lastDecodeMs, packetBase64Bytes: state.lastPacketBytes, receivedScenes: state.receivedScenes,
-        ...renderWork!,
-      });
+      if (workProbe && workRows.length < 2000) {
+        workRows.push({
+          sceneVersion: state.sceneVersion,
+          freezeScene: state.freezeScene,
+          sampleMs,
+          publicationEndMs: performance.now(),
+          renderStartMs,
+          renderEndMs,
+          decodeMs: state.lastDecodeMs,
+          packetBase64Bytes: state.lastPacketBytes,
+          receivedScenes: state.receivedScenes,
+          ...renderWork!,
+        });
+      }
       if (wrist && wrist.rows.length < 10000) {
         const phase = pacer.sampleVsyncPhase();
         wrist.rows.push({

@@ -3,7 +3,12 @@ import { createDefaultLowerers, type RenderLowerer } from "../submodules/raythre
 import type { WebXRRaythreeRenderPayload } from "./webxrRaythreeScene.ts";
 
 export type RenderAnchorSpace = "head" | "left-hand" | "right-hand" | "left-ray" | "right-ray";
-export type RenderAnchor = { space: RenderAnchorSpace; localMatrix: Float64Array };
+export type RenderAnchor = {
+  space: RenderAnchorSpace;
+  localMatrix: Float64Array;
+  /** Carried by a grab ({@link RenderTrackingFollow}) rather than parented to the space. */
+  follow?: true;
+};
 export type Anchored = { renderAnchor?: RenderAnchor };
 export type RenderAnchors = Partial<Record<RenderAnchorSpace, ArrayLike<number>>>;
 const spaces: readonly string[] = ["head", "left-hand", "right-hand", "left-ray", "right-ray"];
@@ -66,6 +71,7 @@ function followAnchor(
   if (Math.abs(follow.pose.determinant()) < 1e-12) return undefined;
   return {
     space: follow.space,
+    follow: true,
     localMatrix: new Float64Array(
       followHelper.copy(follow.pose).invert()
         .multiply(chainHelper.fromArray(worldMatrix as number[])).elements,
@@ -140,6 +146,13 @@ export function resolveRenderAnchors(
   anchors: RenderAnchors,
   /** Optional per-space tally of anchored items, resolved or not (tracking lost). */
   spaceCounts?: Partial<Record<RenderAnchorSpace, number>>,
+  /**
+   * Poses for grab-carried items only (`follow`), overriding `anchors`: a released grab holds
+   * its window at the last shown pose until the worker's landed scene arrives.
+   */
+  followAnchors?: RenderAnchors,
+  /** Optional per-space tally of grab-carried items. */
+  followCounts?: Partial<Record<RenderAnchorSpace, number>>,
 ): number {
   let count = 0;
   const resolve = (
@@ -152,7 +165,11 @@ export function resolveRenderAnchors(
     const anchor = item.renderAnchor;
     if (!anchor) return;
     if (spaceCounts) spaceCounts[anchor.space] = (spaceCounts[anchor.space] ?? 0) + 1;
-    const tracked = anchors[anchor.space];
+    if (anchor.follow && followCounts) {
+      followCounts[anchor.space] = (followCounts[anchor.space] ?? 0) + 1;
+    }
+    const tracked = (anchor.follow ? followAnchors?.[anchor.space] : undefined) ??
+      anchors[anchor.space];
     // Hold last visual placement on tracking loss, matching the existing scene policy.
     if (!tracked) return;
     const old = new THREE.Matrix4().fromArray(item.worldMatrix);

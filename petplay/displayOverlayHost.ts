@@ -16,6 +16,7 @@ import { getOverlayTransformAbsolute, setOverlayTransform } from "../classes/ope
 import { matrixEquals } from "../classes/matrixutils.ts";
 import { isLayoutVisibilityAction } from "../classes/environment/wristMenu/types.ts";
 import { OpenVrRuntime } from "../classes/openVrRuntime.ts";
+import { tryCreateOpenVrOverlayFramePacer } from "../classes/openVrOverlayFramePacing.ts";
 
 const state = actorState({
   name: "display_overlay_host",
@@ -37,6 +38,8 @@ const state = actorState({
   lastWidthMeters: -1,
   lastHmd: null as OpenVR.HmdMatrix34 | null,
   lastDeviceIndex: undefined as number | undefined,
+  /** IVRSystem, to sample a controller pose when a carried screen is released. */
+  systemPointer: null as bigint | null,
   lastAlpha: -1,
   lastCurvature: -1,
   captureFrames: 0,
@@ -154,7 +157,79 @@ type VirtualOverlay = SyncVirtualDisplayPayload & {
   handle: bigint;
   appliedAlpha?: number;
   appliedCurvature?: number;
+  carry?: CarryState;
 };
+
+/**
+ * A screen attached to a controller (`deviceIndex`) while its window is carried. On release
+ * (FOLLOWRELEASE) it is frozen at once at the controller's current pose, and controller-relative
+ * syncs still in flight are ignored until the worker's landed absolute pose arrives: otherwise
+ * the compositor carries it on with the hand for the few ms that answer takes, then snaps back.
+ */
+type CarryState = {
+  device?: number;
+  relative?: OpenVR.HmdMatrix34;
+  frozenAt?: number;
+};
+const CARRY_FREEZE_MAX_MS = 1000;
+const mainCarry: CarryState = {};
+
+/** Whether to apply a sync's transform; tracks what the overlay is attached to. */
+function acceptCarriedTransform(carry: CarryState, sync: SyncDisplayPosePayload): boolean {
+  if (carry.frozenAt != null) {
+    const expired = performance.now() - carry.frozenAt > CARRY_FREEZE_MAX_MS;
+    if (sync.deviceIndex != null && !expired) return false;
+    carry.frozenAt = undefined;
+  }
+  carry.device = sync.deviceIndex;
+  carry.relative = sync.deviceIndex == null ? undefined : sync.hmd;
+  return true;
+}
+
+let releasePacer: ReturnType<typeof tryCreateOpenVrOverlayFramePacer> = null;
+
+function freezeCarried(deviceIndex: number): void {
+  const overlay = state.overlayClass;
+  if (!overlay || state.systemPointer == null) return;
+  releasePacer ??= tryCreateOpenVrOverlayFramePacer(
+    state.systemPointer,
+    null,
+    true,
+    false,
+    "fast",
+    "display-host-release",
+  );
+  if (!releasePacer) return;
+  releasePacer.paceToDisplayAndRefreshPoses();
+  const pose = releasePacer.getCachedTrackedDevicePose(deviceIndex);
+  if (!pose) return;
+  const freeze = (carry: CarryState, handle: bigint) => {
+    if (carry.device !== deviceIndex || !carry.relative || !handle) return;
+    setOverlayTransform(overlay, handle, composeDevicePose(pose.matrix, carry.relative));
+    carry.device = undefined;
+    carry.relative = undefined;
+    carry.frozenAt = performance.now();
+  };
+  freeze(mainCarry, state.overlayHandle);
+  for (const entry of virtualOverlays.values()) {
+    if (entry.handle !== state.overlayHandle) freeze(entry.carry ??= {}, entry.handle);
+  }
+}
+
+/** Device pose (column-major 4×4) × device-relative 3×4 → absolute 3×4. */
+function composeDevicePose(
+  device: ArrayLike<number>,
+  relative: OpenVR.HmdMatrix34,
+): OpenVR.HmdMatrix34 {
+  const r = relative.m;
+  const m = [0, 1, 2].map((row) =>
+    [0, 1, 2, 3].map((col) =>
+      device[row] * r[0][col] + device[4 + row] * r[1][col] + device[8 + row] * r[2][col] +
+      (col === 3 ? device[12 + row] : 0)
+    )
+  );
+  return { m } as OpenVR.HmdMatrix34;
+}
 const virtualOverlays = new Map<string, VirtualOverlay>();
 const pendingVirtualDisplays = new Map<string, SyncVirtualDisplayPayload>();
 const virtualOverlayRemovalTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -313,7 +388,7 @@ new PostMan(
         }
         state.lastWidthMeters = sync.widthMeters;
       }
-      setTransformSafe(sync.hmd, sync.deviceIndex);
+      if (acceptCarriedTransform(mainCarry, sync)) setTransformSafe(sync.hmd, sync.deviceIndex);
       state.lastHmd = sync.hmd;
       state.lastDeviceIndex = sync.deviceIndex;
     },
@@ -326,6 +401,9 @@ new PostMan(
       pendingVirtualDisplays.set(sync.id, sync);
       if (!state.isRunning || !state.overlayClass || !state.textureStructPtr) return;
       syncVirtualDisplay(sync);
+    },
+    FOLLOWRELEASE: (payload: { deviceIndex: number }) => {
+      freezeCarried(payload.deviceIndex);
     },
     REMOVEVIRTUALDISPLAY: (payload: { id: string }) => {
       pendingVirtualDisplays.delete(payload.id);
@@ -398,6 +476,7 @@ new PostMan(
 function initializeDisplayOverlayOpenVr(): void {
   const pointers = openVrRuntime.initialize({
     overlay: "required",
+    system: "optional",
     identity: {
       appKey: "petplay.display-overlay-host",
       name: "PetPlay Display Overlay Host",
@@ -405,11 +484,16 @@ function initializeDisplayOverlayOpenVr(): void {
   });
   if (!pointers.overlay) throw new Error("Display overlay host IVROverlay unavailable");
   state.overlayClass = new OpenVR.IVROverlay(pointers.overlay);
+  state.systemPointer = pointers.system == null
+    ? null
+    : BigInt(Deno.UnsafePointer.value(pointers.system as Deno.PointerObject));
   LogChannel.log("actor", `[displayOverlayHost] process-local IVROverlay ready (${state.id})`);
 }
 
 function releaseDisplayOverlayOpenVr(): void {
   state.overlayClass = null;
+  state.systemPointer = null;
+  releasePacer = null;
   if (Deno.build.os === "linux") {
     openVrRuntime.deferReleaseToProcessExit();
   } else {
@@ -738,7 +822,10 @@ function syncVirtualDisplay(sync: SyncVirtualDisplayPayload): void {
     );
   }
   setVirtualOverlayMouseScale(entry);
-  setOverlayTransform(overlay, entry.handle, sync.hmd, sync.deviceIndex);
+  const carry = entry.handle === state.overlayHandle ? mainCarry : (entry.carry ??= {});
+  if (acceptCarriedTransform(carry, sync)) {
+    setOverlayTransform(overlay, entry.handle, sync.hmd, sync.deviceIndex);
+  }
   const [boundsPtr] = createStruct<OpenVR.TextureBounds>(
     textureBoundsForCrop(sync.crop),
     OpenVR.TextureBoundsStruct,

@@ -17,6 +17,7 @@ import type { Pointer } from "@pmndrs/pointer-events";
 import { getHandOriginWorldMatrix } from "./trackedOrigins.ts";
 import { pulseHand } from "./haptics.ts";
 import type { RenderTrackingFollow } from "../overlayRenderTracking.ts";
+import { requestFollowRelease, syncDisplaysNow } from "./controllerDeviceFrames.ts";
 
 export type GrabHand = "left" | "right";
 
@@ -159,6 +160,11 @@ export function withOneHandScale<T>(
     const grabber = pointerId == null ? undefined : grabPointers.get(pointerId);
     if (store == null || pointerId == null || grabber == null) {
       sessions.delete(target);
+      const follow = target.userData.renderTrackingFollow as CarryFollow | undefined;
+      if (state.last && follow != null) {
+        releaseCarried(state, target, follow, apply);
+        return undefined;
+      }
       setRenderFollow(target, undefined);
       return apply(state, target);
     }
@@ -217,17 +223,21 @@ function setRenderFollow(
     return;
   }
   const space = `${grabber.hand}-${grabber.space}` as const;
-  let follow = target.userData.renderTrackingFollow as RenderTrackingFollow | undefined;
+  let follow = target.userData.renderTrackingFollow as CarryFollow | undefined;
   if (follow?.space !== space) {
     const pointer = grabber.pointer;
-    follow = {
+    const created = {
       space,
       pose: new THREE.Matrix4(),
-      // A grab can end without a last apply (capture dropped), so check the pointer still holds it.
-      active: () => pointer.getPointerCapture() != null,
-    } as unknown as RenderTrackingFollow;
+      releasing: false,
+      // A grab can end without a last apply (capture dropped), so check the pointer still holds
+      // it; a release in progress stays carried until it lands.
+      active: () => created.releasing || pointer.getPointerCapture() != null,
+    } as unknown as CarryFollow;
+    follow = created;
     target.userData.renderTrackingFollow = follow;
   }
+  follow.releasing = false;
   // The pose this apply placed the window from, not a later sample of the controller.
   (follow.pose as unknown as THREE.Matrix4).compose(
     input.pointerWorldOrigin,
@@ -237,3 +247,62 @@ function setRenderFollow(
 }
 
 const UNIT_SCALE = new THREE.Vector3(1, 1, 1);
+const releaseShift = new THREE.Matrix4();
+const releaseParent = new THREE.Matrix4();
+const releaseLocal = new THREE.Matrix4();
+const releaseHelper = new THREE.Matrix4();
+
+type CarryFollow = RenderTrackingFollow & { releasing: boolean };
+
+/**
+ * Lets go of a carried window. The renderer showed it on the controller pose of its last frame;
+ * applying the worker's final grab state instead would jump it, and the renderer would carry it
+ * on with the hand until that scene arrived (an overshoot). So the renderer freezes it at that
+ * last pose and returns it, and the final apply runs only then, shifted onto that pose. The window
+ * stays tagged, and thus frozen, meanwhile.
+ */
+function releaseCarried<T>(
+  state: HandleState<unknown>,
+  target: THREE.Object3D,
+  follow: CarryFollow,
+  apply: (state: HandleState<unknown>, target: THREE.Object3D) => T,
+): void {
+  follow.releasing = true;
+  requestFollowRelease(follow.space, (shown) => {
+    // Grabbed again before the answer: that grab owns the window now.
+    if (target.userData.renderTrackingFollow !== follow || !follow.releasing || !state.last) return;
+    if (shown != null) shiftGrabState(state, target, shown, follow.pose);
+    delete target.userData.renderTrackingFollow;
+    // The release apply stays rigid too, so the window lands exactly on the shifted pose.
+    target.userData.renderTrackingRelease = true;
+    try {
+      apply(state, target);
+    } finally {
+      delete target.userData.renderTrackingRelease;
+    }
+    syncDisplaysNow();
+  });
+}
+
+/** Moves the grab state by the rigid motion from the worker's controller pose to `shown`. */
+function shiftGrabState(
+  state: HandleState<unknown>,
+  target: THREE.Object3D,
+  shown: ArrayLike<number>,
+  workerPose: THREE.Matrix4,
+): void {
+  releaseShift.fromArray(shown as number[]).multiply(releaseHelper.copy(workerPose).invert());
+  const current = state.current as unknown as {
+    position: THREE.Vector3;
+    quaternion: THREE.Quaternion;
+    scale: THREE.Vector3;
+  };
+  // The grab state is in the target's parent frame; the shift is a world-space rigid motion.
+  target.parent?.updateWorldMatrix(true, false);
+  releaseParent.copy(target.parent?.matrixWorld ?? releaseHelper.identity());
+  releaseLocal.compose(current.position, current.quaternion, current.scale)
+    .premultiply(releaseParent)
+    .premultiply(releaseShift)
+    .premultiply(releaseParent.invert());
+  releaseLocal.decompose(current.position, current.quaternion, current.scale);
+}

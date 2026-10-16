@@ -14,7 +14,7 @@ import { DisplayInstanceFrame, type DisplayInstanceFrameProps } from "./ui.tsx";
 import { DEFAULT_DISPLAY_HEIGHT, DISPLAY_ASPECT_WIDTH_OVER_HEIGHT } from "../displayMetrics.ts";
 import type { WorkspaceRect } from "../workspaceDisplays.ts";
 import { getHeadObject } from "../trackedOrigins.ts";
-import { getControllerDeviceFrame } from "../controllerDeviceFrames.ts";
+import { getControllerDeviceFrame, registerDisplaySync } from "../controllerDeviceFrames.ts";
 import type { RenderTrackingFollow } from "../../overlayRenderTracking.ts";
 import { angleBetweenDeg, nextAutoHidden, stepAutoHideFade } from "./autoHide.ts";
 
@@ -195,7 +195,9 @@ export function DisplayInstance(
     }
   });
 
-  useFrame(() => {
+  // Also run right after a carried window lands, so its screen lets go of the controller at once.
+  const syncOverlay = useRef<() => void>(() => {});
+  syncOverlay.current = () => {
     if (displayOverlayHostActor == null) {
       return;
     }
@@ -291,7 +293,9 @@ export function DisplayInstance(
     } catch {
       // actor may be torn down
     }
-  }, displaySyncFrameOpts);
+  };
+  React.useEffect(() => registerDisplaySync(() => syncOverlay.current()), []);
+  useFrame(() => syncOverlay.current(), displaySyncFrameOpts);
 
   return (
     <group

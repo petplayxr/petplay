@@ -171,3 +171,28 @@ Deno.test("a held window follows the grabbing controller while the grab is live"
     "an ended grab leaves the window in the world",
   );
 });
+
+Deno.test("a released grab holds its carried items while hand-attached ones keep tracking", () => {
+  const local = new Float64Array(new THREE.Matrix4().makeTranslation(0, 0, -1).elements);
+  const item = (follow: boolean) => ({
+    worldMatrix: new Float64Array(16),
+    renderAnchor: {
+      space: "right-ray" as const,
+      localMatrix: local,
+      ...(follow ? { follow: true as const } : {}),
+    },
+  });
+  const carried = item(true), wrist = item(false);
+  const payload = {
+    leftEye: { frame: { instances: [carried, wrist] } },
+    rightEye: { frame: { instances: [] } },
+    ui: { panels: [], texts: [], images: [] },
+  } as unknown as WebXRRaythreeRenderPayload;
+  const fresh = new THREE.Matrix4().makeTranslation(0.1, 0, 0).elements;
+  const frozen = new THREE.Matrix4().makeTranslation(0.05, 0, 0).elements;
+  const counts: Record<string, number> = {};
+  resolveRenderAnchors(payload, { "right-ray": fresh }, undefined, { "right-ray": frozen }, counts);
+  near(carried.worldMatrix[12], 0.05);
+  near(wrist.worldMatrix[12], 0.1);
+  assert(counts["right-ray"] === 1, "only carried items count as carried");
+});
