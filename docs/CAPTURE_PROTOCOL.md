@@ -39,3 +39,18 @@ Linux input commands are newline-delimited UTF-8 on the helper's stdin:
 Windows input is handled by PetPlay's Windows input sink instead. ScreenCast restore tokens are
 stored separately in the path passed by `--capture-token-path`; they are not part of the stream.
 Build/startup checks do not validate portal authorization, `/dev/uinput` access or real capture.
+
+## Linux session selection and validation
+
+The helper uses the ScreenCast portal's `OpenPipeWireRemote` FD and requests CPU-mappable
+MemFd/MemPtr buffers. It validates chunk bounds and stride and packs supported four-channel
+formats into BGRA rows before sending them. DMA-BUF-only streams need a separate import path.
+
+`PETPLAY_CAPTURE_DBUS_SESSION_BUS_ADDRESS`, `PETPLAY_CAPTURE_XDG_RUNTIME_DIR` and
+`PETPLAY_CAPTURE_WAYLAND_DISPLAY` override those environment values for the helper alone.
+Use the actual capture desktop's values; PetPlay's own OpenVR environment stays unchanged.
+These overrides select a session, not an arbitrary Gamescope application panel.
+
+The Linux helper's `--no-input` flag skips uinput setup for capture-only testing. See
+[the isolated desktop integration test](../tests/linux_capture/README.md) for real portal,
+PipeWire and PetPlay receiver validation without changing the user's desktop session.

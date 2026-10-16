@@ -1,0 +1,101 @@
+{
+  "date": "2026-10-16",
+  "ci_run": 38961923212,
+  "source_head": "456c65510927f30260d6068ffbb04cb8672e4e01",
+  "scope": "DroidFrame capture prerequisite probe; no source selection or frames reached",
+  "inherited": {
+    "DBUS_SESSION_BUS_ADDRESS": null,
+    "XDG_RUNTIME_DIR": "/tmp/runtime",
+    "WAYLAND_DISPLAY": "gamescope-0",
+    "DISPLAY": ":0",
+    "XDG_CURRENT_DESKTOP": null,
+    "XDG_DESKTOP_PORTAL_DIR": null
+  },
+  "files": {
+    "/usr/lib/xdg-desktop-portal": false,
+    "/usr/lib/xdg-desktop-portal-gamescope": false,
+    "/usr/lib/xdg-desktop-portal-kde": false,
+    "/usr/bin/kwin_wayland": false,
+    "/usr/bin/busctl": true,
+    "/dev/uinput": false
+  },
+  "session_bus_ready": true,
+  "portal_owner": {
+    "code": 0,
+    "stdout": "b false\n",
+    "stderr": ""
+  },
+  "capture_attempts": [
+    {
+      "mode": "inherited-session",
+      "code": 101,
+      "timedOut": false,
+      "stdout": "\u2705 Platform supported and permission granted\n",
+      "stderr": "\nthread 'main' (26110) panicked at vendor/scap/src/capturer/engine/linux/mod.rs:321:55:\nFailed to create dbus connection: D-Bus error: Using X11 for dbus-daemon autolaunch was disabled at compile time, set your DBUS_SESSION_BUS_ADDRESS instead (org.freedesktop.DBus.Error.NotSupported)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "mode": "explicit-droidframe-session",
+      "code": 101,
+      "timedOut": false,
+      "stdout": "\u2705 Platform supported and permission granted\n",
+      "stderr": "\nthread 'main' (26135) panicked at vendor/scap/src/capturer/engine/linux/mod.rs:324:14:\nUnsupported cursor mode: LinCapError { msg: \"The name org.freedesktop.portal.Desktop was not provided by any .service files\" }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    }
+  ],
+  "native_linux_validation": {
+    "date": "2026-10-17",
+    "scope": "Local uncommitted helper and PetPlay receiver; real isolated KDE portal, PipeWire and KWin; no Frame hardware or input validation",
+    "runs": [
+      {
+        "path": "_scratch/linux-capture/20261017-001421/result.json",
+        "backend": "nested",
+        "frames": 25,
+        "dimensions": [
+          960,
+          720
+        ],
+        "receiver": "PetPlay ScreenCapturer and frame receiver worker",
+        "versions": {
+          "kwin": "kwin 6.7.5",
+          "portal": "xdg-desktop-portal 1.22.1",
+          "pipewire": "pipewire\nCompiled with libpipewire 1.6.9\nLinked with libpipewire 1.6.9"
+        },
+        "default_pipewire_remote_poisoned": true,
+        "parent_environment_preserved": true
+      },
+      {
+        "path": "_scratch/linux-capture/20261017-001456/result.json",
+        "backend": "nested",
+        "frames": 25,
+        "dimensions": [
+          960,
+          720
+        ],
+        "receiver": "PetPlay ScreenCapturer and frame receiver worker",
+        "versions": {
+          "kwin": "kwin 6.7.5",
+          "portal": "xdg-desktop-portal 1.22.1",
+          "pipewire": "pipewire\nCompiled with libpipewire 1.6.9\nLinked with libpipewire 1.6.9"
+        },
+        "default_pipewire_remote_poisoned": true,
+        "parent_environment_preserved": true
+      },
+      {
+        "path": "_scratch/linux-capture/20261017-001526/result.json",
+        "backend": "virtual",
+        "frames": 25,
+        "dimensions": [
+          960,
+          720
+        ],
+        "receiver": "PetPlay ScreenCapturer and frame receiver worker",
+        "versions": {
+          "kwin": "kwin 6.7.5",
+          "portal": "xdg-desktop-portal 1.22.1",
+          "pipewire": "pipewire\nCompiled with libpipewire 1.6.9\nLinked with libpipewire 1.6.9"
+        },
+        "default_pipewire_remote_poisoned": true,
+        "parent_environment_preserved": true
+      }
+    ]
+  }
+}

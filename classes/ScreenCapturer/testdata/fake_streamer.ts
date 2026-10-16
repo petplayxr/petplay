@@ -3,6 +3,17 @@
  * helper's wire format, closes the socket and then stays alive, which is the "dropped socket,
  * live helper" case the capturer must notice on its own.
  */
+const report = Deno.env.get("PETPLAY_TEST_CAPTURE_ENV_REPORT");
+if (report) {
+  await Deno.writeTextFile(
+    report,
+    JSON.stringify(Object.fromEntries(
+      ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "WAYLAND_DISPLAY"].map(
+        (key) => [key, Deno.env.get(key)],
+      ),
+    )),
+  );
+}
 const port = Number(Deno.args.find((arg) => arg.startsWith("--port="))?.slice(7));
 const conn = await Deno.connect({ hostname: "127.0.0.1", port });
 const pixels = new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255]);

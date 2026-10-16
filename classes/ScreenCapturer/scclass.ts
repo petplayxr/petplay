@@ -1,3 +1,4 @@
+import { captureSessionEnvironment } from "./captureSessionEnvironment.ts";
 //#region typings
 
 /**
@@ -211,6 +212,7 @@ export class ScreenCapturer {
 
     // Start the Rust process after worker is ready
     const command = new Deno.Command(this.options.executablePath, {
+      env: captureSessionEnvironment(),
       args: [
         `--fps=${this.options.fps}`,
         `--port=${this.options.port}`,

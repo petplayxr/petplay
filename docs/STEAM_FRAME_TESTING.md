@@ -184,3 +184,9 @@ Use a scratch PetPlay instance for mutating interaction tests. `overlay:perf --a
 Full local artifacts are in `_scratch/steam-frame-2026-10-16/`; compact reproduction evidence is
 attached to the local issues above. Four obsolete on-device PetPlay bundles were removed from an
 inactive runtime, reclaiming 1.86 GiB without removing active/rollback runtime images or Steam state.
+
+## Capture architecture follow-up
+
+The [capture assessment](STEAM_FRAME_CAPTURE.md) inventories the image’s Gamescope/KDE portals,
+nested desktop session, helper compatibility gaps and the live DroidFrame capture failure.
+A working bundled-helper version probe does not establish ScreenCast frame delivery.
