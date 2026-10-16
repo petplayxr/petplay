@@ -141,3 +141,33 @@ Deno.test("tracked scene and UI transforms survive the actual process wire codec
   near(payload.leftEye.frame.instances[0].worldMatrix[12], 4);
   near(payload.ui.panels[0].clipping[3], -4);
 });
+
+Deno.test("a held window follows the grabbing controller while the grab is live", () => {
+  const window = new THREE.Group();
+  window.position.set(0.2, 1.2, -1);
+  const panel = new THREE.Mesh();
+  panel.position.set(0, 0.1, 0);
+  window.add(panel);
+  window.updateMatrixWorld(true);
+  let live = true;
+  window.userData.renderTrackingFollow = {
+    space: "right-hand",
+    pose: new THREE.Matrix4().makeTranslation(0.25, 1, -0.3),
+    active: () => live,
+  };
+
+  const anchor = captureRenderAnchor(panel, panel.matrixWorld.elements);
+  assert(anchor?.space === "right-hand", "held window is sent relative to the grabbing hand");
+  const position = new THREE.Vector3().setFromMatrixPosition(
+    new THREE.Matrix4().fromArray(anchor.localMatrix),
+  );
+  near(position.x, -0.05);
+  near(position.y, 0.3);
+  near(position.z, -0.7);
+
+  live = false;
+  assert(
+    captureRenderAnchor(panel, panel.matrixWorld.elements) === undefined,
+    "an ended grab leaves the window in the world",
+  );
+});

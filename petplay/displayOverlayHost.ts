@@ -12,10 +12,7 @@ import {
   type ScreenCapturer,
 } from "../classes/ScreenCapturer/scclass.ts";
 import type { OpenGLManager } from "../classes/openglManager.ts";
-import {
-  getOverlayTransformAbsolute,
-  setOverlayTransformAbsolute,
-} from "../classes/openvrTransform.ts";
+import { getOverlayTransformAbsolute, setOverlayTransform } from "../classes/openvrTransform.ts";
 import { matrixEquals } from "../classes/matrixutils.ts";
 import { isLayoutVisibilityAction } from "../classes/environment/wristMenu/types.ts";
 import { OpenVrRuntime } from "../classes/openVrRuntime.ts";
@@ -39,6 +36,7 @@ const state = actorState({
   textureReady: false,
   lastWidthMeters: -1,
   lastHmd: null as OpenVR.HmdMatrix34 | null,
+  lastDeviceIndex: undefined as number | undefined,
   lastAlpha: -1,
   lastCurvature: -1,
   captureFrames: 0,
@@ -142,6 +140,8 @@ type SyncDisplayPosePayload = {
   opacity?: number;
   /** `SetOverlayCurvature`, 0..1; absent means flat. */
   curvature?: number;
+  /** When set, `hmd` is relative to this tracked device (a controller carrying the window). */
+  deviceIndex?: number;
 };
 
 type WorkspaceCrop = { x: number; y: number; width: number; height: number };
@@ -167,9 +167,9 @@ type SetFrameDataPayload = {
   height: number;
 };
 
-function setTransformSafe(transform: OpenVR.HmdMatrix34) {
+function setTransformSafe(transform: OpenVR.HmdMatrix34, deviceIndex?: number) {
   if (!state.overlayClass || !state.overlayHandle) return;
-  setOverlayTransformAbsolute(state.overlayClass, state.overlayHandle, transform);
+  setOverlayTransform(state.overlayClass, state.overlayHandle, transform, deviceIndex);
 }
 
 new PostMan(
@@ -285,6 +285,7 @@ new PostMan(
       const curvature = sync.curvature ?? 0;
       if (
         state.lastHmd && matrixEquals(state.lastHmd, sync.hmd) &&
+        state.lastDeviceIndex === sync.deviceIndex &&
         state.lastWidthMeters === sync.widthMeters &&
         state.lastAlpha === alpha &&
         state.lastCurvature === curvature
@@ -312,8 +313,9 @@ new PostMan(
         }
         state.lastWidthMeters = sync.widthMeters;
       }
-      setTransformSafe(sync.hmd);
+      setTransformSafe(sync.hmd, sync.deviceIndex);
       state.lastHmd = sync.hmd;
+      state.lastDeviceIndex = sync.deviceIndex;
     },
     SYNCVIRTUALDISPLAY: (sync: SyncVirtualDisplayPayload) => {
       const removalTimer = virtualOverlayRemovalTimers.get(sync.id);
@@ -736,7 +738,7 @@ function syncVirtualDisplay(sync: SyncVirtualDisplayPayload): void {
     );
   }
   setVirtualOverlayMouseScale(entry);
-  setOverlayTransformAbsolute(overlay, entry.handle, sync.hmd);
+  setOverlayTransform(overlay, entry.handle, sync.hmd, sync.deviceIndex);
   const [boundsPtr] = createStruct<OpenVR.TextureBounds>(
     textureBoundsForCrop(sync.crop),
     OpenVR.TextureBoundsStruct,

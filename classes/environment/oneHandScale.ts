@@ -16,6 +16,7 @@ import type { HandleState, HandleStore } from "@pmndrs/handle";
 import type { Pointer } from "@pmndrs/pointer-events";
 import { getHandOriginWorldMatrix } from "./trackedOrigins.ts";
 import { pulseHand } from "./haptics.ts";
+import type { RenderTrackingFollow } from "../overlayRenderTracking.ts";
 
 export type GrabHand = "left" | "right";
 
@@ -26,7 +27,13 @@ export const ONE_HAND_SCALE_MIN_WIDTH = 0.05;
 export const ONE_HAND_SCALE_MAX_WIDTH = 8;
 const TRIGGER_DOWN = 0.2;
 
-type GrabPointer = { hand: GrabHand; inputSource: XRInputSource; pointer: Pointer };
+type GrabPointer = {
+  hand: GrabHand;
+  inputSource: XRInputSource;
+  pointer: Pointer;
+  /** The pointer's pose space: grip for the sphere, target ray for the ray. */
+  space?: "hand" | "ray";
+};
 
 const grabPointers = new Map<number, GrabPointer>();
 
@@ -35,8 +42,9 @@ export function registerGrabPointerHand(
   pointer: Pointer,
   hand: GrabHand,
   inputSource: XRInputSource,
+  space?: GrabPointer["space"],
 ): () => void {
-  const entry = { hand, inputSource, pointer };
+  const entry = { hand, inputSource, pointer, space };
   grabPointers.set(pointer.id, entry);
   return () => {
     if (grabPointers.get(pointer.id) === entry) grabPointers.delete(pointer.id);
@@ -139,6 +147,8 @@ export function withOneHandScale<T>(
   apply: (state: HandleState<unknown>, target: THREE.Object3D) => T,
   stores: Map<string, HandleStore<unknown>>,
   baseWidth: number,
+  /** Let the renderer carry the window with the grabbing controller ({@link setRenderFollow}). */
+  renderFollow = false,
 ): (state: HandleState<unknown>, target: THREE.Object3D) => T | undefined {
   return (state, target) => {
     if (state.first) sessions.delete(target);
@@ -149,6 +159,7 @@ export function withOneHandScale<T>(
     const grabber = pointerId == null ? undefined : grabPointers.get(pointerId);
     if (store == null || pointerId == null || grabber == null) {
       sessions.delete(target);
+      setRenderFollow(target, undefined);
       return apply(state, target);
     }
     let session = sessions.get(target);
@@ -171,6 +182,12 @@ export function withOneHandScale<T>(
       }
     }
     const active = session.active;
+    // While resizing the window holds still as the hand moves, so it must not follow the hand.
+    setRenderFollow(
+      target,
+      renderFollow && active == null ? grabber : undefined,
+      store.inputState.get(pointerId),
+    );
     if (active == null) return apply(state, target);
     if (!down) {
       session.active = undefined;
@@ -183,3 +200,40 @@ export function withOneHandScale<T>(
     return undefined;
   };
 }
+
+/**
+ * A single-handed grab moves the window rigidly with the controller (damped, so it trails at the
+ * hand's speed). Tagging it lets the decoupled renderer re-pose it from its own fresh controller
+ * pose like the wrist menu, instead of at the worker's frame rate and older pose. Hinged and
+ * resizing windows do not move with the hand and are left untagged.
+ */
+function setRenderFollow(
+  target: THREE.Object3D,
+  grabber: GrabPointer | undefined,
+  input?: { pointerWorldOrigin: THREE.Vector3; pointerWorldQuaternion: THREE.Quaternion },
+): void {
+  if (grabber?.space == null || input == null) {
+    delete target.userData.renderTrackingFollow;
+    return;
+  }
+  const space = `${grabber.hand}-${grabber.space}` as const;
+  let follow = target.userData.renderTrackingFollow as RenderTrackingFollow | undefined;
+  if (follow?.space !== space) {
+    const pointer = grabber.pointer;
+    follow = {
+      space,
+      pose: new THREE.Matrix4(),
+      // A grab can end without a last apply (capture dropped), so check the pointer still holds it.
+      active: () => pointer.getPointerCapture() != null,
+    } as unknown as RenderTrackingFollow;
+    target.userData.renderTrackingFollow = follow;
+  }
+  // The pose this apply placed the window from, not a later sample of the controller.
+  (follow.pose as unknown as THREE.Matrix4).compose(
+    input.pointerWorldOrigin,
+    input.pointerWorldQuaternion,
+    UNIT_SCALE,
+  );
+}
+
+const UNIT_SCALE = new THREE.Vector3(1, 1, 1);

@@ -46,6 +46,25 @@ export function setOverlayTransformAbsolute(
 }
 
 /**
+ * Absolute (standing) transform, or relative to a tracked device when `deviceIndex` is given: the
+ * compositor then composes it with its own pose of that device at scanout, so an overlay carried
+ * by a controller moves with the controller instead of at its owner's update rate.
+ */
+export function setOverlayTransform(
+    overlay: OpenVR.IVROverlay,
+    overlayHandle: OpenVR.OverlayHandle,
+    transform: OpenVR.HmdMatrix34,
+    deviceIndex?: number,
+): void {
+    if (deviceIndex == null) {
+        setOverlayTransformAbsolute(overlay, overlayHandle, transform);
+        return;
+    }
+    const [transformPtr] = createStruct<OpenVR.HmdMatrix34>(transform, OpenVR.HmdMatrix34Struct);
+    overlay.SetOverlayTransformTrackedDeviceRelative(overlayHandle, deviceIndex, transformPtr);
+}
+
+/**
  * Get overlay transform in absolute coordinates
  */
 export function getOverlayTransformAbsolute(

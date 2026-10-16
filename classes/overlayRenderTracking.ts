@@ -8,6 +8,21 @@ export type Anchored = { renderAnchor?: RenderAnchor };
 export type RenderAnchors = Partial<Record<RenderAnchorSpace, ArrayLike<number>>>;
 const spaces: readonly string[] = ["head", "left-hand", "right-hand", "left-ray", "right-ray"];
 
+/**
+ * Set on a subtree root (`userData.renderTrackingFollow`) while something tracked carries it but
+ * it is not parented there: a window held by a controller. Its items are sent relative to `pose`,
+ * the world pose of `space` that the worker placed the subtree from, so the renderer re-poses them
+ * with its own fresh tracking like children of that space. `pose` must be the exact sample used
+ * (a grab's pointer pose at apply time): any other sample of the same space differs by up to a
+ * frame of hand motion, which shows as jitter. `active` lets a grab that ended without notice
+ * lapse.
+ */
+export type RenderTrackingFollow = {
+  space: RenderAnchorSpace;
+  pose: THREE.Matrix4;
+  active: () => boolean;
+};
+
 /** IWER defines grip space relative to its target-ray space, rather than the tracked device. */
 export function setRenderHandAnchors(
   anchors: RenderAnchors,
@@ -30,12 +45,32 @@ export function captureRenderAnchor(
   objectLocal?: ArrayLike<number>,
 ): RenderAnchor | undefined {
   for (let root: THREE.Object3D | null = object; root; root = root.parent) {
+    const follow = root.userData?.renderTrackingFollow as RenderTrackingFollow | undefined;
+    if (follow?.active() && spaces.includes(follow.space)) {
+      return followAnchor(follow, worldMatrix);
+    }
     const space = root.userData?.renderTrackingAnchor;
     if (space === "world") return undefined;
     if (!spaces.includes(space)) continue;
     if (Math.abs(root.matrixWorld.determinant()) < 1e-12) return undefined;
     return { space, localMatrix: localMatrixUnder(root, object, worldMatrix, objectLocal) };
   }
+}
+
+const followHelper = new THREE.Matrix4();
+
+function followAnchor(
+  follow: RenderTrackingFollow,
+  worldMatrix: ArrayLike<number>,
+): RenderAnchor | undefined {
+  if (Math.abs(follow.pose.determinant()) < 1e-12) return undefined;
+  return {
+    space: follow.space,
+    localMatrix: new Float64Array(
+      followHelper.copy(follow.pose).invert()
+        .multiply(chainHelper.fromArray(worldMatrix as number[])).elements,
+    ),
+  };
 }
 
 const chainHelper = new THREE.Matrix4();

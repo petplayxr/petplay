@@ -5,6 +5,7 @@ import * as OpenVR from "../submodules/OpenVR_TS_Bindings_Deno/openvr_bindings.t
 import * as THREE from "three";
 import { selectActiveControllerIndex } from "../classes/openVrControllerSelection.ts";
 import { OpenVrControllerTipPoseResolver } from "../classes/openVrControllerTipPose.ts";
+import { setControllerDeviceFrameResolver } from "../classes/environment/controllerDeviceFrames.ts";
 import { wait } from "../classes/utils.ts";
 import { getDisplayMouseDiagnostics } from "../classes/environment/displayInstance/mouse.ts";
 import { OpenVrOverlayTexture } from "../classes/openVrOverlayTexture.ts";
@@ -1862,6 +1863,7 @@ function initializeRaylibOpenVrPacer(
       );
     }
   }
+  setControllerDeviceFrameResolver(resolveControllerDeviceFrame);
   applyOpenVrEyeGeometry();
   LogChannel.log("webxrv2", `[webxr] ${label} init: creating OpenVR pacer`);
   state.nativeRaylibPacer = tryCreateOpenVrOverlayFramePacer(
@@ -2976,4 +2978,37 @@ function maybeLogOverlayPerf() {
   if (stability.frames > 0) {
     LogChannel.log("perf", `[webxr] stability ${formatFrameStability(stability)}`);
   }
+}
+
+const IDENTITY_DEVICE_POSE = {
+  matrix: new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
+  position: [0, 0, 0] as [number, number, number],
+  quaternion: [0, 0, 0, 1] as [number, number, number, number],
+};
+
+/**
+ * The same device-to-pose offsets the decoupled renderer uses for its `*-ray` and `*-hand`
+ * anchors: the render model tip, and for the grip the scene's ray-to-grip offset on top.
+ */
+function resolveControllerDeviceFrame(space: string) {
+  const [hand, kind] = space.split("-");
+  const system = state.nativeRaylibVrSystem;
+  const tip = state.controllerTipPoseResolver;
+  if ((hand !== "left" && hand !== "right") || (kind !== "ray" && kind !== "hand")) return null;
+  if (!system || !tip) return null;
+  const deviceIndex = system.GetTrackedDeviceIndexForControllerRole(
+    hand === "left"
+      ? OpenVR.TrackedControllerRole.TrackedControllerRole_LeftHand
+      : OpenVR.TrackedControllerRole.TrackedControllerRole_RightHand,
+  );
+  if (deviceIndex === OpenVR.k_unTrackedDeviceIndexInvalid) return null;
+  const deviceToPose = new THREE.Matrix4().fromArray(
+    tip.resolve(deviceIndex, IDENTITY_DEVICE_POSE).matrix,
+  );
+  if (kind === "hand") {
+    const grip = state.host?.getRaythreeSceneContext()?.renderGripOffsets?.[hand];
+    if (!grip) return null;
+    deviceToPose.multiply(new THREE.Matrix4().fromArray(grip));
+  }
+  return { deviceIndex, deviceToPose: deviceToPose.elements };
 }

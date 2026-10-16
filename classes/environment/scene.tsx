@@ -356,8 +356,12 @@ function applyDampedHandleState(
   target: import("three").Object3D,
 ): void {
   const dt = Math.max(0, Math.min(0.1, state.delta?.time ?? 1 / 72));
-  const positionAlpha = Math.min(1, dt * HANDLE_POSITION_DAMPENING);
-  const rotationAlpha = Math.min(1, dt * HANDLE_ROTATION_DAMPENING);
+  // A window the renderer carries with the controller (`renderTrackingFollow`) stays rigid to it:
+  // damping by irregular worker frame times makes its offset from the hand wobble, which the
+  // fresh controller pose would then show against the steady hand.
+  const rigid = target.userData.renderTrackingFollow != null;
+  const positionAlpha = rigid ? 1 : Math.min(1, dt * HANDLE_POSITION_DAMPENING);
+  const rotationAlpha = rigid ? 1 : Math.min(1, dt * HANDLE_ROTATION_DAMPENING);
   const object = target as unknown as THREE.Object3D;
   const position = state.current.position;
   object.position.set(
@@ -369,6 +373,16 @@ function applyDampedHandleState(
   object.scale.set(state.current.scale.x, state.current.scale.y, state.current.scale.z);
 }
 
+/**
+ * Grab options that move the target freely with the hand (not a hinge), so the renderer may carry
+ * it with the grabbing controller's fresh pose.
+ */
+const freeGrabOptionSet = new WeakSet<object>();
+function freeGrabOptions<T extends object>(options: T): T {
+  freeGrabOptionSet.add(options);
+  return options;
+}
+
 /** Grab options with the trigger resize ({@link withOneHandScale}). */
 function withTriggerResize(
   options: Omit<HandleOptions<unknown>, "filter">,
@@ -377,7 +391,7 @@ function withTriggerResize(
 ): Omit<HandleOptions<unknown>, "filter"> {
   const apply = options.apply == null
     ? undefined
-    : withOneHandScale(options.apply, stores, baseWidth);
+    : withOneHandScale(options.apply, stores, baseWidth, freeGrabOptionSet.has(options));
   return { ...options, apply, alwaysUpdate: true };
 }
 
@@ -791,7 +805,11 @@ function SpatialRootOrigin(
     group.matrixWorldNeedsUpdate = true;
   });
   return (
-    <group ref={ref} matrixAutoUpdate={false} userData={{ renderTrackingAnchor: tracked ? originId : undefined }}>
+    <group
+      ref={ref}
+      matrixAutoUpdate={false}
+      userData={{ renderTrackingAnchor: tracked ? originId : undefined }}
+    >
       {children}
     </group>
   );
@@ -1201,7 +1219,7 @@ function DisplaySpatialNodeView({
   const baseOptions = React.useMemo(
     () =>
       withTriggerResize(
-        manipulationOptions ?? { apply: commitFreeTransform },
+        manipulationOptions ?? freeGrabOptions({ apply: commitFreeTransform }),
         handleStores,
         DISPLAY_GRAB_SIZE[0] * innerScale,
       ),
@@ -1450,7 +1468,7 @@ function KeyboardSpatialNodeView({
   const baseOptions = React.useMemo(
     () =>
       withTriggerResize(
-        manipulationOptions ?? { apply: commitFreeTransform },
+        manipulationOptions ?? freeGrabOptions({ apply: commitFreeTransform }),
         handleStores,
         node.snapSource.size[0] * innerScale,
       ),
@@ -1821,7 +1839,7 @@ function AttachedSpatialNodeView(
   const freeOptions = React.useMemo<Omit<HandleOptions<unknown>, "filter">>(
     // Same frozen-point model as the hinge so the post-breakaway grab does not inherit the ray
     // projection the hinge just dropped.
-    () => ({ apply: applyFree, projectRays: false }),
+    () => freeGrabOptions({ apply: applyFree, projectRays: false }),
     [applyFree],
   );
   const hingeRotation: [number, number, number] = hinge == null

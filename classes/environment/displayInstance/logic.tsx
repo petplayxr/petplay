@@ -14,6 +14,8 @@ import { DisplayInstanceFrame, type DisplayInstanceFrameProps } from "./ui.tsx";
 import { DEFAULT_DISPLAY_HEIGHT, DISPLAY_ASPECT_WIDTH_OVER_HEIGHT } from "../displayMetrics.ts";
 import type { WorkspaceRect } from "../workspaceDisplays.ts";
 import { getHeadObject } from "../trackedOrigins.ts";
+import { getControllerDeviceFrame } from "../controllerDeviceFrames.ts";
+import type { RenderTrackingFollow } from "../../overlayRenderTracking.ts";
 import { angleBetweenDeg, nextAutoHidden, stepAutoHideFade } from "./autoHide.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -69,6 +71,30 @@ function hmd34ApproxEqual(
   return true;
 }
 
+const followPoseInverse = new THREE.Matrix4();
+const deviceToPose = new THREE.Matrix4();
+
+/**
+ * While a controller carries the window (`renderTrackingFollow`), rewrites `world` into that
+ * controller's device frame and returns the device index, so the overlay host attaches the screen
+ * to the device and the compositor moves it with the controller, as the renderer does the frame.
+ */
+function carryOnController(obj: THREE.Object3D, world: THREE.Matrix4): number | undefined {
+  for (let node: THREE.Object3D | null = obj; node; node = node.parent) {
+    const follow = node.userData?.renderTrackingFollow as RenderTrackingFollow | undefined;
+    if (follow == null) continue;
+    if (!follow.active()) return undefined;
+    const frame = getControllerDeviceFrame(follow.space);
+    if (frame == null) return undefined;
+    followPoseInverse.copy(follow.pose as unknown as THREE.Matrix4).invert();
+    world.premultiply(followPoseInverse).premultiply(
+      deviceToPose.fromArray(frame.deviceToPose as number[]),
+    );
+    return frame.deviceIndex;
+  }
+  return undefined;
+}
+
 /**
  * 16:9 wireframe display frame with XR handle: move/rotate and uniform scale (aspect preserved).
  * When `displayOverlayHostActor` is set, the OpenVR desktop overlay actor is kept aligned with
@@ -105,6 +131,7 @@ export function DisplayInstance(
   const lastSentWidth = useRef<number | null>(null);
   const lastSentOpacity = useRef<number | null>(null);
   const lastSentCurvature = useRef<number | null>(null);
+  const lastSentDevice = useRef<number | undefined>(undefined);
   /** Last crop sent to the overlay host, compared field-wise to avoid a per-frame JSON.stringify. */
   const lastSentCrop = useRef<WorkspaceRect | null>(null);
   /** Auto-hide: 1 shown, 0 faded out; multiplies the opacity sent to the overlay. */
@@ -190,6 +217,7 @@ export function DisplayInstance(
       decompScale.current,
     );
     rigidWorld.current.compose(decompPos.current, decompQuat.current, unitScale.current);
+    const deviceIndex = carryOnController(obj, rigidWorld.current);
     const hmd = hmd34FromColumnMajor4x4(
       rigidWorld.current.elements as unknown as {
         0: number;
@@ -225,6 +253,7 @@ export function DisplayInstance(
         Math.abs(lastSentWidth.current - widthMeters) < 0.0001 &&
         lastSentOpacity.current === sentOpacity &&
         lastSentCurvature.current === curvature &&
+        lastSentDevice.current === deviceIndex &&
         cropUnchanged
       ) {
         return;
@@ -234,6 +263,7 @@ export function DisplayInstance(
     lastSentWidth.current = widthMeters;
     lastSentOpacity.current = sentOpacity;
     lastSentCurvature.current = curvature;
+    lastSentDevice.current = deviceIndex;
     lastSentCrop.current = workspaceCrop ? { ...workspaceCrop } : null;
     try {
       PostMan.PostMessage(
@@ -249,12 +279,13 @@ export function DisplayInstance(
               widthMeters,
               opacity: sentOpacity,
               curvature,
+              deviceIndex,
             },
           }
           : {
             target: targetActor,
             type: "SYNCDISPLAYPOSE",
-            payload: { hmd, widthMeters, opacity: sentOpacity, curvature },
+            payload: { hmd, widthMeters, opacity: sentOpacity, curvature, deviceIndex },
           },
       );
     } catch {

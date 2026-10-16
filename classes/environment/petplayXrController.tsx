@@ -239,29 +239,29 @@ function PetplayDefaultXRInputSourceRayPointer(props: DefaultXRInputSourceRayPoi
   return (
     <XRSpace ref={ref} space="target-ray-space">
       <group userData={{ renderTrackingAnchor: `${handedness}-ray` }}>
-      {rayModelOptions !== false && (
-        <HudPointerRayModel
-          pointer={pointer}
-          {...PETPLAY_RAY_DEFAULTS}
-          opacity={1}
-          {...rayOpts}
-        />
-      )}
-      {cursorModelOptions !== false && <HudPointerCursorModel pointer={pointer} />}
+        {rayModelOptions !== false && (
+          <HudPointerRayModel
+            pointer={pointer}
+            {...PETPLAY_RAY_DEFAULTS}
+            opacity={1}
+            {...rayOpts}
+          />
+        )}
+        {cursorModelOptions !== false && <HudPointerCursorModel pointer={pointer} />}
       </group>
     </XRSpace>
   );
 }
 
 /** Tells the one-hand resize which hand, and which trigger, a grab pointer belongs to. */
-function useRegisterGrabPointer(pointer: Pointer): void {
+function useRegisterGrabPointer(pointer: Pointer, space: "hand" | "ray"): void {
   const state = useXRInputSourceStateContext();
   const inputSource = state.inputSource;
   useEffect(() => {
     const handedness = inputSource.handedness;
     if (handedness !== "left" && handedness !== "right") return;
-    return registerGrabPointerHand(pointer, handedness, inputSource);
-  }, [pointer, inputSource]);
+    return registerGrabPointerHand(pointer, handedness, inputSource, space);
+  }, [pointer, inputSource, space]);
 }
 
 /**
@@ -273,7 +273,7 @@ function PetplayGrabSpherePointer(options: DefaultXRInputSourceGrabPointerOption
   const ref = useRef<Object3D>(null);
   const pointer = useGrabPointer(ref, state, options);
   usePointerXRInputSourceEvents(pointer, state.inputSource, "squeeze", state.events);
-  useRegisterGrabPointer(pointer);
+  useRegisterGrabPointer(pointer, "hand");
   return <XRSpace ref={ref} space="grip-space" />;
 }
 
@@ -285,7 +285,7 @@ function PetplayGrabRayPointer(
   const ref = useRef<Object3D>(null);
   const pointer = useRayPointer(ref, state, rayOpts, "grab");
   usePointerXRInputSourceEvents(pointer, state.inputSource, "squeeze", state.events);
-  useRegisterGrabPointer(pointer);
+  useRegisterGrabPointer(pointer, "ray");
   return <XRSpace ref={ref} space="target-ray-space" />;
 }
 
