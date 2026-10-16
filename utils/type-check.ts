@@ -51,6 +51,12 @@ async function runTypeCheck(): Promise<void> {
   const { filteredOutput, totalErrors, filteredErrors } = filterDiagnostics(fullOutput);
   const remainingErrors = totalErrors - filteredErrors;
 
+  // Import/CLI failures may have no TS diagnostic blocks. They are still failed checks.
+  if (code !== 0 && totalErrors === 0) {
+    console.error(errors || output || `deno check exited with code ${code}`);
+    Deno.exit(1);
+  }
+
   if (!filteredOutput.trim()) {
     console.log(`✅ No type errors found (after filtering ignored paths)`);
     console.log(`(Filtered out ${filteredErrors} error${filteredErrors !== 1 ? 's' : ''})`);

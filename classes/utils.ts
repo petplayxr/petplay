@@ -88,22 +88,25 @@ export function tempFile(filename: string, base: string): string {
 }
 
 /**
- * Creates this process's scratch directory with the controller binding in it.
- * The action manifest names its binding relative to itself, and SteamVR
+ * Creates this process's scratch directory with all default controller bindings in it.
+ * The action manifest names its bindings relative to itself, and SteamVR
  * remembers a binding it once failed to read, so the binding has to be there
  * before any manifest is.
  */
 function ensureRunTemp() {
-  const binding = join(RUN_TEMP_DIR, "bindings_oculus_touch.json");
-  try {
-    Deno.statSync(binding);
-    return;
-  } catch {
-    // Not yet created.
-  }
   Deno.mkdirSync(RUN_TEMP_DIR, { recursive: true });
   const resources = join(import.meta.dirname!, "../resources");
-  Deno.writeFileSync(binding, Deno.readFileSync(join(resources, "bindings_oculus_touch.json")));
+  const manifest = JSON.parse(Deno.readTextFileSync(join(resources, "actions.json"))) as {
+    default_bindings: { binding_url: string }[];
+  };
+  for (const { binding_url: name } of manifest.default_bindings) {
+    const binding = join(RUN_TEMP_DIR, name);
+    try {
+      Deno.statSync(binding);
+    } catch {
+      Deno.writeFileSync(binding, Deno.readFileSync(join(resources, name)));
+    }
+  }
 }
 
 export function createTemp() {

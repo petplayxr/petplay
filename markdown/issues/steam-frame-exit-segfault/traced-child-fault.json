@@ -1,0 +1,36 @@
+{
+  "returncode": 0,
+  "original_harness_passed": true,
+  "native_fault_sha256": "2f54f51595c5e0d1f6cdd8629a668331ddecaeeeac6e873e601e6fcd9cb6c00e",
+  "native_fault_header": [
+    "DroidFrame diagnostic crash registers/maps (not a recovered crash)",
+    "signal=0x000000000000000b",
+    "address=0x0000000000000000",
+    "pc=0x000000770b5254b8",
+    "lr=0x000000770b525460",
+    "sp=0x000000749bacb7f0",
+    "fp=0x000000749bacb7f0",
+    "x0=0x0000000000000000",
+    "x1=0x00000000ffffffff",
+    "x2=0x000000746c3c2ed0",
+    "x3=0x0000000000000040",
+    "x4=0x0000000000000001",
+    "x5=0x0000000000000001",
+    "x6=0x000000770b90a380",
+    "x7=0x0000007712464144"
+  ],
+  "fault_module": "vrclient.so",
+  "fault_module_offset": "0x2584b8",
+  "classification": "native descendant fault must fail the smoke even with parent exit 0; harness corrected",
+  "milestones": {
+    "scene_running": true,
+    "scene_frames_before": 0,
+    "scene_frames_after": 180,
+    "scene_frames_advanced": true,
+    "openvr_ready": true,
+    "renderer_running": true,
+    "uploads_before": 0,
+    "uploads_after": 181,
+    "uploads_advanced": true
+  }
+}

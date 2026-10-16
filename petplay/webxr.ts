@@ -1215,8 +1215,8 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as
 ) => (...values: unknown[]) => Promise<unknown>;
 
 async function evaluateWebXrJs(code: string) {
-  const names = ["state", "host", "THREE", "PostMan", "globalThis"];
-  const values = [state, state.host, THREE, PostMan, globalThis];
+  const names = ["state", "host", "THREE", "PostMan", "globalThis", "moduleUrl"];
+  const values = [state, state.host, THREE, PostMan, globalThis, import.meta.url];
   // A throwing expression must come back as data. This runs inside the actor's
   // worker, so an escaping rejection is an unhandled error that kills PetPlay.
   try {

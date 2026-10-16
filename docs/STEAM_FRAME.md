@@ -1,5 +1,9 @@
 # Steam Frame integration investigation (2026-09-25)
 
+For current experimental CI artifacts and the Quest/DroidFrame regression procedure, see
+[Steam Frame testing](STEAM_FRAME_TESTING.md). The investigation below records the earlier
+image/QEMU work; it is not the current device test status.
+
 This is a compatibility investigation, not a headset certification. There is no Steam Frame
 available for an end-to-end run yet. The checked recovery image is
 `steamframe-oobe-repair-20260922.5153644-0.3.0.img.bz2`, SHA-256

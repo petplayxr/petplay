@@ -333,7 +333,7 @@ function DesktopViewOffsetBridge(
     let lastSentAt = 0;
     let lastSent: [number, number, number] | null = null;
     let pending: [number, number, number] | null = null;
-    let flushTimer: number | null = null;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
     const readOffset = (): [number, number, number] => {
       const origin = controlsStore.getState().origin;

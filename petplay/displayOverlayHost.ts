@@ -6,6 +6,7 @@ import { LogChannel } from "@mommysgoodpuppy/logchannel";
 import { Buffer } from "node:buffer";
 import { join } from "@std/path";
 import { wait } from "../classes/utils.ts";
+import { nativeBuildTarget, screenStreamerRelativePath } from "../classes/nativeBuildTarget.ts";
 import {
   clampCaptureFps,
   DEFAULT_CAPTURE_FPS,
@@ -539,14 +540,14 @@ function getScreenStreamerPath(): string {
     screenStreamerPath = override;
     return override;
   }
-  if (Deno.build.os === "linux" && Deno.build.arch === "aarch64") {
-    throw new Error(
-      "The bundled screen-streamer is x86-64. Set PETPLAY_SCREEN_STREAMER to an ARM64 build.",
-    );
+  const url = new URL(`../${screenStreamerRelativePath(nativeBuildTarget())}`, import.meta.url);
+  let bytes: Uint8Array;
+  try {
+    bytes = Deno.readFileSync(url);
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error;
+    throw new Error("screen-streamer is missing. Run deno task build:native, or set PETPLAY_SCREEN_STREAMER.");
   }
-  const resourceName = Deno.build.os === "windows" ? "screen-streamer.exe" : "screen-streamer";
-  const url = new URL(`../resources/${resourceName}`, import.meta.url);
-  const bytes = Deno.readFileSync(url);
   const runtimeDir = join(Deno.cwd(), "tmp");
   Deno.mkdirSync(runtimeDir, { recursive: true });
   screenStreamerPath = join(runtimeDir, SCREEN_STREAMER_PROCESS_NAME);

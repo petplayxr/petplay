@@ -417,7 +417,6 @@ function HierarchyBadge(
       borderRadius={RADIUS.shell - GAP}
       borderWidth={OUTLINE_WIDTH}
       borderColor={COLOR.outline}
-      borderOpacity={1}
       backgroundColor={COLOR.ground}
       backgroundOpacity={1}
     >

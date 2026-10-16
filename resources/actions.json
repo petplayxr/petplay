@@ -55,6 +55,14 @@
     {
       "controller_type": "oculus_touch",
       "binding_url": "bindings_oculus_touch.json"
+    },
+    {
+      "controller_type": "droidframe_quest",
+      "binding_url": "bindings_droidframe_quest.json"
+    },
+    {
+      "controller_type": "frame_controller",
+      "binding_url": "bindings_frame_controller.json"
     }
   ]
 }

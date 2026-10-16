@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: deno task preconf
+      - run: deno install --allow-import
+      - run: deno task check
+      # Vendor diagnostics are handled by the check task above.
+      - run: deno test -A --no-check classes utils
+      - name: Install desktop smoke dependencies
+        run: sudo apt-get update && sudo apt-get install -y xvfb xauth libglfw3 libgl1-mesa-dri libasound2t64
+      - name: Playtest with software OpenGL
+        run: xvfb-run -a deno task playtest smoke --port=4095
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: smoke-failure-logs
+          path: logs/playtest/
+          retention-days: 7
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: petplay-windows-x64
+            args: ""
+            file: dist/petplay.exe
+          - os: ubuntu-24.04
+            name: petplay-linux-x64
+            args: ""
+            file: dist/petplay
+          - os: ubuntu-24.04-arm
+            name: petplay-linux-arm64-experimental
+            args: --target=aarch64-unknown-linux-gnu
+            file: dist/petplay-aarch64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.0
+      - name: Install Linux capture build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y pkg-config clang libpipewire-0.3-dev libdbus-1-dev
+      - run: deno task preconf
+      - run: deno install --allow-import
+      - run: deno task build ${{ matrix.args }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.file }}
+          if-no-files-found: error
+          retention-days: 7

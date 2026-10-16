@@ -7,6 +7,9 @@
  * Windows"*). Writing into `dist/` also keeps the output from colliding with the `petplay/`
  * source directory on the OSes where the binary has no extension.
  */
+import { nativeBuildTarget } from "../classes/nativeBuildTarget.ts";
+import { buildNative } from "./build-native.ts";
+
 const targetArg = Deno.args.find((arg) => arg.startsWith("--target="));
 if (Deno.args.length > (targetArg ? 1 : 0)) {
   throw new Error("usage: deno task build [--target=aarch64-unknown-linux-gnu]");
@@ -18,6 +21,7 @@ if (target != null && target !== "aarch64-unknown-linux-gnu") {
 const output = target ? "dist/petplay-aarch64" : "dist/petplay";
 
 await Deno.mkdir("dist", { recursive: true });
+const captureHelper = await buildNative(nativeBuildTarget(target));
 
 // Every directory holding a module that is spawned by URL at runtime has to be embedded as files:
 // actors are workers, and `{ worker: "process" }` children are dispatched into a module href. The
@@ -38,7 +42,14 @@ const args = [
   "--include",
   "./resources/",
   "--include",
+  captureHelper,
+  "--include",
   "./submodules/stageforge/",
+  // Agent playtests are dynamically imported inside the compiled webxr worker too.
+  "--include",
+  "./utils/playtest.ts",
+  "--include",
+  "./tests/playtest/",
   "--include",
   "./submodules/threewebxrwebgpudeno/vendor/three-msdf-text-utils/demo/fonts/roboto/",
   "--include",

@@ -236,7 +236,7 @@ export class OpenVrRuntime {
 
   private identifyApplication(
     identity: OpenVrApplicationIdentity,
-    errorPointer: Deno.PointerValue<OpenVR.InitError>,
+    errorPointer: Deno.PointerObject<OpenVR.InitError>,
   ): void {
     if (!identity.appKey.trim()) throw new Error("OpenVR application key must not be empty");
     const applicationsPointer = this.acquireInterface(
@@ -326,7 +326,7 @@ export class OpenVrRuntime {
     requirement: OpenVrInterfaceRequirement,
     version: string,
     label: string,
-    errorPointer: Deno.PointerValue<OpenVR.InitError>,
+    errorPointer: Deno.PointerObject<OpenVR.InitError>,
   ): Deno.PointerValue | null {
     if (requirement === false) return null;
     const pointer = OpenVR.VR_GetGenericInterface(

@@ -61,7 +61,6 @@ function ToastCard({ toast }: { toast: Toast }) {
       backgroundOpacity={0.92}
       borderWidth={OUTLINE_WIDTH}
       borderColor={toneColor(toast)}
-      borderOpacity={toast.tone === "info" ? 0.35 : 1}
     >
       <Text color={COLOR.inkDim} fontSize={14}>{toast.source}</Text>
       <Text color={COLOR.ink} fontSize={22}>{title}</Text>

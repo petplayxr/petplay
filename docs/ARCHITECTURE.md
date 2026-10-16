@@ -513,7 +513,7 @@ Findings from writing this doc, all traceable to code:
   (grabbing from the desktop window) does not exist in the IR-consumer surface yet.
 - **Dormant actors are dead weight** (no `PostMan.create` call site anywhere):
   `webxrOverlay` (the split-process IR consumer, superseded in `f6a5995`), `frameUpdater`
-  (hard-coded Windows helper path `./resources/screen-streamer.exe`), `webUpdater` (frames arrive
+  (unused direct-capture path), `webUpdater` (frames arrive
   over the Windows named pipe `\\.\pipe\petplay-webxr` via `classes/CefCap`), `webUpdaterDirect`
   (spawns `chromedirect_demo` from a submodule that is absent from the tree and `.gitmodules`),
   `controllers`, `laser`, `OSC`, `frontend`. `frameUpdater` and `webUpdater` even share the actor

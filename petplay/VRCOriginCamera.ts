@@ -57,7 +57,7 @@ type CameraOrbitConfig = {
   centerWorld?: Vec3Tuple;
 };
 type CameraOrbitRuntime = {
-  timerId: number;
+  timerId: ReturnType<typeof setInterval> | undefined;
   centerWorld: Vec3Tuple;
   angleRad: number;
   radiusMeters: number;
@@ -854,7 +854,7 @@ function startCameraOrbit(config: CameraOrbitConfig): CameraOrbitRuntime | null 
   sendCameraLookAtMe(true);
 
   const runtime: CameraOrbitRuntime = {
-    timerId: -1,
+    timerId: undefined,
     centerWorld: [...centerWorld],
     angleRad: initialAngle,
     radiusMeters,

@@ -11,9 +11,13 @@ remaining hardware checks.
 
 [![Demo](https://img.youtube.com/vi/2hV8siAFJfI/0.jpg)](https://www.youtube.com/watch?v=2hV8siAFJfI)
 
-Reqs: Npm, Deno, SteamVR, Windows or Linux, optionally vscode
+Reqs: Npm, Deno, SteamVR, Windows or Linux, optionally vscode. Building releases also needs Rust
+and the native capture build dependencies described below.
 
 Clone: `git clone -v --recurse-submodules --progress "https://github.com/goodpuppies/petplay.git"`
+
+The capture helper source is in `submodules/screen-streamer`; `classes/ScreenCapturer/` is
+PetPlay's canonical TypeScript client. Release builds compile this helper from source and embed the matching native executable.
 
 Setup:
 
@@ -29,7 +33,8 @@ Usage:
 ```bash
 deno run -A utils/preconf.ts
 deno install --allow-import
-deno task build          # -> dist/petplay.exe on Windows, dist/petplay on Linux
+deno task build:native   # source/dev capture helper; requires Rust
+deno task build          # builds the capture helper, then compiles PetPlay into dist/
 ```
 
 `utils/build.ts` wraps `deno compile` and branches only where Deno itself does not: `--icon` is
@@ -39,10 +44,22 @@ launcher boots straight into `dev`, so runtime flags still apply — `./dist/pet
 `./dist/petplay --novr --desktop`, and so on. It is compiled with `--env-file`, so run it from a
 directory with the `.env` it should use.
 
+On Linux, native capture builds require `pkg-config`, Clang, PipeWire development headers and
+D-Bus development headers (Ubuntu: `libpipewire-0.3-dev libdbus-1-dev`). Windows builds use the
+Rust MSVC toolchain and Windows SDK. Development checkouts run `deno task build:native` once
+before using desktop capture; release builds do this automatically.
+
 For a Steam Frame ARM64 build, run `deno task build --target=aarch64-unknown-linux-gnu` to create
 `dist/petplay-aarch64`. This cross build leaves the developer machine's `.env` out; supply runtime
 settings on the headset. The native helper builds and remaining hardware checks are in
 [docs/STEAM_FRAME.md](docs/STEAM_FRAME.md).
+
+CI checks types, runs unit tests and a software-OpenGL smoke playtest, and builds Windows x64,
+Linux x64 and **experimental Linux ARM64** artifacts. The ARM64 executable embeds its source-built capture helper but still needs native raylib;
+it is not a self-contained Frame release. Normal version-tag releases contain desktop builds only. See the
+[Frame testing runbook](docs/STEAM_FRAME_TESTING.md) for Quest/DroidFrame testing and known limits.
+Default [Steam Frame controller bindings](docs/STEAM_FRAME_CONTROLLERS.md) are included, alongside
+Oculus Touch and the separate DroidFrame engineering profile.
 
 Child processes work the same as from a checkout: a compiled build has no Deno CLI to run a module
 with, so it re-execs its own binary and imports the child module out of its embedded snapshot
@@ -283,8 +300,9 @@ deno task overlay:perf -- --attach --scenario=none --seconds=30   # watch your o
 ```
 
 Use `--attach` against a session you already have open — including a headset run (`deno task dev`),
-where `--scenario=none` observes your own hands without installing synthetic input (a live IVRInput
-session refuses synthesized controllers outright). `r3f avg` is the r3f `advance()` cost per frame
+where `--scenario=none` observes your own hands without installing synthetic input. Other scenarios
+temporarily override the hands, including with live IVRInput, and restore the controller bridge
+afterwards. `r3f avg` is the r3f `advance()` cost per frame
 (`useFrame` jobs + pointer raycasting) as reported by `WebXRHost`, `r3f max` the worst single frame
 in the phase, and `ovl fps` appears once the raylib overlay is presenting.
 

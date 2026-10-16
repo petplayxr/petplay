@@ -221,16 +221,23 @@ export class RaylibAudioBackend {
     { source: raylib.Sound; aliases: raylib.Sound[]; cursor: number }
   >();
   private ownsDevice = false;
+  private ready = false;
   private context: RaylibAudioContext | null = null;
 
   initialize(context: RaylibAudioContext): void {
     // Never unloaded here: the renderer and other wrappers share the library, and the
     // worker's JS can keep calling into it after the scene unmounts. Deno releases it
     // with the worker (see `WebXROverlayRaylib.cleanup`).
-    if (!raylib.isRaylibLoaded()) raylib.loadRaylib(getDefaultRaylibPath());
-    if (!raylib.IsAudioDeviceReady()) {
-      raylib.InitAudioDevice();
-      this.ownsDevice = true;
+    try {
+      if (!raylib.isRaylibLoaded()) raylib.loadRaylib(getDefaultRaylibPath());
+      if (!raylib.IsAudioDeviceReady()) {
+        raylib.InitAudioDevice();
+        this.ownsDevice = Boolean(raylib.IsAudioDeviceReady());
+      }
+      this.ready = Boolean(raylib.IsAudioDeviceReady());
+      if (!this.ready) this.fail("no audio device available");
+    } catch (error) {
+      this.fail(error);
     }
     context.onPlayback = (playback) => this.play(playback);
     this.context = context;
@@ -241,26 +248,60 @@ export class RaylibAudioBackend {
     liveBackends.delete(this);
     if (context) context.onPlayback = null;
     this.context = null;
+    // Stop callbacks can outlive the scene. Never let them touch unloaded sound buffers.
+    this.ready = false;
     for (const { source, aliases } of this.pools.values()) {
-      for (const alias of aliases) raylib.H.UnloadSoundAlias(alias);
-      raylib.H.UnloadSound(source);
+      for (const alias of aliases) {
+        try {
+          raylib.H.UnloadSoundAlias(alias);
+        } catch (error) {
+          this.fail(error);
+        }
+      }
+      try {
+        raylib.H.UnloadSound(source);
+      } catch (error) {
+        this.fail(error);
+      }
     }
     this.pools.clear();
-    if (this.ownsDevice && raylib.IsAudioDeviceReady()) raylib.CloseAudioDevice();
+    try {
+      if (this.ownsDevice && raylib.IsAudioDeviceReady()) raylib.CloseAudioDevice();
+    } catch (error) {
+      this.fail(error);
+    }
     this.ownsDevice = false;
   }
 
   private play(playback: RaylibPlayback): () => void {
-    const pool = this.getPool(playback.cue);
-    const voices = [pool.source, ...pool.aliases];
-    const voice = voices[pool.cursor++ % voices.length]!;
-    // Raylib's pan channel order is reversed relative to Three's listener
-    // right-vector convention in this WASAPI/SteamVR output path.
-    raylib.H.SetSoundPan(voice, 1 - playback.pan);
-    raylib.H.SetSoundVolume(voice, Math.max(0, Math.min(1, playback.gain * 0.55)));
-    raylib.H.SetSoundPitch(voice, Math.max(0.25, Math.min(4, playback.playbackRate)));
-    raylib.H.PlaySound(voice);
-    return () => raylib.H.StopSound(voice);
+    if (!this.ready) return () => {};
+    try {
+      if (!raylib.IsAudioDeviceReady()) throw new Error("audio device became unavailable");
+      const pool = this.getPool(playback.cue);
+      const voices = [pool.source, ...pool.aliases];
+      const voice = voices[pool.cursor++ % voices.length]!;
+      // Raylib's pan channel order is reversed relative to Three's listener.
+      raylib.H.SetSoundPan(voice, 1 - playback.pan);
+      raylib.H.SetSoundVolume(voice, Math.max(0, Math.min(1, playback.gain * 0.55)));
+      raylib.H.SetSoundPitch(voice, Math.max(0.25, Math.min(4, playback.playbackRate)));
+      raylib.H.PlaySound(voice);
+      return () => {
+        if (!this.ready) return;
+        try {
+          raylib.H.StopSound(voice);
+        } catch (error) {
+          this.fail(error);
+        }
+      };
+    } catch (error) {
+      this.fail(error);
+      return () => {};
+    }
+  }
+
+  private fail(error: unknown): void {
+    this.ready = false;
+    console.warn(`[audio] disabled: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   private getPool(cue: string) {
@@ -273,14 +314,26 @@ export class RaylibAudioBackend {
       Deno.UnsafePointer.of(wav) as Deno.PointerValue<number>,
       wav.byteLength,
     );
-    const source = raylib.H.LoadSoundFromWave(wave);
-    raylib.H.UnloadWave(wave);
+    if (!raylib.H.IsWaveValid(wave)) throw new Error(`could not load cue ${cue}`);
+    let source: raylib.Sound;
+    try {
+      source = raylib.H.LoadSoundFromWave(wave);
+    } finally {
+      raylib.H.UnloadWave(wave);
+    }
+    // raylib 5.5 LoadSoundAlias dereferences the source buffer without checking for null.
+    if (!raylib.H.IsSoundValid(source)) throw new Error(`could not create sound for ${cue}`);
     const pool = {
       source,
-      aliases: Array.from({ length: 7 }, () => raylib.H.LoadSoundAlias(source)),
+      aliases: [] as raylib.Sound[],
       cursor: 0,
     };
     this.pools.set(cue, pool);
+    for (let i = 0; i < 7; i++) {
+      const alias = raylib.H.LoadSoundAlias(source);
+      if (!raylib.H.IsSoundValid(alias)) break;
+      pool.aliases.push(alias);
+    }
     return pool;
   }
 }

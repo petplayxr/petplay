@@ -1,0 +1,120 @@
+{
+  "date": "2026-10-16",
+  "environment": "Quest 3 / DroidFrame, genuine Frame SteamVR 2.17.10; experimental graphics/timing adapters",
+  "bundle_manifest_sha256": "f7e34d93575f426ed2912b6f90b3bae259fac1e24be687e662c0688fa661dcc3",
+  "executable_sha256": "bb2241f248a359615f51cd2298282b3c4ad4d1ed4be63ccd092e870dcf9fecee",
+  "source_head": "d519b4402bceeea7e6823c1e6414ec514732bf4d",
+  "source_status": [
+    " M .github/workflows/release.yml",
+    " M AGENTS.md",
+    " M README.md",
+    " M classes/environment/raylibAudioContext.ts",
+    " M classes/environment/spatialContextToolbar.tsx",
+    " M classes/environment/toastOverlay.tsx",
+    " M classes/environment/ui/primitives.tsx",
+    " M classes/environment/wristMenu/ui.tsx",
+    " M classes/openVrRuntime.ts",
+    " M classes/overlaySceneFingerprint.test.ts",
+    " M deno.json",
+    " M deno.lock",
+    " M docs/STEAM_FRAME.md",
+    " M petplay/VRCOriginCamera.ts",
+    " M petplay/desktopControlSurface.tsx",
+    " M petplay/webxr.ts",
+    " M tests/playtest/wrist.ts",
+    " M utils/build.ts",
+    " M utils/overlay-perf-harness.ts",
+    " M utils/overlay-perf.ts",
+    " M utils/type-check.ts",
+    "?? .github/workflows/ci.yml",
+    "?? classes/environment/raylibAudioContext.test.ts",
+    "?? docs/STEAM_FRAME_TESTING.md",
+    "?? utils/overlay-perf-harness.test.ts"
+  ],
+  "mode": "vr",
+  "returncode": -11,
+  "alive_after_health": true,
+  "forced_kill": false,
+  "milestones": {
+    "scene_running": true,
+    "scene_frames_before": 0,
+    "scene_frames_after": 145,
+    "scene_frames_advanced": true,
+    "openvr_ready": true,
+    "renderer_running": true,
+    "uploads_before": 0,
+    "uploads_after": 145,
+    "uploads_advanced": true
+  },
+  "playtest": [
+    {
+      "name": "show-windows",
+      "ok": true,
+      "ms": 8127,
+      "notes": [
+        "display: display-1"
+      ],
+      "failures": []
+    },
+    {
+      "name": "move-window",
+      "ok": true,
+      "ms": 1932,
+      "notes": [
+        "moved 0.250 m"
+      ],
+      "failures": []
+    },
+    {
+      "name": "resize-window",
+      "ok": true,
+      "ms": 1721,
+      "notes": [
+        "scale 1.000 -> 1.363"
+      ],
+      "failures": []
+    },
+    {
+      "name": "type",
+      "ok": true,
+      "ms": 1917,
+      "notes": [
+        "typed: h i"
+      ],
+      "failures": []
+    },
+    {
+      "name": "window-settings",
+      "ok": false,
+      "ms": 4091,
+      "notes": [],
+      "failures": [
+        "the toolbar's settings button opens the window's settings"
+      ]
+    },
+    {
+      "name": "change-setting",
+      "ok": true,
+      "ms": 4396,
+      "notes": [],
+      "failures": []
+    }
+  ],
+  "shutdown_log_tail": [
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "exit! WOOF~",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "[Scheduler] Root \"root_1\" not found; invalidation ignored.",
+    "DroidFrame robust-list adapter: diagnostic emulation, no kernel owner-death cleanup"
+  ]
+}

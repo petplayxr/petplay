@@ -64,7 +64,7 @@ New work must not make the service depend on SteamVR. Existing places that do ar
 
 | # | Track | Doc | Gist |
 |---|---|---|---|
-| 1 | Capture in-repo | [capture-in-repo.md](./capture-in-repo.md) | `screen-streamer` source moves into this repo and builds with it |
+| 1 | Capture in-repo | [capture-in-repo.md](./capture-in-repo.md) | `screen-streamer` is a submodule; CI builds and embeds native helpers |
 | 2 | Steam app | [steam-app.md](./steam-app.md) | persistent vrmanifest, auto-launch, packaging, then a Steam store app |
 | 3 | Stability & performance | [stability-performance.md](./stability-performance.md) | soak tests, crash surface, frame budget, the known-gaps list |
 | 4 | Basic UI/UX | [ui-ux-basics.md](./ui-ux-basics.md) | settings, first run, clean base environment, feedback |

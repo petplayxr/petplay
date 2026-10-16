@@ -2,13 +2,16 @@
 
 ## Today
 
-- The capture helper's source lives in a separate repo, `~/git/screen-streamer`
-  (github.com/goodpuppies/screen-streamer): ~440 lines of Rust in `src/main.rs` on top of a
+- The capture helper's source is now the `submodules/screen-streamer` Git submodule
+  (github.com/goodpuppies/screen-streamer, tracking `master`): Rust in `src/main.rs` on top of a
   vendored `scap` fork (`vendor/scap`). It uses PipeWire/portal on Linux, WGC on Windows, and
   `/dev/uinput` input injection on Linux (`input-linux`).
-- PetPlay ships **prebuilt binaries** in `resources/screen-streamer{,.exe}`. They are x86-64
-  only, and `displayOverlayHost.ts` (`getScreenStreamerPath`) copies them to `tmp/` at runtime.
-  ARM64 needs `PETPLAY_SCREEN_STREAMER` set by hand (see `docs/STEAM_FRAME.md`).
+  - Registered 2026-10-16; the current Rust/Cargo changes and vendored fork are carried in the
+    pinned submodule revision. The original `~/git/screen-streamer` checkout remains unchanged.
+- `deno task build:native` compiles the helper; `deno task build` runs it automatically and embeds
+  the target's executable. CI uses matching Windows x64, Linux x64 and Linux ARM64 runners.
+  `resources/screen-streamer{,.exe}` have been removed. Source checkouts build the helper once
+  before capture; runtime extraction and `PETPLAY_SCREEN_STREAMER` overrides work on ARM64 too.
 - `screen-streamer/` also holds its own copies of `scclass.ts` and `frame_receiver_worker.ts`,
   and both have diverged from `classes/ScreenCapturer/`.
 - Four capture-ish client classes sit in `classes/`: `ScreenCapturer` (live), `IpcCapturer`,
@@ -17,17 +20,14 @@
 
 ## Plan
 
-1. Import the source with history: `git subtree add --prefix native/screen-streamer`, or a plain
-   copy if the history isn't worth keeping. Use a directory, **not a submodule**: the goal is one
-   checkout that builds.
-2. Drop the duplicate TS in the imported tree. `classes/ScreenCapturer/` is the canonical client.
-3. `deno task build:native` runs `cargo build --release` for the host target (plus an ARM64 cross
-   target for the Frame), and `deno task build` depends on it. The built binary goes into the
-   build output, so `resources/screen-streamer*` drops out of git.
-4. Resolve the binary from the build output first, then `PETPLAY_SCREEN_STREAMER`. Remove the
-   ARM64 throw.
-5. Write down the wire protocol (TCP 12345, frame header, compression) in `docs/`, next to the
-   code that speaks it.
+1. Source registration and CI builds are done as a **submodule**, per the 2026-10-16 decision.
+   Use `git submodule update --init --recursive` after cloning.
+2. `classes/ScreenCapturer/` remains the canonical TS client. The duplicate TS in the helper
+   repository is not part of PetPlay's runtime integration.
+3. Done: `deno task build:native` runs `cargo build --locked --release`; `deno task build` embeds
+   the target output. Native CI runners avoid ARM64 cross-linker setup.
+4. Done: select the embedded target helper, with `PETPLAY_SCREEN_STREAMER` overriding it.
+5. Done: [native helper and wire protocol](../../docs/CAPTURE_PROTOCOL.md).
 6. Fold in the capture issues: reconnect, the fixed port, and orphaned helpers on Windows
    (`displayOverlayHost.ts:398`).
 7. Delete or quarantine `IpcCapturer`/`CefCap`/`WebCapturer` once nothing references them.

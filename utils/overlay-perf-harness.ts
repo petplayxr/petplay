@@ -7,7 +7,7 @@
  * is loaded at runtime *inside that worker* and receives both objects.
  *
  * Kept here (everything that must run in the isolate):
- *   - synthetic controller input for runs without a headset;
+ *   - synthetic controller input for headless and live headset runs;
  *   - scripted interaction scenarios (hover, trigger, squeeze-grab drag, edge sweep, joystick);
  *   - frame-metric sampling;
  *   - in-worker CPU profile capture.
@@ -201,7 +201,7 @@ export function installSyntheticInput(host: WebXrHostLike): SynthInput {
   const source = host.directOpenVrInputSource;
 
   const input: SynthInput = { left: handDefaults(), right: handDefaults(), restore: () => {} };
-  const original = host.updateEmulatedControllersFromOpenVr.bind(host);
+  const original = host.updateEmulatedControllersFromOpenVr;
   input.restore = () => {
     host.updateEmulatedControllersFromOpenVr = original;
   };
@@ -214,7 +214,7 @@ export function installSyntheticInput(host: WebXrHostLike): SynthInput {
     source.rightView.trigger = input.right.trigger ? 1 : 0;
     source.leftBuffers.joystick[1] = input.left.joystickY;
     source.rightBuffers.joystick[1] = input.right.joystickY;
-    original();
+    original.call(host);
   };
 
   return input;

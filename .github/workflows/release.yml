@@ -6,44 +6,37 @@ on:
       - "v*"
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            artifact: dist/petplay.exe
-          - os: ubuntu-latest
-            artifact: dist/petplay
-    runs-on: ${{ matrix.os }}
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  release:
+    needs: ci
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          submodules: recursive
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
+          path: dist
+          name: petplay-linux-x64
+      - uses: actions/download-artifact@v4
         with:
-          deno-version: v2.9.2
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Preconfigure
-        run: deno run -A utils/preconf.ts
-
-      - name: Install dependencies
-        run: deno install --allow-import
-
-      - name: Build executable
-        run: deno run build
-
+          path: dist
+          name: petplay-windows-x64
+      - name: Hash desktop executables
+        run: |
+          cd dist
+          sha256sum petplay petplay.exe > SHA256SUMS
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.artifact }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/petplay
+            dist/petplay.exe
+            dist/SHA256SUMS
+            resources/licenses/raylib.txt
+            resources/licenses/scap.txt

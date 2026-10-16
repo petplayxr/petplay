@@ -7,6 +7,7 @@ import { LogChannel } from "@mommysgoodpuppy/logchannel";
 import { setImmediate } from "node:timers";
 import { Buffer } from "node:buffer";
 import { tempFile, wait } from "../classes/utils.ts";
+import { nativeBuildTarget, screenStreamerRelativePath } from "../classes/nativeBuildTarget.ts";
 
 //takes an overlay handle and a frame source, updates overlay texture continuously
 interface frame {
@@ -79,7 +80,8 @@ new PostMan(
 );
 
 function INITSCREENCAP(): ScreenCapturer {
-  const exePath = tempFile("./resources/screen-streamer.exe", import.meta.dirname!);
+  const exePath = tempFile(screenStreamerRelativePath(nativeBuildTarget()), import.meta.dirname!);
+  if (Deno.build.os !== "windows") Deno.chmodSync(exePath, 0o755);
   const logStats = getWebxrFrameLogsEnabled();
   const capturer = new ScreenCapturer({
     debug: false,

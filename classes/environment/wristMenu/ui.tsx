@@ -91,7 +91,6 @@ function MonitorAssignments({
                   backgroundOpacity={selected ? 1 : 0}
                   borderWidth={selected ? 0 : OUTLINE_WIDTH}
                   borderColor={COLOR.outline}
-                  borderOpacity={1}
                   onClick={() => onAssignOutput?.(display.id, output.id)}
                 >
                   <Text color={selected ? COLOR.onAccent : COLOR.ink} fontSize={13}>
@@ -120,7 +119,6 @@ function MonitorAssignments({
                 backgroundOpacity={0}
                 borderWidth={OUTLINE_WIDTH}
                 borderColor={COLOR.outline}
-                borderOpacity={1}
                 onClick={() => onAddOutput?.(output.id)}
               >
                 <Text color={COLOR.ink} fontSize={13}>Add {output.name}</Text>
@@ -451,7 +449,6 @@ export function WristMenuUi(
     <WristOverlay
       clock={clock}
       dateLabel={dateLabel}
-      elapsed={elapsed}
       status={statusLabel}
       displayCount={workspaceLayout.displays.length}
       batteries={batteries}

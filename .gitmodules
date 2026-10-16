@@ -34,3 +34,7 @@
 	path = submodules/petplay_ovrdriver
 	url = https://github.com/goodpuppies/petplay_ovrdriver.git
 	branch = main
+[submodule "submodules/screen-streamer"]
+	path = submodules/screen-streamer
+	url = https://github.com/goodpuppies/screen-streamer.git
+	branch = master

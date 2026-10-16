@@ -1,0 +1,126 @@
+{
+  "action_manifest_version": 0,
+  "alias_info": {},
+  "bindings": {
+    "/actions/main": {
+      "haptics": [
+        {
+          "output": "/actions/main/out/Haptic",
+          "path": "/user/hand/left/output/haptic"
+        },
+        {
+          "output": "/actions/main/out/Haptic",
+          "path": "/user/hand/right/output/haptic"
+        }
+      ],
+      "poses": [
+        {
+          "output": "/actions/main/in/HandPoseLeft",
+          "path": "/user/hand/left/pose/raw"
+        },
+        {
+          "output": "/actions/main/in/HandPoseRight",
+          "path": "/user/hand/right/pose/raw"
+        }
+      ],
+      "sources": [
+        {
+          "inputs": {
+            "click": {
+              "output": "/actions/main/in/TriggerLeft"
+            }
+          },
+          "mode": "button",
+          "path": "/user/hand/left/input/trigger"
+        },
+        {
+          "inputs": {
+            "click": {
+              "output": "/actions/main/in/TriggerRight"
+            }
+          },
+          "mode": "button",
+          "path": "/user/hand/right/input/trigger"
+        },
+        {
+          "inputs": {
+            "click": {
+              "output": "/actions/main/in/GrabLeft"
+            }
+          },
+          "mode": "button",
+          "path": "/user/hand/left/input/grip"
+        },
+        {
+          "inputs": {
+            "click": {
+              "output": "/actions/main/in/GrabRight"
+            }
+          },
+          "mode": "button",
+          "path": "/user/hand/right/input/grip"
+        },
+        {
+          "inputs": {
+            "touch": {
+              "output": "/actions/main/in/RightClickModifier"
+            }
+          },
+          "mode": "button",
+          "path": "/user/hand/left/input/dpad_down"
+        },
+        {
+          "inputs": {
+            "touch": {
+              "output": "/actions/main/in/RightClickModifier"
+            }
+          },
+          "mode": "button",
+          "path": "/user/hand/right/input/a"
+        },
+        {
+          "inputs": {
+            "touch": {
+              "output": "/actions/main/in/MiddleClickModifier"
+            }
+          },
+          "mode": "button",
+          "path": "/user/hand/left/input/dpad_up"
+        },
+        {
+          "inputs": {
+            "touch": {
+              "output": "/actions/main/in/MiddleClickModifier"
+            }
+          },
+          "mode": "button",
+          "path": "/user/hand/right/input/b"
+        },
+        {
+          "inputs": {
+            "position": {
+              "output": "/actions/main/in/JoystickLeft"
+            }
+          },
+          "mode": "joystick",
+          "path": "/user/hand/left/input/thumbstick"
+        },
+        {
+          "inputs": {
+            "position": {
+              "output": "/actions/main/in/JoystickRight"
+            }
+          },
+          "mode": "joystick",
+          "path": "/user/hand/right/input/thumbstick"
+        }
+      ]
+    }
+  },
+  "category": "steamvr_input",
+  "controller_type": "frame_controller",
+  "description": "PetPlay click, grab, scroll, desktop mouse modifiers and haptics for Steam Frame",
+  "name": "Steam Frame Controllers",
+  "options": {},
+  "simulated_actions": []
+}

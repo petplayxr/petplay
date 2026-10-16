@@ -15,8 +15,8 @@
  * deno task overlay:perf -- --attach --seconds=30        # watch your own VR session (no input)
  * ```
  *
- * `--attach` never installs synthetic input: a session with a live IVRInput (a headset run) refuses
- * synthesized controllers outright, so attaching only observes it.
+ * `--attach` accepts synthetic scenarios on live headset sessions too. Use `--scenario=none`
+ * to observe without overriding the hands. Scripted input is restored after the run.
  */
 
 import { dirname, fromFileUrl, join } from "@std/path";

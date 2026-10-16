@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-16",
+  "before_bundle_manifest_sha256": "0a925ed5b00143797b918502ec8dc76cf32fb5d2ea9031c1c41903e7be6bdafb",
+  "raylib_sha256": "43b6fb628dff3f195b09299f7d9801c975822a288f2fc5e0272ee110dbe94b2e",
+  "native_fault_header": [
+    "DroidFrame diagnostic crash registers/maps (not a recovered crash)",
+    "signal=0x000000000000000b",
+    "address=0x0000000000000170",
+    "pc=0x00000073ec49a83c",
+    "lr=0x00000073ec49a834",
+    "sp=0x00000073ed1a3720",
+    "fp=0x00000073ed1a3740",
+    "x0=0x00000073ed1a3768",
+    "x1=0x0000000000000000",
+    "x2=0x0000000000000028",
+    "x3=0x0000000a10bd55f1",
+    "x4=0x000000734538cfd8",
+    "x5=0x0000000000000012",
+    "x6=0x000000174fa00000",
+    "x7=0x00000073470f33e0"
+  ],
+  "resolved_function": "LoadSoundAlias",
+  "elf_virtual_pc": "0xea83c",
+  "source": "raylib-5.5/src/raudio.c:971",
+  "after": [
+    {
+      "name": "show-windows",
+      "ok": true,
+      "ms": 8127,
+      "notes": [
+        "display: display-1"
+      ],
+      "failures": []
+    },
+    {
+      "name": "move-window",
+      "ok": true,
+      "ms": 1932,
+      "notes": [
+        "moved 0.250 m"
+      ],
+      "failures": []
+    },
+    {
+      "name": "resize-window",
+      "ok": true,
+      "ms": 1721,
+      "notes": [
+        "scale 1.000 -> 1.363"
+      ],
+      "failures": []
+    },
+    {
+      "name": "type",
+      "ok": true,
+      "ms": 1917,
+      "notes": [
+        "typed: h i"
+      ],
+      "failures": []
+    },
+    {
+      "name": "window-settings",
+      "ok": false,
+      "ms": 4091,
+      "notes": [],
+      "failures": [
+        "the toolbar's settings button opens the window's settings"
+      ]
+    },
+    {
+      "name": "change-setting",
+      "ok": true,
+      "ms": 4396,
+      "notes": [],
+      "failures": []
+    }
+  ]
+}

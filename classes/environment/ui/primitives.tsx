@@ -180,7 +180,6 @@ export function Pill(
       backgroundOpacity={filled && !disabled ? 1 : 0}
       borderWidth={filled && !disabled ? 0 : OUTLINE_WIDTH}
       borderColor={disabled ? COLOR.inkDim : hovered && onClick ? COLOR.accent : COLOR.outline}
-      borderOpacity={1}
       {...handlers}
       onClick={disabled ? undefined : withClickHaptic(onClick)}
     >
@@ -233,7 +232,6 @@ export function Slot(
       backgroundOpacity={active && !disabled ? 1 : 0}
       borderWidth={active && !disabled ? 0 : OUTLINE_WIDTH}
       borderColor={disabled ? COLOR.inkDim : hovered ? COLOR.accent : COLOR.outline}
-      borderOpacity={1}
       {...handlers}
       onClick={disabled ? undefined : withClickHaptic(onClick)}
     >
@@ -328,7 +326,6 @@ export function Control<T extends string>(
       backgroundOpacity={0}
       borderWidth={OUTLINE_WIDTH}
       borderColor={COLOR.outline}
-      borderOpacity={1}
     >
       {options.map((option) => {
         const selected = option.value === value;

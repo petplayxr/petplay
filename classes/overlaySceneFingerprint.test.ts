@@ -69,7 +69,7 @@ Deno.test("scene content changes the fingerprint", () => {
   const base = fingerprintScene(payload());
   const cases: ((p: WebXRRaythreeRenderPayload) => void)[] = [
     (p) => p.leftEye.frame.instances[0]!.worldMatrix[12] = 1, // unanchored motion
-    (p) => (p.ui.panels[0]!.renderAnchor!.localMatrix as Float32Array)[12] = 1,
+    (p) => p.ui.panels[0]!.renderAnchor!.localMatrix[12] = 1,
     (p) => p.ui.panels[0]!.data[3] = 1,
     (p) => p.ui.texts[0]!.text = "12:01",
     (p) => (p.ui.texts[0]!.geometry as { revision: number }).revision = 2,

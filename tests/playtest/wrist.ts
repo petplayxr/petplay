@@ -196,7 +196,10 @@ export const steps: PlaytestStep[] = [
         if (!ctx.expect(outputs.length > 0, "the host's outputs are listed")) return;
         const root = displays.find((display) => display.root);
         if (!ctx.expect(root, "a root display is listed")) return;
-        const node = () => getSpatialGraph()?.nodes[root!.id];
+        const node = () => {
+          const candidate = getSpatialGraph()?.nodes[root!.id];
+          return candidate?.kind === "display" ? candidate : undefined;
+        };
         const original = node()?.workspaceOutputId;
         const other = outputs.find((output) => output.id !== original);
         if (other != null) {
@@ -224,7 +227,7 @@ export const steps: PlaytestStep[] = [
           await ctx.waitFor(
             () =>
               Object.values(getSpatialGraph()?.nodes ?? {}).some((candidate) =>
-                !before.has(candidate.id) && candidate.workspaceOutputId === free.id &&
+                candidate.kind === "display" && !before.has(candidate.id) && candidate.workspaceOutputId === free.id &&
                 added.push(candidate.id) > 0
               ),
             `Add ${free.name} adds a display showing it`,

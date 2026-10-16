@@ -4,6 +4,9 @@
 - `markdown/`: plans and work in progress. Start with `markdown/what-petplay-is.md` and
   `markdown/petplay-2.0/README.md`.
 - `markdown/issues/`: the bug tracker, one folder per issue (see its README).
+- Use `_scratch/` for agent scratch files, experiments and local test artifacts. Do not use the
+  repo-local `tmp/` for agent work: PetPlay manages it programmatically and may clobber its contents.
+  Leave PetPlay's runtime files there.
 - Type-check with `deno task check`: it filters out the vendor submodules' unrelated errors that
   raw `deno check` reports (`deno task check:all` for the unfiltered graph).
 
