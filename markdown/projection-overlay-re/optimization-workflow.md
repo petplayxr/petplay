@@ -164,7 +164,25 @@ The synthetic probe's projected **960×960 pixel fields are not real-headset ima
 measurements**. Use local/world transforms and timestamps for CPU checks, or adapt
 the capture geometry/optics before analyzing physical images.
 
+## Frame timing
+
+`utils/petplay-frame-timeline.py` works against a live `--agent-repl` server:
+
+```bash
+python3 utils/petplay-frame-timeline.py debug '{"panoramaPacing":"vsync","panoramaPresentMinMs":11}'
+python3 utils/petplay-frame-timeline.py capture --seconds 30 --output _scratch/tl.json
+python3 utils/petplay-frame-timeline.py latch _scratch/tl.json --misses
+python3 utils/petplay-frame-timeline.py worker-fps
+```
+
+For compositor correlation, run `native/compositorTimingProbe` (build command in its header)
+for the same period as `capture`, then `compositor <probe.csv> <timeline.json>`.
+
 ## Deno/V8 CPU profiling
+
+`utils/petplay-cpuprofile-analyze.py <file> --frames N` summarises any `.cpuprofile`;
+`--under <function>` breaks a subtree down; `--between <frame tick function>` shows what runs
+outside the ticks and during long gaps (used for the webxr worker with `onDeviceFrame`).
 
 First verify the local Deno implementation supports `node:inspector` and
 `Profiler.enable/start/stop`; no browser or external debugger is required.

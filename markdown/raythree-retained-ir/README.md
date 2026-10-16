@@ -1,5 +1,17 @@
 # Retained raythree IR
 
+> **Status (16 October 2026): deferred.** Smaller changes covered the measured need first, as
+> suggested in [review.md](./review.md):
+> - The worker skips publishing unchanged scenes (`classes/overlaySceneFingerprint.ts`), so
+>   idle decode fell from 1.78 to 0.04 ms/frame.
+> - Anchored items keep bit-identical local matrices while nothing moves, which is most of P1's
+>   invariant for hand-attached UI.
+> - Grab-carried windows are sent relative to the controller (`renderTrackingFollow`).
+>
+> The remaining cost is a scene that changes every frame: the worker spends ~10 ms per frame
+> (see [the worker issue](../issues/webxr-worker-saturates-when-the-scene-changes-every-frame/README.md)).
+> Revisit this plan, with review.md's points folded in, if those fixes are not enough.
+
 Make the scene stream between the scene producer (the webxr worker running Three.js) and the
 decoupled renderer cost about as much as **what changed**, not as much as **what exists**. Both
 sides keep a copy of the scene; the producer sends only the changes.

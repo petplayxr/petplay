@@ -1,5 +1,43 @@
 # Panorama controller jitter: audit and next controls
 
+## Outcome (16 October 2026, later)
+
+Panorama on the decoupled renderer is now smooth in the headset at nice 0 under heavy load
+(load average ~27 on 16 cores, VRChat + FaceTrackVR). The causes found, in order:
+
+1. **Latch alternation.** With vsync pacing the panorama presented 2–16 ms after vsync, while
+   SteamVR latches overlays about 8–9 ms after it, so frames alternated between on time and
+   late. Holding the present to 11 ms after vsync (`panoramaPresentMinMs: 11`) removed it.
+   `native/waitFrameSyncProbe` showed `WaitFrameSync`'s phase jitters natively too (p5–p95
+   2.9–6.4 ms), so it is not Deno. A hold derived from successive vsync timing (percentiles over
+   a sliding window, not a running mean; see Valve's Compositor_FrameTiming notes) is still to
+   do, so it doesn't depend on hardware or scene.
+2. **Render-thread cost.** Slow renders were scheduler preemption (the slowest 2%: 5.5 ms on
+   CPU + 6.1 ms in the run queue). Cheaper frames left more slack: renderRaythreeFrame
+   4.16 → 2.27 ms (per-run panel slots, one panel data texture, cached struct bytes), and the
+   worker now skips unchanged scenes (`classes/overlaySceneFingerprint.ts`), which took decode
+   from 1.78 to 0.04 ms/frame while idle.
+3. **Worker cadence.** The webxr worker's rAF was a free-running 13.3 ms timer that overshot
+   to ~68 Hz, so worker-driven motion beat against the display. It is now locked to vsync
+   (`vsyncLockedScheduler` in `classes/webxrPolyfills.ts`).
+4. **Carried windows.** Grabbed windows moved at the worker's rate and from its older pose.
+   They now follow the controller's fresh pose in the renderer (`renderTrackingFollow`; a
+   two-hand frame for two hands), their OpenVR screens attach to the controller
+   (`SetOverlayTransformTrackedDeviceRelative`), and a release handshake (FOLLOWRELEASE) lands
+   them where they were last shown.
+
+The misses left (~0.3% of latch windows) all line up with SteamVR compositor drops
+(`native/compositorTimingProbe`: 7 of 7 next to a drop, against 2.7% by chance), and the
+compositor render thread already runs SCHED_RR 99. Tried and dropped: an async frame-sync wait,
+projection vsync pacing, deferred decode. Tools: `utils/petplay-frame-timeline.py`,
+`utils/petplay-cpuprofile-analyze.py`. Open follow-ups:
+[worker saturation](../issues/webxr-worker-saturates-when-the-scene-changes-every-frame/README.md),
+[long-running degradation](../issues/long-running-dev-server-degrades-frame-pacing/README.md).
+
+The audit below is the record from before these fixes.
+
+---
+
 16 October 2026. Investigation, not a confirmed diagnosis.
 
 The restored panorama shares the independent renderer, IR inbox, fresh tracking/anchors,
