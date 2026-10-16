@@ -30,3 +30,6 @@
 	path = submodules/GOLXROG
 	url = https://github.com/mommysgoodpuppy/GOLXROG.git
 	branch = main
+[submodule "submodules/petplay_ovrdriver"]
+	path = submodules/petplay_ovrdriver
+	url = ../petplay_ovrdriver

@@ -42,6 +42,8 @@
     "preconf": "deno run -A utils/preconf.ts",
     "nulldriver:true": "deno run -A utils/null-driver-toggle.ts true",
     "nulldriver:false": "deno run -A utils/null-driver-toggle.ts false",
+    "driver:build": "zig build --build-file submodules/petplay_ovrdriver/build.zig",
+    "driver:test": "deno run -A utils/petplay-ovrdriver-test.ts --build",
     "overlay:presenter:build": "deno run -A utils/build-overlay-presenter.ts",
     "openvr:probe": "deno run -A utils/openvr-timing-probe.ts",
     "probe:openvr-raylib-overlay": "deno run -A --no-check tests/openvr_raylib_overlay_probe/main.ts",
