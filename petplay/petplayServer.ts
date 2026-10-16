@@ -19,8 +19,9 @@ export async function startPetplayServer(
     Deno.build.os === "linux" && Deno.build.arch === "aarch64" &&
     !Deno.env.get("DENO_GLFW_PATH")
   ) {
-    // @gfx/dwm bundles an x86-64 GLFW library for Linux. Frame has native GLFW.
-    Deno.env.set("DENO_GLFW_PATH", "/usr/lib/libglfw.so.3");
+    // @gfx/dwm bundles x86-64 GLFW. Let the loader find native GLFW on
+    // both Frame (/usr/lib) and multiarch distributions such as Ubuntu.
+    Deno.env.set("DENO_GLFW_PATH", "libglfw.so.3");
   }
   ensuredenodir();
   createTemp();
