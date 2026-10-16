@@ -16,7 +16,11 @@ import type { HandleState, HandleStore } from "@pmndrs/handle";
 import type { Pointer } from "@pmndrs/pointer-events";
 import { getHandOriginWorldMatrix } from "./trackedOrigins.ts";
 import { pulseHand } from "./haptics.ts";
-import type { RenderTrackingFollow } from "../overlayRenderTracking.ts";
+import {
+  followFrame,
+  type FollowPair,
+  type RenderTrackingFollow,
+} from "../overlayRenderTracking.ts";
 import { requestFollowRelease, syncDisplaysNow } from "./controllerDeviceFrames.ts";
 
 export type GrabHand = "left" | "right";
@@ -153,9 +157,23 @@ export function withOneHandScale<T>(
 ): (state: HandleState<unknown>, target: THREE.Object3D) => T | undefined {
   return (state, target) => {
     if (state.first) sessions.delete(target);
-    const store = state.last || state.current.pointerAmount !== 1
+    const pointers = state.current.pointerAmount;
+    const store = state.last || (pointers !== 1 && pointers !== 2)
       ? undefined
       : storeFor(stores.values(), state);
+    if (store != null && pointers === 2) {
+      // Two hands: no trigger resize, but the renderer still carries the window, in the frame
+      // spanning both grab points, so a second hand joining or leaving does not jump it.
+      sessions.delete(target);
+      const [first, second] = store.inputState.keys();
+      setRenderFollow(
+        target,
+        renderFollow ? grabPointers.get(first) : undefined,
+        store.inputState.get(first),
+        { grabber: grabPointers.get(second), input: store.inputState.get(second) },
+      );
+      return apply(state, target);
+    }
     const pointerId = store?.inputState.keys().next().value;
     const grabber = pointerId == null ? undefined : grabPointers.get(pointerId);
     if (store == null || pointerId == null || grabber == null) {
@@ -213,37 +231,87 @@ export function withOneHandScale<T>(
  * pose like the wrist menu, instead of at the worker's frame rate and older pose. Hinged and
  * resizing windows do not move with the hand and are left untagged.
  */
+type GrabInput = {
+  pointerWorldOrigin: THREE.Vector3;
+  pointerWorldQuaternion: THREE.Quaternion;
+  pointerWorldPoint: THREE.Vector3;
+};
+
 function setRenderFollow(
   target: THREE.Object3D,
   grabber: GrabPointer | undefined,
-  input?: { pointerWorldOrigin: THREE.Vector3; pointerWorldQuaternion: THREE.Quaternion },
+  input?: GrabInput,
+  second?: { grabber: GrabPointer | undefined; input: GrabInput | undefined },
 ): void {
-  if (grabber?.space == null || input == null) {
+  const secondSpace = second?.grabber?.space;
+  if (
+    grabber?.space == null || input == null ||
+    (second != null && (secondSpace == null || second.input == null))
+  ) {
     delete target.userData.renderTrackingFollow;
     return;
   }
   const space = `${grabber.hand}-${grabber.space}` as const;
+  const pairSpace = second?.grabber == null || secondSpace == null
+    ? undefined
+    : `${second.grabber.hand}-${secondSpace}` as const;
   let follow = target.userData.renderTrackingFollow as CarryFollow | undefined;
-  if (follow?.space !== space) {
-    const pointer = grabber.pointer;
+  if (follow?.space !== space || follow.pair?.space !== pairSpace) {
+    const holders = [grabber.pointer, second?.grabber?.pointer];
     const created = {
       space,
       pose: new THREE.Matrix4(),
       releasing: false,
-      // A grab can end without a last apply (capture dropped), so check the pointer still holds
+      // A grab can end without a last apply (capture dropped), so check a pointer still holds
       // it; a release in progress stays carried until it lands.
-      active: () => created.releasing || pointer.getPointerCapture() != null,
+      active: () =>
+        created.releasing || holders.some((pointer) => pointer?.getPointerCapture() != null),
     } as unknown as CarryFollow;
     follow = created;
     target.userData.renderTrackingFollow = follow;
   }
   follow.releasing = false;
-  // The pose this apply placed the window from, not a later sample of the controller.
-  (follow.pose as unknown as THREE.Matrix4).compose(
-    input.pointerWorldOrigin,
-    input.pointerWorldQuaternion,
-    UNIT_SCALE,
+  // The poses this apply placed the window from, not a later sample of the controllers.
+  const pose = poseOf(input, firstPose);
+  if (second == null || pairSpace == null) {
+    follow.pair = undefined;
+    (follow.pose as unknown as THREE.Matrix4).copy(pose);
+    return;
+  }
+  const otherPose = poseOf(second.input!, secondPose);
+  const pair: FollowPair = {
+    space: pairSpace,
+    // Each grab point in its pointer's own space: fixed while the grab holds (frozen points).
+    points: [
+      grabPoint(input, pose),
+      grabPoint(second.input!, otherPose),
+    ],
+  };
+  follow.pair = pair;
+  const frame = followFrame(
+    { [space]: pose.elements, [pairSpace]: otherPose.elements },
+    space,
+    pair,
+    follow.pose as unknown as Parameters<typeof followFrame>[3],
   );
+  // Grab points on top of each other: hold the window on the first hand instead.
+  if (frame == null) {
+    follow.pair = undefined;
+    (follow.pose as unknown as THREE.Matrix4).copy(pose);
+  }
+}
+
+const firstPose = new THREE.Matrix4();
+const secondPose = new THREE.Matrix4();
+const grabPointHelper = new THREE.Matrix4();
+
+function poseOf(input: GrabInput, target: THREE.Matrix4): THREE.Matrix4 {
+  return target.compose(input.pointerWorldOrigin, input.pointerWorldQuaternion, UNIT_SCALE);
+}
+
+function grabPoint(input: GrabInput, pose: THREE.Matrix4): number[] {
+  return input.pointerWorldPoint.clone().applyMatrix4(grabPointHelper.copy(pose).invert())
+    .toArray();
 }
 
 const UNIT_SCALE = new THREE.Vector3(1, 1, 1);
@@ -268,7 +336,7 @@ function releaseCarried<T>(
   apply: (state: HandleState<unknown>, target: THREE.Object3D) => T,
 ): void {
   follow.releasing = true;
-  requestFollowRelease(follow.space, (shown) => {
+  requestFollowRelease({ space: follow.space, pair: follow.pair }, (shown) => {
     // Grabbed again before the answer: that grab owns the window now.
     if (target.userData.renderTrackingFollow !== follow || !follow.releasing || !state.last) return;
     if (shown != null) shiftGrabState(state, target, shown, follow.pose);

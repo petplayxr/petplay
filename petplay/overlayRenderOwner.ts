@@ -10,7 +10,11 @@ import { OpenVrOverlayTexture } from "../classes/openVrOverlayTexture.ts";
 import { OverlayPresenterNative, type RenderCameras } from "../classes/overlayPresenterNative.ts";
 import { trackingMatrix34, writeStereoRenderViews } from "../classes/overlayRenderCamera.ts";
 import {
+  followFrame,
+  followKey,
+  type FollowPair,
   type RenderAnchors,
+  type RenderAnchorSpace,
   resolveRenderAnchors,
   setRenderHandAnchors,
 } from "../classes/overlayRenderTracking.ts";
@@ -204,9 +208,15 @@ new PostMan(
   {
     __INIT__: () => {},
     __HEALTH__: () => health(),
-    FOLLOWRELEASE: (payload: { space: string; seq: number }) => {
-      const pose = state.renderedAnchors[payload.space] ?? null;
-      if (pose) state.followFreeze.set(payload.space, { pose, at: performance.now() });
+    FOLLOWRELEASE: (payload: { space: RenderAnchorSpace; pair?: FollowPair; seq: number }) => {
+      const frame = followFrame(state.renderedAnchors, payload.space, payload.pair);
+      const pose = frame ? Array.from(frame.elements) : null;
+      if (pose) {
+        state.followFreeze.set(followKey(payload.space, payload.pair), {
+          pose,
+          at: performance.now(),
+        });
+      }
       if (state.webxrTarget) {
         PostMan.PostMessage({
           target: state.webxrTarget,
@@ -659,10 +669,8 @@ async function run(options: Start) {
         }
       }
       state.anchorSpaces = {};
-      const followAnchors: RenderAnchors = {};
-      for (const [space, freeze] of state.followFreeze) {
-        followAnchors[space as keyof RenderAnchors] = freeze.pose;
-      }
+      const followAnchors: Record<string, number[]> = {};
+      for (const [key, freeze] of state.followFreeze) followAnchors[key] = freeze.pose;
       const followCounts: Partial<Record<string, number>> = {};
       state.resolvedAnchors = resolveRenderAnchors(
         payload,
@@ -671,10 +679,10 @@ async function run(options: Start) {
         followAnchors,
         followCounts,
       );
-      // A scene without carried items for a frozen space is the worker's landed one.
-      for (const [space, freeze] of state.followFreeze) {
-        if (!followCounts[space] || performance.now() - freeze.at > FOLLOW_FREEZE_MAX_MS) {
-          state.followFreeze.delete(space);
+      // A scene without items carried in a frozen frame is the worker's landed one.
+      for (const [key, freeze] of state.followFreeze) {
+        if (!followCounts[key] || performance.now() - freeze.at > FOLLOW_FREEZE_MAX_MS) {
+          state.followFreeze.delete(key);
         }
       }
       for (const [space, matrix] of Object.entries(anchors)) {

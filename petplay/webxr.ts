@@ -1878,9 +1878,10 @@ function initializeRaylibOpenVrPacer(
     }
   }
   setControllerDeviceFrameResolver(resolveControllerDeviceFrame);
-  setFollowReleaseSender((space, seq) => {
-    // Screens attached to the controller freeze at once, in parallel with the renderer.
-    const deviceIndex = resolveControllerDeviceFrame(space)?.deviceIndex;
+  setFollowReleaseSender(({ space, pair }, seq) => {
+    // Screens attached to the controller freeze at once, in parallel with the renderer. A
+    // two-hand carry keeps them absolute, so there is nothing to freeze there.
+    const deviceIndex = pair ? undefined : resolveControllerDeviceFrame(space)?.deviceIndex;
     if (state.displayOverlayHostActor && deviceIndex != null) {
       PostMan.PostMessage({
         target: state.displayOverlayHostActor,
@@ -1889,7 +1890,11 @@ function initializeRaylibOpenVrPacer(
       });
     }
     if (!state.decoupledRenderer || !state.renderOwner) return false;
-    PostMan.PostMessage({ target: state.renderOwner, type: "FOLLOWRELEASE", payload: { space, seq } });
+    PostMan.PostMessage({
+      target: state.renderOwner,
+      type: "FOLLOWRELEASE",
+      payload: { space, pair, seq },
+    });
     return true;
   });
   applyOpenVrEyeGeometry();

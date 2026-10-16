@@ -83,7 +83,8 @@ function carryOnController(obj: THREE.Object3D, world: THREE.Matrix4): number | 
   for (let node: THREE.Object3D | null = obj; node; node = node.parent) {
     const follow = node.userData?.renderTrackingFollow as RenderTrackingFollow | undefined;
     if (follow == null) continue;
-    if (!follow.active()) return undefined;
+    // An overlay attaches to one device; a two-hand carry keeps the screen absolute.
+    if (!follow.active() || follow.pair) return undefined;
     const frame = getControllerDeviceFrame(follow.space);
     if (frame == null) return undefined;
     followPoseInverse.copy(follow.pose as unknown as THREE.Matrix4).invert();

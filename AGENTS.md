@@ -4,6 +4,8 @@
 - `markdown/`: plans and work in progress. Start with `markdown/what-petplay-is.md` and
   `markdown/petplay-2.0/README.md`.
 - `markdown/issues/`: the bug tracker, one folder per issue (see its README).
+- Type-check with `deno task check`: it filters out the vendor submodules' unrelated errors that
+  raw `deno check` reports (`deno task check:all` for the unfiltered graph).
 
 ## Git
 

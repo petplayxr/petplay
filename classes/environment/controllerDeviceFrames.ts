@@ -6,7 +6,7 @@
  *
  * The webxr worker registers the resolver once OpenVR is up; without it everything stays absolute.
  */
-import type { RenderAnchorSpace } from "../overlayRenderTracking.ts";
+import type { FollowPair, RenderAnchorSpace } from "../overlayRenderTracking.ts";
 
 export type ControllerDeviceFrame = {
   deviceIndex: number;
@@ -29,7 +29,10 @@ export function getControllerDeviceFrame(space: RenderAnchorSpace): ControllerDe
  * showed and returns that pose, so the worker can land the window exactly there. `land` gets the
  * pose (column-major 4×4), or null when no renderer answers in time.
  */
-export type FollowReleaseSender = (space: RenderAnchorSpace, seq: number) => boolean;
+export type FollowReleaseSender = (
+  carry: { space: RenderAnchorSpace; pair?: FollowPair },
+  seq: number,
+) => boolean;
 
 let releaseSender: FollowReleaseSender | null = null;
 let releaseSeq = 0;
@@ -41,11 +44,11 @@ export function setFollowReleaseSender(next: FollowReleaseSender | null): void {
 }
 
 export function requestFollowRelease(
-  space: RenderAnchorSpace,
+  carry: { space: RenderAnchorSpace; pair?: FollowPair },
   land: (pose: ArrayLike<number> | null) => void,
 ): void {
   const seq = ++releaseSeq;
-  if (releaseSender == null || !releaseSender(space, seq)) return land(null);
+  if (releaseSender == null || !releaseSender(carry, seq)) return land(null);
   pendingReleases.set(seq, land);
   setTimeout(() => settleFollowRelease(seq, null), FOLLOW_RELEASE_TIMEOUT_MS);
 }

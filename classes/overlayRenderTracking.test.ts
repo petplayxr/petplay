@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import {
   captureRenderAnchor,
+  followFrame,
   type RenderAnchors,
   resolveRenderAnchors,
   setRenderHandAnchors,
@@ -195,4 +196,33 @@ Deno.test("a released grab holds its carried items while hand-attached ones keep
   near(carried.worldMatrix[12], 0.05);
   near(wrist.worldMatrix[12], 0.1);
   assert(counts["right-ray"] === 1, "only carried items count as carried");
+});
+
+Deno.test("the two-hand frame moves, turns and scales with both grab points", () => {
+  const pair = {
+    space: "left-hand" as const,
+    points: [[0, 0, -0.1], [0, 0, -0.1]] as [number[], number[]],
+  };
+  const right = new THREE.Matrix4().makeTranslation(0.3, 1, -0.5);
+  const left = new THREE.Matrix4().makeTranslation(-0.3, 1, -0.5);
+  const frame = (r: THREE.Matrix4, l: THREE.Matrix4) =>
+    followFrame({ "right-hand": r.elements, "left-hand": l.elements }, "right-hand", pair)!;
+  const base = frame(right, left);
+  const origin = new THREE.Vector3().setFromMatrixPosition(base);
+  near(origin.x, 0);
+  near(origin.z, -0.6);
+  near(new THREE.Vector3().setFromMatrixScale(base).x, 0.6);
+
+  // Carrying both hands rigidly carries the frame the same way.
+  const motion = new THREE.Matrix4().makeRotationY(0.4).setPosition(0.1, 0.2, 0);
+  const moved = frame(motion.clone().multiply(right), motion.clone().multiply(left));
+  const expected = motion.clone().multiply(base);
+  for (let i = 0; i < 16; i++) near(moved.elements[i], expected.elements[i]);
+
+  // Pulling the hands apart scales it.
+  const apart = frame(
+    new THREE.Matrix4().makeTranslation(0.6, 1, -0.5),
+    new THREE.Matrix4().makeTranslation(-0.6, 1, -0.5),
+  );
+  near(new THREE.Vector3().setFromMatrixScale(apart).x, 1.2);
 });

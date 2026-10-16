@@ -8,6 +8,14 @@ export type RenderAnchor = {
   localMatrix: Float64Array;
   /** Carried by a grab ({@link RenderTrackingFollow}) rather than parented to the space. */
   follow?: true;
+  /** Carried by two hands: held in the {@link followFrame} spanning both grab points. */
+  pair?: FollowPair;
+};
+
+/** The second hand of a two-hand grab, and each pointer's grab point in its own space. */
+export type FollowPair = {
+  space: RenderAnchorSpace;
+  points: [ArrayLike<number>, ArrayLike<number>];
 };
 export type Anchored = { renderAnchor?: RenderAnchor };
 export type RenderAnchors = Partial<Record<RenderAnchorSpace, ArrayLike<number>>>;
@@ -24,9 +32,65 @@ const spaces: readonly string[] = ["head", "left-hand", "right-hand", "left-ray"
  */
 export type RenderTrackingFollow = {
   space: RenderAnchorSpace;
+  /** The {@link followFrame} the worker placed the subtree from. */
   pose: THREE.Matrix4;
   active: () => boolean;
+  pair?: FollowPair;
 };
+
+/** Key of a carry's frame: one pointer space, or both for two hands. */
+export function followKey(space: RenderAnchorSpace, pair?: FollowPair): string {
+  return pair == null ? space : `${space}+${pair.space}`;
+}
+
+const frameA = new THREE.Matrix4();
+const frameB = new THREE.Matrix4();
+const pointA = new THREE.Vector3();
+const pointB = new THREE.Vector3();
+const frameX = new THREE.Vector3();
+const frameY = new THREE.Vector3();
+const frameZ = new THREE.Vector3();
+const upB = new THREE.Vector3();
+
+/**
+ * The frame a carried subtree is held in. One hand: the pointer pose. Two hands: origin at the
+ * midpoint of the grab points, x from the first to the second, up from both hands' up directions,
+ * uniformly scaled by their distance. A two-pointer grab moves, turns, twists and scales the
+ * window with exactly these quantities, so between worker frames the window stays put in this
+ * frame and the renderer can carry it with fresh poses of both controllers.
+ */
+export function followFrame(
+  anchors: Partial<Record<string, ArrayLike<number>>>,
+  space: RenderAnchorSpace,
+  pair: FollowPair | undefined,
+  target = new THREE.Matrix4(),
+): THREE.Matrix4 | null {
+  const a = anchors[space];
+  if (!a) return null;
+  if (pair == null) return target.fromArray(a as number[]);
+  const b = anchors[pair.space];
+  if (!b) return null;
+  frameA.fromArray(a as number[]);
+  frameB.fromArray(b as number[]);
+  pointA.fromArray(pair.points[0] as number[]).applyMatrix4(frameA);
+  pointB.fromArray(pair.points[1] as number[]).applyMatrix4(frameB);
+  frameX.subVectors(pointB, pointA);
+  const distance = frameX.length();
+  if (distance < 1e-6) return null;
+  frameX.divideScalar(distance);
+  frameY.set(0, 1, 0).transformDirection(frameA).add(upB.set(0, 1, 0).transformDirection(frameB));
+  frameY.addScaledVector(frameX, -frameY.dot(frameX));
+  if (frameY.lengthSq() < 1e-8) {
+    // Both hands' up directions lie along the axis: any perpendicular is as good.
+    frameY.set(0, 0, 1).addScaledVector(frameX, -frameX.z);
+    if (frameY.lengthSq() < 1e-8) frameY.set(0, 1, 0).addScaledVector(frameX, -frameX.y);
+  }
+  frameY.normalize();
+  frameZ.crossVectors(frameX, frameY);
+  target.makeBasis(frameX, frameY, frameZ);
+  target.scale(upB.setScalar(distance));
+  return target.setPosition(pointA.add(pointB).multiplyScalar(0.5));
+}
 
 /** IWER defines grip space relative to its target-ray space, rather than the tracked device. */
 export function setRenderHandAnchors(
@@ -72,6 +136,7 @@ function followAnchor(
   return {
     space: follow.space,
     follow: true,
+    ...(follow.pair ? { pair: follow.pair } : {}),
     localMatrix: new Float64Array(
       followHelper.copy(follow.pose).invert()
         .multiply(chainHelper.fromArray(worldMatrix as number[])).elements,
@@ -150,9 +215,9 @@ export function resolveRenderAnchors(
    * Poses for grab-carried items only (`follow`), overriding `anchors`: a released grab holds
    * its window at the last shown pose until the worker's landed scene arrives.
    */
-  followAnchors?: RenderAnchors,
-  /** Optional per-space tally of grab-carried items. */
-  followCounts?: Partial<Record<RenderAnchorSpace, number>>,
+  followAnchors?: Partial<Record<string, ArrayLike<number>>>,
+  /** Optional tally of grab-carried items per {@link followKey}. */
+  followCounts?: Partial<Record<string, number>>,
 ): number {
   let count = 0;
   const resolve = (
@@ -165,11 +230,13 @@ export function resolveRenderAnchors(
     const anchor = item.renderAnchor;
     if (!anchor) return;
     if (spaceCounts) spaceCounts[anchor.space] = (spaceCounts[anchor.space] ?? 0) + 1;
-    if (anchor.follow && followCounts) {
-      followCounts[anchor.space] = (followCounts[anchor.space] ?? 0) + 1;
+    let tracked: ArrayLike<number> | undefined | null = anchors[anchor.space];
+    if (anchor.follow) {
+      const key = followKey(anchor.space, anchor.pair);
+      if (followCounts) followCounts[key] = (followCounts[key] ?? 0) + 1;
+      tracked = followAnchors?.[key] ??
+        (anchor.pair ? followFrame(anchors, anchor.space, anchor.pair)?.elements : tracked);
     }
-    const tracked = (anchor.follow ? followAnchors?.[anchor.space] : undefined) ??
-      anchors[anchor.space];
     // Hold last visual placement on tracking loss, matching the existing scene policy.
     if (!tracked) return;
     const old = new THREE.Matrix4().fromArray(item.worldMatrix);
