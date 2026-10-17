@@ -46,6 +46,8 @@ const args = [
   "-A",
   // A cross build must not embed the developer machine's .env into a deployable binary.
   ...(target ? [] : ["--env-file"]),
+  // It still needs production React/npm builds: `release.env` carries only those settings.
+  ...(target ? ["--env-file=release.env"] : []),
   "--no-check",
   ...(target ? ["--target", target] : []),
   "--include",
@@ -83,6 +85,8 @@ args.push("petplay/petplay.ts", "dev");
 
 const build = new Deno.Command(Deno.execPath(), {
   args,
+  // Package export conditions are resolved while compiling, so the compiler needs them too.
+  env: { DENO_CONDITIONS: "production" },
   stdin: "inherit",
   stdout: "inherit",
   stderr: "inherit",

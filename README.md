@@ -53,8 +53,9 @@ Rust MSVC toolchain and Windows SDK. Development checkouts run `deno task build:
 before using desktop capture; release builds do this automatically.
 
 For a Steam Frame ARM64 build, run `deno task build --target=aarch64-unknown-linux-gnu` to create
-`dist/petplay-aarch64`. This cross build leaves the developer machine's `.env` out; supply runtime
-settings on the headset. ARM64 builds require Zig 0.13.0 (`PETPLAY_ZIG` can select the binary);
+`dist/petplay-aarch64`. This cross build leaves the developer machine's `.env` out and embeds only
+`release.env` (production React/npm builds); supply other runtime settings on the headset. ARM64
+builds render 2160 px per eye by default, the Frame's panel size (desktop: 3560). ARM64 builds require Zig 0.13.0 (`PETPLAY_ZIG` can select the binary);
 local cross builds also need `PETPLAY_RAYLIB_SYSROOT` pointing to target GLFW development
 libraries. Native ARM64 CI builds a test-only GLFW 3.4 fixture. See the
 [raylib build recipe](utils/native/raylib/README.md). The native helper builds and remaining hardware checks are in

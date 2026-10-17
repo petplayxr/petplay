@@ -22,7 +22,10 @@ ARM64 remains a clearly labelled experimental CI artifact while device validatio
 normal releases still publish desktop executables only. Local changes to these workflows do
 not run or publish them.
 
-The cross build omits the developer `.env`. ARM64 raylib 5.5 is now source-built with pinned
+The cross build omits the developer `.env` and embeds `release.env` instead, so React and the
+npm stack run their production builds (v0.0.10 and earlier ran development builds on ARM64).
+ARM64 builds default to a 2160 px eye size, the Frame's per-eye panel resolution, instead of the
+desktop 3560. ARM64 raylib 5.5 is now source-built with pinned
 Zig 0.13.0, the official upstream recipe and a small external-GLFW patch, then embedded and
 selected automatically. `PETPLAY_RAYLIB_LIBRARY` remains an override. The capture helper is now built from the pinned screen-streamer
 submodule and embedded in the executable; `PETPLAY_SCREEN_STREAMER` can override it. The genuine Frame
