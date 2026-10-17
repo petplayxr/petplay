@@ -198,6 +198,24 @@ child processes lack the bus. Portal services and desktop support remain indepen
 Results: `_scratch/frame-capture-2026-10-16/live-probe/result.json`. The available image's extracted
 configuration inventory and inspected public source revisions are retained beside that evidence.
 
+## DroidFrame game-mode portal result (2026-10-18)
+
+DroidFrame now runs Frame's genuine game-mode portals, PipeWire and WirePlumber in its session.
+See DroidFrame's `BASIC-PLATFORM.md`, "Game-mode portals and media session".
+
+- **The shipped frontend exposes no ScreenCast in game mode.** xdg-desktop-portal 1.18.4 selects
+  backends only through a `portals.conf` file or a `UseIn=` key. `start-gamescope-session`
+  points it at `gamescope-portals/`, which has neither. The helper fails with "No such interface
+  org.freedesktop.portal.ScreenCast". This is predicted from the image and reproduced on
+  DroidFrame, not yet observed on hardware.
+- **The rest of the chain works.** With a `gamescope-portals.conf` added (a deviation from the
+  image), the Gamescope portal hands out the compositor's node, and the helper receives frames
+  through PipeWire and WirePlumber on the Frame's zink/Turnip stack. Gamescope's stream carries
+  pixels only while it has a focused window to paint.
+- **The KDE dialog came from desktop mode.** The tester's picker came from KDE's portal, which
+  means desktop mode (nested Plasma), not game mode. Their xrdp run was a separate X11 session,
+  where KDE's ScreenCast cannot work.
+
 ## Smallest useful next validation
 
 The local portal/buffer fixes and native Linux pixel test are in place. On a real Frame, test one
