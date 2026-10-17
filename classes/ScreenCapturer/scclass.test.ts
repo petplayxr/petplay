@@ -70,3 +70,39 @@ Deno.test("capture session overrides reach the helper without changing the OpenV
     Deno.removeSync(dir, { recursive: true });
   }
 });
+
+Deno.test("a helper refused by the portal reports why, and a disposed capturer never respawns it", async () => {
+  const dir = Deno.makeTempDirSync();
+  const helper = `${dir}/refused-streamer`;
+  const starts = `${dir}/starts`;
+  // Mirrors KDE's portal ending the request: an error line on stderr, exit 1, no frame.
+  Deno.writeTextFileSync(
+    helper,
+    `#!/bin/sh\necho start >> "${starts}"\necho 'Error: Backend("The user interaction was ended in some other way")' >&2\nexit 1\n`,
+  );
+  Deno.chmodSync(helper, 0o755);
+  const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
+  const port = (listener.addr as Deno.NetAddr).port;
+  listener.close();
+
+  let notifyExit!: (status: Deno.CommandStatus) => void;
+  const exited = new Promise<Deno.CommandStatus>((resolve) => notifyExit = resolve);
+  const capturer = new ScreenCapturer({ port, executablePath: helper, onExit: notifyExit });
+  try {
+    await capturer.start();
+    assertEquals((await exited).code, 1);
+    await new Promise((resolve) => setTimeout(resolve, 100)); // let stderr drain
+    assertEquals(capturer.hasReceivedFrame(), false);
+    assertEquals(
+      capturer.getLastError(),
+      'Error: Backend("The user interaction was ended in some other way")',
+    );
+    await capturer.dispose();
+    // The desktop loop keeps polling; each poll used to start a new helper and portal dialog.
+    for (let i = 0; i < 3; i++) await capturer.getNextFrame(null, 50).catch(() => null);
+    assertEquals(Deno.readTextFileSync(starts).trim().split("\n").length, 1);
+  } finally {
+    await capturer.dispose();
+    Deno.removeSync(dir, { recursive: true });
+  }
+});

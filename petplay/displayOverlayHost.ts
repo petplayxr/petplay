@@ -10,6 +10,7 @@ import { nativeBuildTarget, screenStreamerRelativePath } from "../classes/native
 import {
   clampCaptureFps,
   DEFAULT_CAPTURE_FPS,
+  type CapturedFrame,
   type ScreenCapturer,
 } from "../classes/ScreenCapturer/scclass.ts";
 import type { OpenGLManager } from "../classes/openglManager.ts";
@@ -601,8 +602,23 @@ async function initScreenCapturer(fps: number): Promise<ScreenCapturer> {
       state.screenCapturer = null;
       warmCapturePromise = null;
       if (state.shuttingDown) return;
-      const message = `screen-streamer exited (code=${status.code}, success=${status.success})`;
+      const reason = capturer.getLastError();
+      const message = `screen-streamer exited (code=${status.code}, success=${status.success})` +
+        (reason ? `: ${reason}` : "");
       state.lastStartError = message;
+      if (!capturer.hasReceivedFrame()) {
+        // It never captured: the portal refused, was cancelled or found no source. Restarting
+        // would open a new picker dialog every few seconds (and KDE ends a pending one when the
+        // next request arrives), so wait for the user to open the desktop again instead.
+        LogChannel.error("actor", `[displayOverlayHost] ${message}; not restarting capture`);
+        postStatusToast({
+          title: "Desktop capture unavailable",
+          content: reason ?? "The screen-sharing request did not complete. Open the desktop to retry.",
+          tone: "warning",
+        });
+        void capturer.dispose();
+        return;
+      }
       void capturer.dispose().finally(() => scheduleCaptureRestart(message));
     },
   });
@@ -1051,11 +1067,17 @@ async function deskCapLoop(
   const maxFrames = state.captureFrames;
   const continuous = maxFrames === 0;
   let frameCount = 0;
-  const capturer = state.screenCapturer;
-  let lastFrame: Awaited<ReturnType<typeof capturer.getLatestFrame>> = null;
+  let lastFrame: CapturedFrame | null = null;
   let nextPresentAt = 0;
   while (state.isRunning && (continuous || frameCount < maxFrames)) {
-    const frame = await capturer.getNextFrame(lastFrame, 1_000);
+    // Follow the current helper: a lost stream is replaced by scheduleCaptureRestart, and a
+    // helper that never captured is not replaced until the user opens the desktop again.
+    const capturer = state.screenCapturer;
+    if (!capturer) {
+      await wait(250);
+      continue;
+    }
+    const frame: CapturedFrame | null = await capturer.getNextFrame(lastFrame, 1_000).catch(() => null);
     if (!frame) {
       continue;
     }

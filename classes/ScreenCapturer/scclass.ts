@@ -81,6 +81,9 @@ export class ScreenCapturer {
   private controlWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private worker: Worker | null = null;
   private frameData: CapturedFrame | null = null;
+  private lastErrorLine: string | null = null;
+  private receivedFrame = false;
+  private disposed = false;
   private frameCount = 0;
   private totalReceiveTime = 0;
   private isStarted = false;
@@ -123,6 +126,8 @@ export class ScreenCapturer {
    * @throws Error if the capture process fails to start
    */
   async start(): Promise<void> {
+    // A frame poll after dispose() must not silently spawn a new helper (and a new portal dialog).
+    if (this.disposed) throw new Error("ScreenCapturer was disposed");
     if (this.isStarted) return;
     if (this.startPromise) return this.startPromise;
 
@@ -169,6 +174,7 @@ export class ScreenCapturer {
               this.handleDisconnect();
             } else if (type === "frame") {
               this.frameData = { data, width, height, receiveTime };
+              this.receivedFrame = true;
               const waiters = this.frameWaiters.splice(0);
               for (const finish of waiters) finish(this.frameData);
               this.frameCount++;
@@ -243,6 +249,8 @@ export class ScreenCapturer {
       new WritableStream({
         write: (chunk) => {
           const text = new TextDecoder().decode(chunk);
+          const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+          if (lines.length > 0) this.lastErrorLine = lines[lines.length - 1];
           this.log("Process stderr:", text);
         },
       }),
@@ -324,6 +332,16 @@ export class ScreenCapturer {
     });
   }
 
+  /** True once the helper has delivered a frame; a portal refusal exits before that. */
+  hasReceivedFrame(): boolean {
+    return this.receivedFrame;
+  }
+
+  /** The helper's last stderr line, e.g. the portal's reason for ending the request. */
+  getLastError(): string | null {
+    return this.lastErrorLine;
+  }
+
   getStatus() {
     return {
       started: this.isStarted,
@@ -343,6 +361,7 @@ export class ScreenCapturer {
    * The instance cannot be reused after calling this method.
    */
   async dispose() {
+    this.disposed = true;
     this.stopping = true;
     this.isStarted = false;
 
