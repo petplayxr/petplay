@@ -124,8 +124,9 @@ Use `_scratch/` for agent artifacts; PetPlay owns the repo-local `tmp/`.
    assets and preserves the shared-sync contract, isolates PetPlay settings/layout, and records
    readiness, activity and shutdown separately. It requires staging space plus 256 MiB headroom.
    Reuse the staged hash in the same guest profile rather than copying the executable repeatedly.
-   Obsolete bundles under inactive profiles can be removed when space is needed; preserve active
-   and rollback runtime selections and Steam state.
+   DroidFrame launches prune old guest profiles (and the Petplay builds staged in them), unselected
+   runtimes and job logs. When the Quest still runs out of space, use `droidframectl storage-prune`;
+   see DroidFrame's `QUEST-STORAGE.md`.
 
 The no-VR control requires advancing scene frames and clean exit. VR additionally requires a
 ready OpenVR client, a ready renderer and advancing overlay uploads. Accepted uploads do not
