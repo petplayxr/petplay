@@ -25,6 +25,7 @@ import {
 } from "../classes/openVrOverlayFramePacing.ts";
 import { WebXROverlayGl } from "../classes/webxrOverlayGl.ts";
 import {
+  getRaylibNativeEyeSize,
   type NativeOpenVrRaylibDebugFrame,
   WebXROverlayRaylib,
 } from "../classes/webxrOverlayRaylib.ts";
@@ -1742,7 +1743,7 @@ async function startRenderOwner() {
       webxrTarget: state.id,
       overlayKey: `${config?.overlayKey ?? "petplay.webxr"}.independent.${Deno.pid}`,
       overlayName: config?.overlayName,
-      eyeSize: Number(Deno.args.find((arg) => arg.startsWith("--webxr-raylib-eye-size="))?.split("=")[1] ?? 3560),
+      eyeSize: getRaylibNativeEyeSize(),
       presentMode: state.raylibProjectionOverlayEnabled ? "projection" : "panorama",
       overlayWidthInMeters: config?.overlayWidthInMeters,
       overlayDistance: config?.overlayDistance,

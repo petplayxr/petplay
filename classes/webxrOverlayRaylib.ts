@@ -71,11 +71,17 @@ const DEBUG_LEFT_CONTROLLER_CUBE_WIRE = {
 } as raylib.Color;
 
 /**
- * Per-eye render target (pixels) for 3D + uikit. The 3560/eye default preserves the high-resolution
- * 7120-square stacked stereo panorama. Use `--webxr-raylib-eye-size=2048` (or another smaller value)
- * to trade sharpness for fill rate and VRAM while profiling or on weaker GPUs.
+ * Default per-eye render target. Desktop keeps the high-resolution 7120-square stacked stereo
+ * panorama (3560/eye). ARM64 means the Steam Frame, whose panels are 2160x2160 per eye: rendering
+ * the desktop size there is ~2.7x the pixels for no visible gain on a mobile GPU.
  */
-function getRaylibNativeEyeSize(): number {
+export const DEFAULT_RAYLIB_EYE_SIZE = Deno.build.arch === "aarch64" ? 2160 : 3560;
+
+/**
+ * Per-eye render target (pixels) for 3D + uikit, [DEFAULT_RAYLIB_EYE_SIZE] unless
+ * `--webxr-raylib-eye-size=<n>` trades sharpness for fill rate and VRAM.
+ */
+export function getRaylibNativeEyeSize(): number {
   const arg = Deno.args
     .find((a) => a.startsWith("--webxr-raylib-eye-size="))
     ?.split("=", 2)[1]
@@ -84,7 +90,7 @@ function getRaylibNativeEyeSize(): number {
   if (Number.isFinite(n) && n >= 64 && n <= 4096) {
     return n;
   }
-  return 3560;
+  return DEFAULT_RAYLIB_EYE_SIZE;
 }
 
 function getRaylibNativeEyeSizeCandidates(preferred = getRaylibNativeEyeSize()): number[] {

@@ -286,7 +286,7 @@ The live presentation chain, in order (`uploadRaylibShadowFrame`, `petplay/webxr
 `paceToDisplayAndRefreshPosesYielding` → `applyDirectOpenVrShadowPose` + `updateDirectOpenVrInputs`
 (pose **into** the host) → `captureShadowFrame` → `getRaythreeSceneContext` → `buildPayload` (one
 `updateMatrixWorld`, one eye extract, right eye aliased) → `renderRaythreeFrame` (two raylib eye
-targets, default 3560², combined through the varggles shader) → `setTextureHandle` + `present()`
+targets, default 3560², 2160² on ARM64, combined through the varggles shader) → `setTextureHandle` + `present()`
 (`SetOverlayTexture`) → recovery-attempt reset → `signalExternalPacerAdvanced()`.
 
 Two facts this makes precise:
