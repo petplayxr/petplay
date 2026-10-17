@@ -9,6 +9,8 @@ import { MainStdinHandler } from "../classes/mainStdinHandler.ts";
 import { OverlayRenderMode } from "./webxr.ts";
 import type { api as openVrApi } from "./OpenVR.ts";
 import { startWebXrAutoReload } from "../classes/webxrAutoReload.ts";
+import { requestProcessExit } from "../classes/processExitRequest.ts";
+import { OPENVR_REATTACH_ARG } from "../classes/steamVrProcess.ts";
 
 const state = actorState({
   name: "main",
@@ -958,6 +960,12 @@ async function superviseOpenVrRuntime(actors: SupervisedSceneActors): Promise<vo
         : await openVrLossReason(actors, supervisor.attachment);
       if (reason != null) {
         await detachOpenVrRuntime(actors, supervisor.attachment, reason);
+        if (!requested && !Deno.args.includes(OPENVR_REATTACH_ARG)) {
+          LogChannel.log("actor", `[supervisor] exiting with SteamVR (${reason})`);
+          supervisor.running = false;
+          requestProcessExit(`SteamVR session ended (${reason})`);
+          return;
+        }
       }
       await wait(OPENVR_ATTACHED_POLL_MS);
     } catch (error) {

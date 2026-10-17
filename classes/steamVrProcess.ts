@@ -2,6 +2,12 @@
 
 export const DEFAULT_STEAMVR_PROCESS_NAMES = ["vrserver"] as const;
 export const OPENVR_ATTACH_ONLY_ARG = "--openvr-attach-only";
+/**
+ * Keep the server running when SteamVR quits and attach again when it returns.
+ * Without it the server exits with SteamVR, so a release binary runs once and
+ * leaves nothing behind. Dev servers pass it to keep the desktop view and REPL.
+ */
+export const OPENVR_REATTACH_ARG = "--openvr-reattach";
 
 function processNameMatches(name: string, candidates: readonly string[]): boolean {
   return candidates.some((candidate) => candidate === name || candidate.slice(0, 15) === name);

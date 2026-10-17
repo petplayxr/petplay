@@ -56,7 +56,7 @@
     "check": "deno run -A utils/type-check.ts",
     "check:all": "deno check --allow-import",
     "ui": "deno run -A petplay/uiViewer.tsx ",
-    "server": "deno run -A --unstable-webgpu --env-file --no-check petplay/petplay.ts dev --agent-repl",
+    "server": "deno run -A --unstable-webgpu --env-file --no-check petplay/petplay.ts dev --agent-repl --openvr-reattach",
     "status": "deno run -A petplay/client.ts status",
     "reboot": "deno run -A petplay/client.ts reboot",
     "desktop": "deno run -A petplay/client.ts desktop",
@@ -72,7 +72,7 @@
       "command": "deno run -A utils/build.ts"
     },
     "devw": {
-      "command": "deno run -A --env-file utils/watcher.ts --watch ./petplay/ --ext ts --verbose --exec \"deno run -A petplay/petplay.ts dev\"",
+      "command": "deno run -A --env-file utils/watcher.ts --watch ./petplay/ --ext ts --verbose --exec \"deno run -A petplay/petplay.ts dev --openvr-reattach\"",
       "dependencies": [
         "cefbuild"
       ]

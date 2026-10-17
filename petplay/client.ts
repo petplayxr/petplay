@@ -36,6 +36,7 @@ import {
   stopServerProcess,
   type ServerHealth,
 } from "./serverProcess.ts";
+import { OPENVR_REATTACH_ARG } from "../classes/steamVrProcess.ts";
 
 const LOG_PREFIX = "[client]";
 /** A one-shot preview capture waits for a child process to boot a window and draw one frame. */
@@ -544,7 +545,8 @@ async function startServerAndReport(extraArgs: string[] = []): Promise<void> {
 
 async function cmdDev(): Promise<number> {
   if (await serverHealth() == null) {
-    await startServerAndReport();
+    // A dev server outlives SteamVR restarts; see OPENVR_REATTACH_ARG.
+    await startServerAndReport([OPENVR_REATTACH_ARG]);
   }
   const status = await cmdDesktop();
   if (status !== 0) {

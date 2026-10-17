@@ -1,6 +1,7 @@
 import { IPCWorker, PostalService, setWorkerChildArgs } from "../submodules/stageforge/mod.ts";
 import { childProcessArgs } from "../classes/childModule.ts";
 import { asyncPrompt, createTemp, destroyTemp, ensuredenodir, wait } from "../classes/utils.ts";
+import { listenForProcessExitRequests } from "../classes/processExitRequest.ts";
 import { releaseWindowsSyntheticDisplayMouseState } from "../classes/environment/displayInstance/mouse.ts";
 import { releaseWindowsSyntheticKeyboardState } from "../classes/environment/keyboard/win32SystemKeyboard.ts";
 
@@ -146,6 +147,11 @@ export async function startPetplayServer(
       // SIGTERM is not available on every supported platform.
     }
   }
+
+  listenForProcessExitRequests((reason) => {
+    console.log(`[petplay] exit requested: ${reason}; shutting down`);
+    void petplayDefaultExit();
+  });
 
   const devExitAfterArg = Deno.args.find((arg) => arg.startsWith("--dev-exit-after-ms="));
   if (devExitAfterArg) {

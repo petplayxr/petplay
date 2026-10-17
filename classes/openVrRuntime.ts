@@ -138,6 +138,23 @@ export class OpenVrRuntime {
     }
 
     const errorPointer = P.Int32P<OpenVR.InitError>();
+    // An overlay-type init starts SteamVR when it is not running. PetPlay only
+    // attaches to a runtime someone else started: a supervisor retrying every
+    // few seconds would otherwise relaunch SteamVR each time the user quits it.
+    // A background-type init fails instead of starting it, so probe with one.
+    OpenVR.VR_InitInternal(
+      errorPointer,
+      OpenVR.ApplicationType.VRApplication_Background,
+    );
+    const probeError = new Deno.UnsafePointerView(errorPointer).getInt32();
+    if (probeError !== OpenVR.InitError.VRInitError_None) {
+      throw new Error(
+        probeError === OpenVR.InitError.VRInitError_Init_NoServerForBackgroundApp
+          ? "SteamVR is not running"
+          : `Failed to initialize OpenVR: ${OpenVR.InitError[probeError]}`,
+      );
+    }
+    OpenVR.VR_ShutdownInternal();
     OpenVR.VR_InitInternal(
       errorPointer,
       OpenVR.ApplicationType.VRApplication_Overlay,

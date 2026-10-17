@@ -152,6 +152,11 @@ supervision. Shell commands are *clients* of it: they message the server's agent
 starting their own scene, so the desktop view is an actor the server starts, not a second process
 rendering its own copy of the world.
 
+PetPlay never starts SteamVR: it waits for a running instance and attaches to it. By default it
+exits when that SteamVR session ends, so the release binary runs once and leaves nothing behind.
+`--openvr-reattach` keeps the server running and attaches again when SteamVR returns; the dev tasks
+below pass it.
+
 ```bash
 deno task server             # long-lived: scene + supervision + agent REPL on 3987
 deno task status             # supervisor / scene / desktop view readout
