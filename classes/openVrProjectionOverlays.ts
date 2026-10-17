@@ -10,6 +10,7 @@
  * texture was rendered from, so it reprojects the texture to the pose it actually displays, the
  * same way it treats a scene application's eye buffers.
  */
+import { FLIP_OVERLAY_Y } from "./overlayTextureFlip.ts";
 import * as OpenVR from "../submodules/OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
 import { P } from "../submodules/OpenVR_TS_Bindings_Deno/pointers.ts";
 import { createStruct } from "../submodules/OpenVR_TS_Bindings_Deno/utils.ts";
@@ -133,7 +134,7 @@ export class OpenVrProjectionOverlays {
     if (this.eyes.length !== 2) {
       throw new Error("projection overlays not initialized");
     }
-    const flipV = this.conventions.flipV;
+    const flipV = this.conventions.flipV !== FLIP_OVERLAY_Y;
     if (this.appliedFlipV !== flipV) {
       this.bounds.set(flipV ? [0, 1, 1, 0] : [0, 0, 1, 1]);
       for (const eye of this.eyes) {

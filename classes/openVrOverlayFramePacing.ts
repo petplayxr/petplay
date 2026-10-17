@@ -12,6 +12,13 @@ import { FpsCounter } from "./fpsCounter.ts";
 import { LogChannel } from "@mommysgoodpuppy/logchannel";
 
 const MAX_VSYNC_POLLS = 2_000_000;
+/**
+ * The vsync index stops advancing while SteamVR is in standby (headset off the head). Spinning
+ * until it moves kept a core at 100% for as long as the headset sat idle, so a spin longer than
+ * this many frame periods marks the counter stalled, and pacing idles on a timer until it moves.
+ */
+const VSYNC_STALL_FRAMES = 2;
+const VSYNC_STALLED_POLL_MS = 100;
 const DEFAULT_VSYNC_SPIN_TAIL_MS = 1.0;
 // A 72 Hz headset has a 13.9 ms frame. Capping the coarse yield at 4 ms meant
 // that finishing early in a frame skipped the yield entirely and hammered
@@ -147,6 +154,8 @@ export class OpenVrOverlayFramePacer {
   private lastHmd: OpenVrHmdEmulationPose | null = null;
   private lastFallbackPaceAt = 0;
   private fallbackVsyncUnavailableLogged = false;
+  /** Set when the vsync index stopped advancing (standby); cleared once it moves. */
+  private vsyncStalled = false;
   private readonly poseArrayBuffer: ArrayBuffer;
   private readonly posePtr: Deno.PointerValue<OpenVR.TrackedDevicePose>;
   private readonly vsyncSecondsBuffer = new Float32Array(1);
@@ -247,6 +256,11 @@ export class OpenVrOverlayFramePacer {
       return await this.paceToOverlayFrameSync();
     }
     let yieldedMs = 0;
+    if (this.vsyncStalled && this.paceMode === "vsync") {
+      const t0 = performance.now();
+      await wait(VSYNC_STALLED_POLL_MS);
+      return this.paceToDisplayAndRefreshPosesSync(performance.now() - t0);
+    }
     if (this.paceMode === "vsync" && this.lastVsyncFrameIndex !== 0n) {
       const gotVsync = this.vr.GetTimeSinceLastVsync(
         this.vsyncSecondsPtr,
@@ -386,6 +400,12 @@ export class OpenVrOverlayFramePacer {
       const last = this.lastVsyncFrameIndex;
       let newIndex = last;
       const spinStart = performance.now();
+      this.displayHzCache ??= readHmdFloatProp(
+        this.vr,
+        OpenVR.TrackedDeviceProperty.Prop_DisplayFrequency_Float,
+      ) ?? 90;
+      // Stalled: check once without spinning (the async caller already idled on a timer).
+      const stallMs = this.vsyncStalled ? 0 : VSYNC_STALL_FRAMES * 1000 / this.displayHzCache;
       while (newIndex === last) {
         if (!this.vr.GetTimeSinceLastVsync(this.vsyncSecondsPtr, this.vsyncFramePtr)) {
           return this.refreshPosesWithFallbackTiming(
@@ -396,14 +416,19 @@ export class OpenVrOverlayFramePacer {
           );
         }
         newIndex = this.vsyncFrameBuffer[0];
-        if (++spins > MAX_VSYNC_POLLS) {
+        if (newIndex !== last) break;
+        if (
+          ++spins > MAX_VSYNC_POLLS ||
+          (spins % 1024 === 0 && performance.now() - spinStart > stallMs)
+        ) {
           const spinTime = performance.now() - spinStart;
-          LogChannel.log(
-            "webxrv2",
-            `[${this.label}] vsync spin timeout: spins=${spins}, time=${
-              spinTime.toFixed(2)
-            }ms, last=${last}, newIndex=${newIndex}`,
-          );
+          if (!this.vsyncStalled) {
+            this.vsyncStalled = true;
+            LogChannel.log(
+              "webxrv2",
+              `[${this.label}] vsync index stalled at ${last} (SteamVR standby?); idling every ${VSYNC_STALLED_POLL_MS}ms until it moves`,
+            );
+          }
           return this.setLastPaceResult({
             ok: false,
             frameIndex: newIndex,
@@ -417,6 +442,10 @@ export class OpenVrOverlayFramePacer {
         }
       }
       spinTime = performance.now() - spinStart;
+      if (this.vsyncStalled) {
+        this.vsyncStalled = false;
+        LogChannel.log("webxrv2", `[${this.label}] vsync index moving again (${last} -> ${newIndex})`);
+      }
 
       if (last !== 0n && last + 1n < newIndex) {
         skippedDisplayFrames = Number(newIndex - last - 1n);

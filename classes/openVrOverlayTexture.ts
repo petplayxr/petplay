@@ -1,4 +1,5 @@
 import * as OpenVR from "../submodules/OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
+import { FLIP_OVERLAY_Y } from "./overlayTextureFlip.ts";
 import { P } from "../submodules/OpenVR_TS_Bindings_Deno/pointers.ts";
 import { createStruct } from "../submodules/OpenVR_TS_Bindings_Deno/utils.ts";
 
@@ -183,7 +184,7 @@ export class OpenVrOverlayTexture {
       );
     }
 
-    const flipVertical = options.flipVertical ?? true;
+    const flipVertical = (options.flipVertical ?? true) !== FLIP_OVERLAY_Y;
     const bounds = flipVertical
       ? { uMin: 0, uMax: 1, vMin: 1, vMax: 0 }
       : { uMin: 0, uMax: 1, vMin: 0, vMax: 1 };

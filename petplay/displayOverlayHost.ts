@@ -1,4 +1,5 @@
 import { actorState, PostMan } from "../submodules/stageforge/mod.ts";
+import { withOverlayFlipY } from "../classes/overlayTextureFlip.ts";
 import * as OpenVR from "../submodules/OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
 import { P } from "../submodules/OpenVR_TS_Bindings_Deno/pointers.ts";
 import { createStruct } from "../submodules/OpenVR_TS_Bindings_Deno/utils.ts";
@@ -844,7 +845,7 @@ function syncVirtualDisplay(sync: SyncVirtualDisplayPayload): void {
     setOverlayTransform(overlay, entry.handle, sync.hmd, sync.deviceIndex);
   }
   const [boundsPtr] = createStruct<OpenVR.TextureBounds>(
-    textureBoundsForCrop(sync.crop),
+    withOverlayFlipY(textureBoundsForCrop(sync.crop)),
     OpenVR.TextureBoundsStruct,
   );
   overlay.SetOverlayTextureBounds(entry.handle, boundsPtr);
@@ -1172,7 +1173,10 @@ async function startDesktopOpenVrOverlay(config: StartDesktopPayload) {
   const bounds = config.runScreenCapture
     ? { uMin: 0, uMax: 1, vMin: 1, vMax: 0 }
     : { uMin: 0, uMax: 1, vMin: 0, vMax: 1 };
-  const [boundsPtr, _] = createStruct<OpenVR.TextureBounds>(bounds, OpenVR.TextureBoundsStruct);
+  const [boundsPtr, _] = createStruct<OpenVR.TextureBounds>(
+    withOverlayFlipY(bounds),
+    OpenVR.TextureBoundsStruct,
+  );
   overlay.SetOverlayTextureBounds(overlayHandle, boundsPtr);
 
   const idTransform: OpenVR.HmdMatrix34 = {
