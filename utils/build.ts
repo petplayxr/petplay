@@ -30,6 +30,21 @@ const webxr = await new Deno.Command(Deno.execPath(), {
 if (!webxr.success) throw new Error(`WebXR runtime build failed (${webxr.code})`);
 
 await Deno.mkdir("dist", { recursive: true });
+// The per-run log (classes/runLog.ts) names the build a tester ran.
+const commit = new TextDecoder().decode(
+  (await new Deno.Command("git", { args: ["rev-parse", "HEAD"], stdout: "piped", stderr: "null" })
+    .output())
+    .stdout,
+).trim();
+await Deno.writeTextFile(
+  "dist/build-info.json",
+  JSON.stringify({
+    commit: commit || null,
+    target: target ?? Deno.build.target,
+    built: new Date().toISOString(),
+  }) +
+    "\n",
+);
 const resolvedTarget = nativeBuildTarget(target);
 const captureHelper = await buildNative(resolvedTarget);
 const raylib = resolvedTarget === "aarch64-unknown-linux-gnu"
@@ -61,6 +76,8 @@ const args = [
   "--include",
   captureHelper,
   ...(raylib ? ["--include", raylib] : []),
+  "--include",
+  "./dist/build-info.json",
   "--include",
   "./submodules/stageforge/",
   // Agent playtests are dynamically imported inside the compiled webxr worker too.

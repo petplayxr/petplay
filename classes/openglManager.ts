@@ -212,20 +212,13 @@ export class OpenGLManager {
       const version = gl.GetString(gl.VERSION) as Deno.PointerObject<unknown>;
       const vendor = gl.GetString(gl.VENDOR) as Deno.PointerObject<unknown>;
       const renderer = gl.GetString(gl.RENDERER) as Deno.PointerObject<unknown>;
-      console.log(`OpenGL Initialized:
-  Version:  ${
-        version
-          ? new TextDecoder().decode(Deno.UnsafePointerView.getArrayBuffer(version, 20))
-          : "N/A"
-      }...
-  Vendor:   ${
-        vendor ? new TextDecoder().decode(Deno.UnsafePointerView.getArrayBuffer(vendor, 20)) : "N/A"
-      }...
-  Renderer: ${
-        renderer
-          ? new TextDecoder().decode(Deno.UnsafePointerView.getArrayBuffer(renderer, 20))
-          : "N/A"
-      }...`);
+      const glString = (pointer: Deno.PointerObject<unknown> | null) =>
+        pointer ? Deno.UnsafePointerView.getCString(pointer) : "N/A";
+      console.log(
+        `OpenGL initialized: version ${glString(version)}; vendor ${glString(vendor)}; renderer ${
+          glString(renderer)
+        }`,
+      );
 
       // --- Shader Setup ---
       //console.log("--- Starting Shader Setup ---");

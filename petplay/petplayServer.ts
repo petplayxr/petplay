@@ -2,6 +2,7 @@ import { IPCWorker, PostalService, setWorkerChildArgs } from "../submodules/stag
 import { childProcessArgs } from "../classes/childModule.ts";
 import { asyncPrompt, createTemp, destroyTemp, ensuredenodir, wait } from "../classes/utils.ts";
 import { listenForProcessExitRequests } from "../classes/processExitRequest.ts";
+import { watchLogParent } from "../classes/runLog.ts";
 import { releaseWindowsSyntheticDisplayMouseState } from "../classes/environment/displayInstance/mouse.ts";
 import { releaseWindowsSyntheticKeyboardState } from "../classes/environment/keyboard/win32SystemKeyboard.ts";
 
@@ -148,6 +149,10 @@ export async function startPetplayServer(
     }
   }
 
+  watchLogParent(() => {
+    console.log("[petplay] logging parent exited; shutting down");
+    void petplayDefaultExit();
+  });
   listenForProcessExitRequests((reason) => {
     console.log(`[petplay] exit requested: ${reason}; shutting down`);
     void petplayDefaultExit();

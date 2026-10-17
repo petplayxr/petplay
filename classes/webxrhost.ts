@@ -1691,6 +1691,11 @@ export class WebXRHost {
     }
 
     if (this.root) {
+      // Tear the React tree down while r3f's scheduler root still exists. Unmounting directly
+      // removes the root first, and every uikit component's cleanup then requests a layout frame
+      // from it: one "[Scheduler] Root not found" warning per component (thousands) on each stop.
+      this.root.render(null);
+      await new Promise((resolve) => setTimeout(resolve, 0));
       this.root.unmount();
       this.root = null;
     }

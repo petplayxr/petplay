@@ -95,7 +95,7 @@ const GET_STRING_TRACKED_DEVICE_PROPERTY = {
   result: "u32",
 } as const;
 
-class OpenVrTrackedDeviceStringReader {
+export class OpenVrTrackedDeviceStringReader {
   readonly #getString: Deno.UnsafeFnPointer<typeof GET_STRING_TRACKED_DEVICE_PROPERTY>;
 
   constructor(systemPointer: Deno.PointerObject) {

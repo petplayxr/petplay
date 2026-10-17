@@ -193,13 +193,16 @@ export class WebXROverlayRaylib {
     }
 
     raylib.loadRaylib(getDefaultRaylibPath());
-    raylib.SetTraceLogLevel(raylib.TraceLogLevel.LOG_WARNING);
+    // INFO for window creation only: raylib then logs the GL vendor, renderer and version, which
+    // bug reports from other GPUs and drivers need.
+    raylib.SetTraceLogLevel(raylib.TraceLogLevel.LOG_INFO);
     raylib.SetConfigFlags(DEFAULT_WINDOW_FLAGS);
     raylib.H.InitWindow(
       CONTEXT_WINDOW_WIDTH,
       CONTEXT_WINDOW_HEIGHT,
       `${name}_${this.uniqueId}`,
     );
+    raylib.SetTraceLogLevel(raylib.TraceLogLevel.LOG_WARNING);
     this.windowInitialized = true;
 
     this.combineShader = raylib.H.LoadShaderFromMemory(

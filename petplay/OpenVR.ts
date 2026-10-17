@@ -2,6 +2,8 @@ import { actorState, PostMan } from "../submodules/stageforge/mod.ts";
 import { LogChannel } from "@mommysgoodpuppy/logchannel";
 import { type OpenVrPresence, OpenVrRuntime } from "../classes/openVrRuntime.ts";
 import { wait } from "../classes/utils.ts";
+import * as OpenVRBindings from "../submodules/OpenVR_TS_Bindings_Deno/openvr_bindings.ts";
+import { OpenVrTrackedDeviceStringReader } from "../classes/openVrControllerTipPose.ts";
 import {
   DEFAULT_STEAMVR_PROCESS_NAMES,
   OPENVR_ATTACH_ONLY_ARG,
@@ -183,6 +185,7 @@ function attemptInitialize(): void {
         state.compositorPTR != null
       })`,
     );
+    logHeadsetIdentity(pointers.system);
   } catch (error) {
     state.initError = error instanceof Error ? error.message : String(error);
     // The library stays loaded after a failed init, so probing is cheap and
@@ -192,6 +195,25 @@ function attemptInitialize(): void {
       "actor",
       `OpenVR runtime unavailable (attempt ${state.initAttempts}): ${state.initError}`,
     );
+  }
+}
+
+/** Runtime version and headset identity, for bug reports from hardware we do not have. */
+function logHeadsetIdentity(system: Deno.PointerValue | null): void {
+  if (system == null) return;
+  try {
+    const strings = new OpenVrTrackedDeviceStringReader(system as Deno.PointerObject);
+    const P = OpenVRBindings.TrackedDeviceProperty;
+    const hmd = [
+      ["system", P.Prop_TrackingSystemName_String],
+      ["model", P.Prop_ModelNumber_String],
+      ["manufacturer", P.Prop_ManufacturerName_String],
+      ["firmware", P.Prop_TrackingFirmwareVersion_String],
+    ].map(([label, property]) => `${label}=${strings.get(0, property as number) ?? "?"}`);
+    const runtime = new OpenVRBindings.IVRSystem(system).GetRuntimeVersion();
+    LogChannel.log("actor", `OpenVR runtime ${runtime}; headset ${hmd.join(" ")}`);
+  } catch (error) {
+    LogChannel.log("actor", `OpenVR headset identity unavailable: ${error}`);
   }
 }
 

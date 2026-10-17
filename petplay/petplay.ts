@@ -2,6 +2,7 @@ import { initializeLinuxScheduling } from "../classes/linuxScheduling.ts";
 import { dispatchChildModule } from "../classes/childModule.ts";
 import { startPetplayServer } from "./petplayServer.ts";
 import { installNativeCrashTrace } from "../classes/nativeCrashTrace.ts";
+import { runLogParent, shouldRunLogParent } from "../classes/runLog.ts";
 
 installNativeCrashTrace();
 initializeLinuxScheduling();
@@ -16,5 +17,7 @@ initializeLinuxScheduling();
  * separate modules rather than behind an early exit.
  */
 if (await dispatchChildModule(Deno.args) == null) {
+  // The compiled release logs each run to a file through a thin parent; see runLog.
+  if (shouldRunLogParent(Deno.args)) Deno.exit(await runLogParent());
   await startPetplayServer({ interactive: import.meta.main });
 }
