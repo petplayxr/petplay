@@ -550,6 +550,53 @@ function CommonOverlayChords({
   return null;
 }
 
+type UikitRoot = THREE.Object3D & {
+  root: { peek(): { component: unknown } };
+  size: { peek(): unknown };
+  update(delta: number): void;
+};
+
+/**
+ * Lays out the hidden windows' UIKit roots before their first show, one root per frame. A hidden
+ * Activity runs no frame jobs, so the first show otherwise laid out every window in one frame
+ * (~30 ms for the keyboard alone). Only roots that have never been laid out are touched: after a
+ * show, the visible frame jobs own layout as before.
+ *
+ * `layer` must be outside the Activity: refs inside a hidden Activity are detached.
+ */
+function usePrewarmHiddenUiLayout(
+  visible: boolean,
+  layer: React.RefObject<THREE.Object3D | null>,
+) {
+  const queue = React.useRef<UikitRoot[]>([]);
+  const frame = React.useRef(0);
+  useFrame(() => {
+    const group = layer.current;
+    if (visible || group == null) {
+      queue.current.length = 0;
+      return;
+    }
+    const next = queue.current.shift();
+    if (next !== undefined) {
+      if (next.size.peek() == null && next.parent != null) next.update(0);
+      return;
+    }
+    // Hidden content commits at offscreen priority and windows come and go, so look again now
+    // and then: traversing the hidden windows takes microseconds.
+    if (frame.current++ % 30 !== 0) return;
+    group.traverse((object) => {
+      const candidate = object as Partial<UikitRoot>;
+      if (
+        typeof candidate.update === "function" && candidate.root != null &&
+        candidate.size != null && candidate.root.peek().component === object &&
+        candidate.size.peek() == null
+      ) {
+        queue.current.push(object as UikitRoot);
+      }
+    });
+  });
+}
+
 function WindowLayer({
   displayOverlayHostActor,
   onMouse,
@@ -579,6 +626,8 @@ function WindowLayer({
       cancelled = true;
     };
   }, [fontsLoaded]);
+  const layer = React.useRef<THREE.Group>(null);
+  usePrewarmHiddenUiLayout(visible, layer);
   const camera = useThree((r3fState) => r3fState.camera);
   const renderer = useThree((r3fState) => r3fState.gl);
   const position = React.useMemo(() => new THREE.Vector3(), []);
@@ -787,7 +836,7 @@ function WindowLayer({
   // hidden takes its props at construction, so the first show does not restyle every window.
   return (
     <SpatialAudioProvider>
-      <group {...({ intersectChildren: visible } as Record<string, unknown>)}>
+      <group ref={layer} {...({ intersectChildren: visible } as Record<string, unknown>)}>
         <React.Activity mode={visible ? "visible" : "hidden"}>
           <ConstructWithPropsContext.Provider value={constructWithProps}>
             <group userData={{ spatialGraphRoot: true, originId: SCENE_ORIGIN_ID, static: true }}>

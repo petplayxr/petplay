@@ -1,8 +1,8 @@
 # First display reveal: evidence and property-order experiment
 
 Status: property-order cache rejected (inconclusive); static UI texture preload and
-construct-with-props and render-time text measurement accepted; hidden layout prewarm rejected.
-First reveal remains a multi-frame hitch (~55 ms of release frame time over budget): still open.
+construct-with-props, render-time text measurement and hidden layout prewarm accepted.
+First reveal remains a ~54 ms release hitch (~40 ms over budget per reveal): still open.
 
 ## Reproduction and attribution
 
@@ -227,11 +227,35 @@ Two debug attempts are retained as failed runs: one ended when the Steam client 
 SIGSEGV; no PetPlay event preceded it), and one where the v3 *baseline* reported `No wrist menu`
 3 s after scene-ready. The latter is unexplained and unresolved.
 
-## Rejected: lay out hidden UIKit roots ahead of time
+## Accepted: lay out hidden UIKit roots before the first show
 
-Calling `update(0)` on each hidden UIKit root, one per frame while hidden, did lay out the
-windows (largest root 30 ms), but on top of render-time text it gave no gain: per-pair
-first-reveal excess 88→51, 59→66, 62→58, 62→57, 60→66. One of its five runs froze for
-**2,966 ms** about 0.36 s after `hide-display-3`, when that hook would rescan the just-hidden
-windows and lay out roots it had not seen. No such stall occurred in any other build today.
-Root cause not established; the code was removed. Evidence: `_scratch/perf/layout-prewarm/`.
+A hidden Activity runs no frame jobs, so the first visible frame laid out every window: 31 ms of
+`calculateLayout` remained, mostly the default layout's keyboard (593 of the window layer's
+650 UIKit components). `WindowLayer` now calls `update(0)` on hidden roots that have never been
+laid out, one per frame, shortly after launch. Roots that already have a size are never touched,
+so after the first show the visible frame jobs own layout exactly as before.
+
+First attempt (v1, `_scratch/perf/layout-prewarm/`) was a no-op: its ref sat on a group inside
+the hidden Activity, and React detaches refs there, so it never ran before the first reveal. Its
+screening (no gain) therefore measured nothing. One of its five runs froze for **2,966 ms**
+~0.36 s after `hide-display-3`. A plausible path exists (a frame where the hook saw "hidden"
+before React detached the ref could queue roots at one hide and lay one out at the next), but a
+hunt of 24 extra hide/show cycles on each of the v1 and text-sync builds
+(`_scratch/perf/freeze-hunt/`, worst interval 49 ms) did not reproduce it. **Unresolved and
+unattributed.** v2 keeps the ref on the wrapper outside the Activity and cannot take that path.
+
+v2 against text-sync (`_scratch/perf/layout-prewarm/v2/`), release, five pairs:
+
+| Metric | Baseline median | Candidate median | Pair differences |
+| --- | ---: | ---: | --- |
+| First reveal worst `frameMetric` (ms) | 74.15 | 54.37 | -13.0, -16.1, -21.0, -20.0, -21.6 |
+| First reveal excess (ms) | | | 66→54, 64→36, 64→40, 62→34, 51→34 |
+| Longest host rAF interval (ms) | 55.71 | 34.04 | -12.6, -23.3, -21.7, -20.7, -22.5 |
+
+Other phases within the A/A floor; `laser-drag` worst frame read +0.4 to +2.8 ms in release but
+-0.5, +0.6, -0.1 in debug and the hook returns immediately while windows are visible. Debug,
+three pairs: first reveal worst frame -16.6, -4.3, -20.9 ms; excess 129→119, 127→132, 110→84,
+a weaker gain. Executables: release `946401a2…`, debug in `artifacts.sha256`. Unit suite 234
+passed; `--novr` smoke, showhide, layouts, hovertoolbar, window-settings, wrist, keyboard and
+toasts passed. Startup gains one layout per root in the first second (accepted tradeoff: the user
+prefers launch cost to interaction stalls).
