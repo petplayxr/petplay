@@ -1,7 +1,7 @@
 # First display reveal: evidence and property-order experiment
 
-Status: property-order cache rejected (inconclusive); static UI texture preload accepted.
-First reveal remains a ~125 ms release hitch: still an open defect.
+Status: property-order cache rejected (inconclusive); static UI texture preload and
+construct-with-props accepted. First reveal remains a ~73 ms release hitch: still an open defect.
 
 ## Reproduction and attribution
 
@@ -140,6 +140,55 @@ frame -38.9, -37.9, -42.5 ms (median 179.06 → 141.12), longest rAF interval -1
 texture path after the first draw and release showed -0.3 to -4.1 ms, so this is recorded as
 unexplained debug variation, not dismissed. Debug executables `89290c64…` / `35656279…`.
 
-The remaining ~125 ms first reveal is still a blocking defect. Next candidate: construct UIKit
-components with their first render's props so the hidden `Activity` pre-render applies them,
-instead of every component restyling in the reveal commit.
+## Accepted: build hidden window UI with its props at construction
+
+The window layer is a hidden `React.Activity`; its UIKit components are constructed during the
+hidden pre-render, but `uikit-r3f` applied props only from a passive effect, which a hidden
+Activity does not run. The first reveal therefore ran `resetProperties` on every component in
+one commit (55.5 ms in the profile). The constructor already applies `inputProperties`, so the
+wrapper now passes the first render's props there and treats them as applied, under
+`ConstructWithPropsContext`, which `WindowLayer` sets while hidden.
+
+Two rejected variants are kept as evidence (`_scratch/perf/uikit-construct-props/`):
+
+- v1, unconditional (every component constructed with props): first reveal 119.8 → 71.9 ms,
+  but `menu-wrist` worst frame +0.3 to +1.3 ms in all five pairs and 20–21 ms frames in 3/5
+  runs (0/5 baseline). Visible mounts moved that work from the passive effect into the commit.
+- v2, context value `!visible`: warm reveals +4 to +13 ms in all five pairs, because changing
+  the context value re-rendered every UIKit component on each show and hide.
+
+Accepted v3 holds a stable ref in the context, read once at construction. Baseline is the
+texture-preload release (`2f372c5d…`); candidate `a1327df6…`. Release, five alternating pairs:
+
+| Metric | Baseline median | Candidate median | Pair differences (ms) |
+| --- | ---: | ---: | --- |
+| First reveal worst `frameMetric` | 128.04 | 72.61 | -61.1, -53.0, -54.6, -44.7, -58.7 |
+| Longest host rAF interval | 81.11 | 66.94 | -17.1, -10.3, -16.5, -10.7, -21.8 |
+| Second reveal worst frame | 24.07 | 27.15 | +1.5, +1.4, -1.8, +4.8, +6.3 |
+| Third reveal worst frame | 22.68 | 23.77 | +0.6, -3.9, -2.3, -0.1, +2.6 |
+
+Summed rAF time beyond 13.33 ms over the five runs: first reveal 819 → 509 ms, second and
+third reveals together 104 → 106 ms. Menus, drag and scale were within noise. One 20+ ms
+frame each in `menu-wrist` and `menu-screens` (0 in baseline) is unattributed: that UI is
+outside the context and runs the baseline path apart from a `useContext` read.
+
+Debug, three pairs (a first attempt was cut short when the lab's 3600 s window ended; its
+completed pair agreed): first reveal 140.95 → 78.28 ms (-57.6, -70.2, -61.3), rAF maximum
+-22.1, -30.2, -21.0 ms, other phases within noise.
+
+**Explicit tradeoff: startup.** The restyle work now happens during the hidden pre-render at
+launch. A 20-second window from worker start, three pairs: time to ready unchanged
+(~2.61 s), but rAF time beyond 13.33 ms +49, +34, +4 ms and the worst startup frame
++48, +14, +25 ms on top of a pre-existing ~180–200 ms startup stall present in both builds.
+That cost moves from the first window interaction to launch; the launch stall itself is the
+next target.
+
+Visual check: headset readbacks of wrist home, revealed display backplates and Settings
+showed no layout differences (overlay crop RMSE 0.8–1.9%, consistent with the animated world
+and clock). Gates: `deno task check`; unit suite 234 passed; compiled smoke both modes; the
+native route in every release and debug run; `--novr` playtests smoke, showhide, layouts,
+hovertoolbar, window-settings, wrist and keyboard passed. Same limits as above: no heavy
+world, WayVR comparison, camera interaction or soak.
+
+The remaining ~73 ms first reveal is the first-layout cost (UIKit/yoga `calculateLayout`,
+31 ms in the original profile) plus GC; it is still a blocking defect.

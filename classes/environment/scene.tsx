@@ -29,6 +29,7 @@ import { PostMan } from "../../submodules/stageforge/mod.ts";
 import { SpatialAudioProvider } from "./spatialAudio.tsx";
 import { setSetting, useSetting } from "../settings.ts";
 import { getPointerById } from "../../submodules/threewebxrwebgpudeno/submodules/xr/packages/pointer-events/src/pointer.ts";
+import { ConstructWithPropsContext } from "../../submodules/threewebxrwebgpudeno/uikit-r3f.tsx";
 import type { PointerEvent as PenPointerEvent } from "@pmndrs/pointer-events";
 import {
   defaultApply,
@@ -555,6 +556,8 @@ function WindowLayer({
   directOpenVrInputSource?: DirectOpenVrInputSource;
 }) {
   const visible = useWindowLayerVisible();
+  const constructWithProps = React.useRef(!visible);
+  constructWithProps.current = !visible;
   const camera = useThree((r3fState) => r3fState.camera);
   const renderer = useThree((r3fState) => r3fState.gl);
   const position = React.useMemo(() => new THREE.Vector3(), []);
@@ -759,24 +762,27 @@ function WindowLayer({
   // ~0.4 s on every show (~0.2 s on hide). A hidden Activity keeps React's tree and the three
   // objects but runs effect cleanups, so a hidden window has no frame jobs and no OpenVR overlay.
   // Pointer events ignore `visible`, so the wrapper also stops rays reaching hidden windows. The
-  // audio provider stays outside: acquiring it brings up the native audio device.
+  // audio provider stays outside: acquiring it brings up the native audio device. UI built while
+  // hidden takes its props at construction, so the first show does not restyle every window.
   return (
     <SpatialAudioProvider>
       <group {...({ intersectChildren: visible } as Record<string, unknown>)}>
         <React.Activity mode={visible ? "visible" : "hidden"}>
-          <group userData={{ spatialGraphRoot: true, originId: SCENE_ORIGIN_ID, static: true }}>
-            <CommonOverlayChords
-              inputSource={directOpenVrInputSource}
-              graph={graph}
-              handleStores={handleStores}
-              onMouse={onMouse}
-            />
-            {roots.map((node) => (
-              <SpatialRootOrigin key={node.id} originId={node.originId}>
-                {renderRoot(node)}
-              </SpatialRootOrigin>
-            ))}
-          </group>
+          <ConstructWithPropsContext.Provider value={constructWithProps}>
+            <group userData={{ spatialGraphRoot: true, originId: SCENE_ORIGIN_ID, static: true }}>
+              <CommonOverlayChords
+                inputSource={directOpenVrInputSource}
+                graph={graph}
+                handleStores={handleStores}
+                onMouse={onMouse}
+              />
+              {roots.map((node) => (
+                <SpatialRootOrigin key={node.id} originId={node.originId}>
+                  {renderRoot(node)}
+                </SpatialRootOrigin>
+              ))}
+            </group>
+          </ConstructWithPropsContext.Provider>
         </React.Activity>
       </group>
     </SpatialAudioProvider>
