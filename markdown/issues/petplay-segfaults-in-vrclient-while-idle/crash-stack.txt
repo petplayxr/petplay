@@ -1,0 +1,12 @@
+                Stack trace of thread 452041:
+                #0  0x00007fd16e8237e2 n/a (vrclient.so + 0x6237e2)
+                #1  0x00007fd16e573bc1 n/a (vrclient.so + 0x373bc1)
+                #2  0x00007fd16e573de5 n/a (vrclient.so + 0x373de5)
+                #3  0x00007fd16e580c8b n/a (vrclient.so + 0x380c8b)
+                #4  0x00007fd16e5a7b18 n/a (vrclient.so + 0x3a7b18)
+                #5  0x00007fd16e483db9 n/a (vrclient.so + 0x283db9)
+                #6  0x00007fd16e3fda56 n/a (vrclient.so + 0x1fda56)
+                #7  0x00007fd16e3fe150 n/a (vrclient.so + 0x1fe150)
+                #8  0x0000561db965a052 n/a (deno + 0x274e052)
+                #9  0x00007fd16f5f6f70 n/a (n/a + 0x0)
+                ELF object binary architecture: AMD x86-64

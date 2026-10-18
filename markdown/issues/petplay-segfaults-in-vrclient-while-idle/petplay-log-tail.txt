@@ -1,0 +1,16 @@
+[ScreenCapturer] Process stdout: 🎬 FPS: 27.4 | Latency: 39.0ms | Dropped: 0/28 (0.0%)    
+[FPS] [raylib-pacer] 75.0 Hz (vsync)
+[ScreenCapturer] Process stdout: 🎬 FPS: 27.2 | Latency: 35.0ms | Dropped: 0/28 (0.0%)    
+[FPS] [raylib-pacer] 74.9 Hz (vsync)
+[ScreenCapturer] Process stdout: 🎬 FPS: 26.8 | Latency: 36.0ms | Dropped: 0/27 (0.0%)    
+[FPS] [raylib-pacer] 75.0 Hz (vsync)
+[ScreenCapturer] Process stdout: 🎬 FPS: 27.0 | Latency: 39.0ms | Dropped: 0/27 (0.0%)    
+[ScreenCapturer] Process stdout: 🎬 FPS: 26.4 | Latency: 36.0ms | Dropped: 0/27 (0.0%)    
+[ScreenCapturer] Process stdout: 🎬 FPS: 26.0 | Latency: 38.0ms | Dropped: 0/27 (0.0%)    
+[ScreenCapturer] Process stdout: 🎬 FPS: 25.9 | Latency: 37.0ms | Dropped: 0/26 (0.0%)    
+[ScreenCapturer] Process stdout: 🎬 FPS: 26.9 | Latency: 36.0ms | Dropped: 0/27 (0.0%)    
+[ScreenCapturer] Process stdout: 🎬 FPS: 27.6 | Latency: 34.0ms | Dropped: 0/28 (0.0%)    
+[ScreenCapturer] Process stdout: 🎬 FPS: 27.1 | Latency: 38.0ms | Dropped: 0/28 (0.0%)    
+[ScreenCapturer] Process stdout: 🎬 FPS: 27.4 | Latency: 35.0ms | Dropped: 0/28 (0.0%)    
+[ScreenCapturer] Process stdout: 🎬 FPS: 27.4 | Latency: 36.0ms | Dropped: 0/28 (0.0%)    
+[WebSocketWorkerHost] WebSocket transport failed
