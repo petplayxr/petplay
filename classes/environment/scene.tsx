@@ -30,6 +30,12 @@ import { SpatialAudioProvider } from "./spatialAudio.tsx";
 import { setSetting, useSetting } from "../settings.ts";
 import { getPointerById } from "../../submodules/threewebxrwebgpudeno/submodules/xr/packages/pointer-events/src/pointer.ts";
 import { ConstructWithPropsContext } from "../../submodules/threewebxrwebgpudeno/uikit-r3f.tsx";
+import {
+  loadAllMsdfFonts,
+  MSDF_FONTS,
+  type MsdfFontId,
+  peekMsdfFontAssets,
+} from "../../submodules/threewebxrwebgpudeno/msdf-text.tsx";
 import type { PointerEvent as PenPointerEvent } from "@pmndrs/pointer-events";
 import {
   defaultApply,
@@ -558,6 +564,21 @@ function WindowLayer({
   const visible = useWindowLayerVisible();
   const constructWithProps = React.useRef(!visible);
   constructWithProps.current = !visible;
+  // Text measures and builds during render only once its font has loaded, so wait for the fonts
+  // before building the (normally hidden) windows; otherwise the first show measures every label.
+  const [fontsLoaded, setFontsLoaded] = React.useState(() =>
+    Object.keys(MSDF_FONTS).every((id) => peekMsdfFontAssets(id as MsdfFontId) != null)
+  );
+  React.useEffect(() => {
+    if (fontsLoaded) return;
+    let cancelled = false;
+    void loadAllMsdfFonts().then(() => {
+      if (!cancelled) setFontsLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fontsLoaded]);
   const camera = useThree((r3fState) => r3fState.camera);
   const renderer = useThree((r3fState) => r3fState.gl);
   const position = React.useMemo(() => new THREE.Vector3(), []);
@@ -776,7 +797,7 @@ function WindowLayer({
                 handleStores={handleStores}
                 onMouse={onMouse}
               />
-              {roots.map((node) => (
+              {fontsLoaded && roots.map((node) => (
                 <SpatialRootOrigin key={node.id} originId={node.originId}>
                   {renderRoot(node)}
                 </SpatialRootOrigin>

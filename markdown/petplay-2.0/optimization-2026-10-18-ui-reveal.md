@@ -1,7 +1,8 @@
 # First display reveal: evidence and property-order experiment
 
 Status: property-order cache rejected (inconclusive); static UI texture preload and
-construct-with-props accepted. First reveal remains a ~73 ms release hitch: still an open defect.
+construct-with-props and render-time text measurement accepted; hidden layout prewarm rejected.
+First reveal remains a multi-frame hitch (~55 ms of release frame time over budget): still open.
 
 ## Reproduction and attribution
 
@@ -192,3 +193,45 @@ world, WayVR comparison, camera interaction or soak.
 
 The remaining ~73 ms first reveal is the first-layout cost (UIKit/yoga `calculateLayout`,
 31 ms in the original profile) plus GC; it is still a blocking defect.
+
+## Noise floor: A/A run
+
+Four pairs of the identical v3 executable in both slots (`_scratch/perf/aa-noise/`):
+first-reveal excess rAF time 484 vs 432 ms, `menu-wrist` 41 vs 29 ms with 3 vs 0 frames over
+20 ms, `menu-layouts` 1 vs 0. Single-frame differences of one or two events per five runs in
+the menu phases are inside this floor; the per-pair first-reveal differences claimed here are not.
+Excess = summed rAF interval beyond 13.33 ms within a route phase (`_scratch/perf/excess.py`).
+
+## Accepted: measure hidden window text during render
+
+After construct-with-props, a cold-reveal profile showed `Text` and `MsdfText` (threewebxr
+`webgpu-uikit.tsx`, `msdf-text.tsx`) loading fonts and measuring in effects. Inside the hidden
+Activity that never ran, so hidden windows were laid out with an estimated label size; the reveal
+then loaded, measured, re-rendered, built every text geometry and laid out again. Now loaded fonts
+are kept in a synchronous cache, `Text`/`MsdfText` built under `ConstructWithPropsContext` measure
+and build during render, and `WindowLayer` builds its windows once the fonts have loaded
+(milliseconds after launch). Visible mounts keep the effect path: an unscoped first version
+moved wrist-page text work into the mount frame (`menu-layouts` 0 → 5 frames over 20 ms).
+
+Release, five pairs against v3 (`_scratch/perf/msdf-sync/scoped/`): first-reveal excess
+503 → 295 ms, every pair better (100→53, 95→63, 101→55, 106→57, 101→67); longest rAF interval
+-20.7, -7.9, -17.8, -20.9, -13.0 ms. Worst single first-reveal frame was unchanged within noise:
+the gain is fewer and shorter follow-up frames. Menus, drag and scale within the A/A floor.
+Debug, three pairs (`final/paired-debug`): first-reveal excess 598 → 400 ms (196→120, 194→151,
+207→130), rAF maximum -45.7, -33.5, -36.5 ms. Executables: release `94664b47…`, debug
+`604a7d61…`. Unit suite 234 passed; `--novr` smoke, showhide, layouts, hovertoolbar,
+window-settings, wrist, keyboard (including legends-fit) and toasts passed.
+
+Two debug attempts are retained as failed runs: one ended when the Steam client shut down at
+22:19:23 (`Steam SHUTDOWN.` in vrserver.txt, followed by VRChat exit and the known compositor
+SIGSEGV; no PetPlay event preceded it), and one where the v3 *baseline* reported `No wrist menu`
+3 s after scene-ready. The latter is unexplained and unresolved.
+
+## Rejected: lay out hidden UIKit roots ahead of time
+
+Calling `update(0)` on each hidden UIKit root, one per frame while hidden, did lay out the
+windows (largest root 30 ms), but on top of render-time text it gave no gain: per-pair
+first-reveal excess 88→51, 59→66, 62→58, 62→57, 60→66. One of its five runs froze for
+**2,966 ms** about 0.36 s after `hide-display-3`, when that hook would rescan the just-hidden
+windows and lay out roots it had not seen. No such stall occurred in any other build today.
+Root cause not established; the code was removed. Evidence: `_scratch/perf/layout-prewarm/`.
