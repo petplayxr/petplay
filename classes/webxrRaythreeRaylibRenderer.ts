@@ -512,6 +512,12 @@ export class WebXRRaythreeRaylibRenderer {
         color: raylib.WHITE,
       },
     );
+    // Decode and upload the static registry now rather than on first draw. The
+    // display backplate logo is otherwise first drawn when a display is first
+    // revealed, putting a 2084² PNG decode and upload inside that interaction.
+    for (const textureId of Object.keys(UI_TEXTURE_PATHS)) {
+      this.ensureUiTexture(textureId);
+    }
   }
 
   private ensureUiTexture(textureId: string): raylibBindings.Texture2D | null {
