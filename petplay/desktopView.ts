@@ -312,7 +312,12 @@ async function runDesktopViewWindow(): Promise<void> {
   try {
     let flags = 0;
     if (state.hidden) flags |= raylib.ConfigFlags.FLAG_WINDOW_HIDDEN;
-    if (state.camera === "vrc") flags |= raylib.ConfigFlags.FLAG_WINDOW_TRANSPARENT;
+    if (state.camera === "vrc") {
+      // A capture surface, not a window to use: no border, never focused, and clicks pass through
+      // to whatever is below, so a fully transparent layer cannot swallow desktop input.
+      flags |= raylib.ConfigFlags.FLAG_WINDOW_TRANSPARENT | raylib.ConfigFlags.FLAG_WINDOW_UNDECORATED |
+        raylib.ConfigFlags.FLAG_WINDOW_MOUSE_PASSTHROUGH | raylib.ConfigFlags.FLAG_WINDOW_UNFOCUSED;
+    }
     if (flags !== 0) raylib.SetConfigFlags(flags);
     raylib.H.InitWindow(width, height, state.title);
     windowUp = true;
