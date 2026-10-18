@@ -10,6 +10,7 @@ import { OverlayRenderMode } from "./webxr.ts";
 import type { api as openVrApi } from "./OpenVR.ts";
 import { startWebXrAutoReload } from "../classes/webxrAutoReload.ts";
 import { requestProcessExit } from "../classes/processExitRequest.ts";
+import { getSetting, loadSettings } from "../classes/settings.ts";
 import { OPENVR_REATTACH_ARG } from "../classes/steamVrProcess.ts";
 
 const state = actorState({
@@ -602,11 +603,14 @@ type VrcCameraViewPayload = {
  * so OBS can stack the two captures 1:1.
  */
 async function startVrcCameraView(options: VrcCameraViewPayload | null) {
+  // The webxr actor owns edits; reload persisted settings for CLI starts too.
+  loadSettings();
+  const [width, height] = getSetting("vrcCameraResolution").split("x").map(Number);
   const payload = {
     webxrTarget: clientActors.webxr,
     camera: "vrc" as const,
-    width: options?.width ?? getNumberArg("--vrc-camera-view-width", 1920),
-    height: options?.height ?? getNumberArg("--vrc-camera-view-height", 1080),
+    width: options?.width ?? getNumberArg("--vrc-camera-view-width", width),
+    height: options?.height ?? getNumberArg("--vrc-camera-view-height", height),
     fovYDeg: options?.fovYDeg ?? getNumberArg("--vrc-camera-fov", 45),
     fps: getNumberArg("--vrc-camera-view-fps", 60),
     diagnostics: options?.diagnostics ?? false,
@@ -651,14 +655,24 @@ async function stopVrcCameraView() {
 async function getVrcCameraViewStatus() {
   const id = clientActors.vrcCameraView;
   if (id == null) {
+    publishVrcCameraLayer(false);
     return { running: false, actorId: null, details: null };
   }
   try {
-    const health = await callActor<{ details?: unknown }>(id, "HEALTH", OPENVR_HEALTH_TIMEOUT_MS);
+    const health = await callActor<{ details?: { width?: number; height?: number } }>(id, "HEALTH", OPENVR_HEALTH_TIMEOUT_MS);
+    publishVrcCameraLayer(true, health?.details);
     return { running: true, actorId: id, details: health?.details ?? null };
   } catch {
+    publishVrcCameraLayer(false);
     return { running: false, actorId: id, details: null };
   }
+}
+
+function publishVrcCameraLayer(running: boolean, size?: { width?: number; height?: number }): void {
+  if (clientActors.webxr) PostMan.PostMessage({
+    target: clientActors.webxr, type: "VRCCAMERAVIEWSTATUS",
+    payload: { running, width: size?.width ?? null, height: size?.height ?? null },
+  });
 }
 
 async function getDecoupledDesktopViewStatus() {
@@ -725,6 +739,7 @@ function startWebXr(
       width: WEBXR_RENDER_WIDTH,
       height: WEBXR_RENDER_HEIGHT,
       title: "PetPlay WebXR",
+      mainActor: state.id,
       debugWindow: false,
       sessionMode: "immersive-ar",
       alpha: true,
@@ -1107,6 +1122,7 @@ async function createNoOpenVrScene() {
       width: WEBXR_RENDER_WIDTH,
       height: WEBXR_RENDER_HEIGHT,
       title: "PetPlay WebXR",
+      mainActor: state.id,
       debugWindow: false,
       sessionMode: "immersive-ar",
       alpha: true,

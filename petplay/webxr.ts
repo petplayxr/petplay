@@ -38,6 +38,7 @@ import { IntervalMetric, type IntervalMetricSample } from "../classes/intervalMe
 import type { RaylibOverlayFrameAckPayload } from "../classes/raylibOverlayAckPayload.ts";
 import {
   getSceneBackgroundColor,
+  withoutVrcCameraHelpers,
   type WebXRRaythreeRenderPayload,
   WebXRRaythreeSceneBridge,
 } from "../classes/webxrRaythreeScene.ts";
@@ -66,6 +67,8 @@ import {
   type VrcCameraDebugPose,
 } from "../classes/vrcCameraDebugState.ts";
 import { type TrackedPose, VrcCameraTracker } from "../classes/vrcCameraCalibration.ts";
+import { createVrcCameraWorkerSolver } from "../classes/vrcCameraSolver.ts";
+import { vrcCameraStore, type VrcCameraLayerStatus } from "../classes/environment/vrcCameraStore.ts";
 import { captureDenoCpuProfile } from "../classes/denoCpuProfile.ts";
 import { getSettings, isSettingKey, loadSettings, setSetting } from "../classes/settings.ts";
 import { pushToast, type ToastInput } from "../classes/environment/toastStore.ts";
@@ -198,6 +201,7 @@ type StartWebXRPayload = {
   vrSystemPointer?: number | bigint | null;
   controllerActor?: string | null;
   wristMenuActor?: string | null;
+  mainActor?: string | null;
   displayOverlayHostActor?: string | null;
   sessionMode?: SupportedSessionMode;
   alpha?: boolean;
@@ -243,6 +247,7 @@ type OverlayConfig = {
 
 const state = actorState({
   name: "webxr",
+  mainActor: null as string | null,
   host: null as WebXRHost | null,
   startup: null as Promise<void> | null,
   webGpuOverlay: null as OpenVrOverlayTexture | null,
@@ -469,6 +474,10 @@ new PostMan(
     },
     STARTWEBXR: (payload: StartWebXRPayload | null) => {
       state.lastStartPayload = payload ?? null;
+      state.mainActor = payload?.mainActor ?? state.mainActor;
+      if (state.mainActor) PostMan.PostMessage({
+        target: state.mainActor, type: "VRCCAMERAVIEWSTATUS", payload: null,
+      });
       state.decoupledRenderer = payload?.decoupledRenderer ?? Deno.args.some((arg) => arg === "--webxr-decoupled-renderer" || arg === "--webxr-decoupled-renderer=1");
       state.desktopViewControlAllowed = payload?.desktopViewControlEnabled ??
         false;
@@ -742,12 +751,12 @@ new PostMan(
         lookAtTargetEstimate?: Vec3Tuple | null;
       },
     ) => {
+      if (typeof payload.zoom === "number") {
+        vrcCameraTracker.setFovYDeg(payload.zoom);
+      }
       if (payload.cameraPose) {
         setVrcCameraDebugPose(payload.cameraPose);
         trackVrcCameraPose(payload.cameraPose);
-      }
-      if (typeof payload.zoom === "number") {
-        vrcCameraTracker.setFovYDeg(payload.zoom);
       }
       if ("originEstimate" in payload) {
         setVrcCameraOriginEstimate(payload.originEstimate ?? null);
@@ -768,6 +777,7 @@ new PostMan(
         content: `Hold the camera and slowly turn it for ${Math.round(durationMs / 1000)} s`,
         timeoutMs: durationMs,
       });
+      publishVrcCameraStatus();
       return vrcCameraTracker.status();
     },
     /** Ends a running capture now and solves with the samples so far. */
@@ -775,11 +785,21 @@ new PostMan(
       if (vrcCameraTracker.status().calibrating) {
         reportVrcCameraCalibration(vrcCameraTracker.finishCalibration());
       }
+      publishVrcCameraStatus();
       return vrcCameraTracker.status();
     },
     CLEARVRCCAMERACALIBRATION: (_payload: void) => {
       vrcCameraTracker.clearCalibration();
+      publishVrcCameraStatus();
       return vrcCameraTracker.status();
+    },
+    SETVRCCAMERALIVECALIBRATION: (payload: { enabled: boolean }) => {
+      setVrcCameraLive(payload.enabled);
+      return vrcCameraTracker.status();
+    },
+    VRCCAMERAVIEWSTATUS: (payload: VrcCameraLayerStatus) => {
+      vrcCameraLayer = payload;
+      publishVrcCameraStatus();
     },
     GETVRCCAMERACALIBRATION: (_payload: void) => vrcCameraTracker.status(),
     SETDESKTOPVIEWOFFSET: (
@@ -1354,7 +1374,41 @@ const VRC_CAMERA_CALIBRATION_MS = 10_000;
 /** A fit worse than this probably paired the camera with the wrong motion. */
 const VRC_CAMERA_CALIBRATION_WARN_RMS_METERS = 0.03;
 
-const vrcCameraTracker = new VrcCameraTracker();
+const vrcCameraSolver = createVrcCameraWorkerSolver();
+const vrcCameraTracker = new VrcCameraTracker(vrcCameraSolver, () => publishVrcCameraStatus());
+let vrcCameraLayer: VrcCameraLayerStatus = { running: false, width: null, height: null };
+let vrcCameraPublishedAt = 0;
+function publishVrcCameraStatus(): void {
+  vrcCameraPublishedAt = Date.now();
+  vrcCameraStore.publish({ tracker: vrcCameraTracker.status(), layer: vrcCameraLayer });
+}
+function setVrcCameraLive(on: boolean): void {
+  if (on) vrcCameraTracker.beginLiveCalibration();
+  else vrcCameraTracker.endLiveCalibration();
+  publishVrcCameraStatus();
+}
+vrcCameraStore.setControls({
+  setLive: setVrcCameraLive,
+  clear() {
+    vrcCameraTracker.clearCalibration();
+    publishVrcCameraStatus();
+  },
+  async refreshLayer() {
+    if (!state.mainActor) throw new Error("Camera layer host unavailable");
+    await PostMan.PostMessage({ target: state.mainActor, type: "VRCCAMERAVIEWSTATUS", payload: null }, true);
+  },
+  async setLayer(running) {
+    if (!state.mainActor) throw new Error("Camera layer host unavailable");
+    await PostMan.PostMessage({
+      target: state.mainActor, type: running ? "STARTVRCCAMERAVIEW" : "STOPVRCCAMERAVIEW", payload: null,
+    }, true);
+  },
+});
+vrcCameraStore.setPredictor(() =>
+  vrcCameraTracker.status().live || vrcCameraLayer.running
+    ? vrcCameraTracker.currentViewPose() : null
+);
+publishVrcCameraStatus();
 
 function trackVrcCameraPose(pose: VrcCameraDebugPose): void {
   const inputs = state.host?.getDirectOpenVrInputs();
@@ -1363,6 +1417,7 @@ function trackVrcCameraPose(pose: VrcCameraDebugPose): void {
     right: trackedPose(inputs?.controllers.right ?? null),
   });
   if (result) reportVrcCameraCalibration(result.calibration);
+  if (result || Date.now() - vrcCameraPublishedAt >= 250) publishVrcCameraStatus();
 }
 
 function trackedPose(
@@ -1483,8 +1538,11 @@ function publishRaythreeFrameToViews(
     view.lastFingerprint = fingerprint ?? null;
     view.lastSentAt = performance.now();
     view.primed = true;
-    const extraction = { ...payload.leftEye, assets: prepared.assets };
     const vrcView = view.camera === "vrc";
+    const extraction = {
+      ...(vrcView ? withoutVrcCameraHelpers(payload.leftEye) : payload.leftEye),
+      assets: prepared.assets,
+    };
     const outgoing: WebXRRaythreeRenderPayload = {
       ...payload,
       background: view.label === "projection-renderer" || vrcView ? [0, 0, 0, 0] : background,
@@ -1578,6 +1636,9 @@ function startBatteryPoll(): void {
 }
 
 async function stopWebXR(): Promise<true> {
+  vrcCameraTracker.clearCalibration();
+  vrcCameraSolver.dispose();
+  publishVrcCameraStatus();
   await stopRenderOwner();
   if (batteryPoll != null) {
     clearInterval(batteryPoll);

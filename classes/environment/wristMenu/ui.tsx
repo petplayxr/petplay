@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { CameraSettingsView } from "./cameraView.tsx";
+import { useVrcCameraSnapshot } from "../vrcCameraStore.ts";
 import type { AllowedPointerEventsType } from "@pmndrs/pointer-events";
 import { Button, Container } from "../../../submodules/threewebxrwebgpudeno/webgpu-uikit.tsx";
 import { Text } from "../ui/text.tsx";
@@ -335,11 +337,12 @@ function WristSettingsView({ onBack }: { onBack: () => void }) {
 
 /** Settings reachable from the wrist; every row here is persisted by `classes/settings.ts`. */
 function SettingsView(
-  { onBack, onOpenWrist, onOpenMonitors, onOpenLayouts }: {
+  { onBack, onOpenWrist, onOpenMonitors, onOpenLayouts, onOpenCamera }: {
     onBack: () => void;
     onOpenWrist: () => void;
     onOpenMonitors: () => void;
     onOpenLayouts: () => void;
+    onOpenCamera: () => void;
   },
 ) {
   return (
@@ -364,9 +367,10 @@ function SettingsView(
         backgroundColor={COLOR.tile}
         backgroundOpacity={1}
       >
-        <Pill slots={2} units={2} fontSize={13} onClick={onOpenWrist}>WRIST</Pill>
-        <Pill slots={2} units={2} fontSize={13} onClick={onOpenMonitors}>MONITORS</Pill>
-        <Pill slots={2} units={2} fontSize={13} onClick={onOpenLayouts}>LAYOUTS</Pill>
+        <Pill slots={1} units={2} fontSize={11} onClick={onOpenWrist}>WRIST</Pill>
+        <Pill slots={1} units={2} fontSize={11} onClick={onOpenMonitors}>SCREENS</Pill>
+        <Pill slots={1} units={2} fontSize={11} onClick={onOpenLayouts}>LAYOUTS</Pill>
+        <Pill slots={1} units={2} fontSize={11} onClick={onOpenCamera}>CAMERA</Pill>
       </Container>
     </Container>
   );
@@ -391,11 +395,12 @@ export function WristMenuUi(
   }: WristMenuUiProps,
 ) {
   const pe: AllowedPointerEventsType = pointerEventsType ?? "all";
-  const [view, setView] = useState<"main" | "settings" | "wrist" | "monitors" | "layouts">(
+  const [view, setView] = useState<"main" | "settings" | "wrist" | "monitors" | "layouts" | "camera">(
     "main",
   );
   const batteries = useBatteryReadings();
   const nowPlaying = useNowPlaying();
+  const camera = useVrcCameraSnapshot();
   const opacity = useSetting("wristMenuOpacity");
 
   if (view === "settings") {
@@ -406,9 +411,16 @@ export function WristMenuUi(
           onOpenWrist={() => setView("wrist")}
           onOpenMonitors={() => setView("monitors")}
           onOpenLayouts={() => setView("layouts")}
+          onOpenCamera={() => setView("camera")}
         />
       </Shell>
     );
+  }
+
+  if (view === "camera") {
+    return <Shell pointerEventsType={pe} opacity={opacity}>
+      <CameraSettingsView onBack={() => setView("settings")} />
+    </Shell>;
   }
 
   if (view === "wrist") {
@@ -449,7 +461,7 @@ export function WristMenuUi(
     <WristOverlay
       clock={clock}
       dateLabel={dateLabel}
-      status={statusLabel}
+      status={camera?.layer.running ? `Camera layer on · ${camera.tracker.calibration || camera.tracker.liveFit ? "synced" : "not synced"}` : statusLabel}
       displayCount={workspaceLayout.displays.length}
       batteries={batteries}
       nowPlaying={nowPlaying}

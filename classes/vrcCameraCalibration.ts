@@ -45,6 +45,11 @@ export type VrcCameraCalibration = {
   maxErrorMeters: number;
   samples: number;
   solvedAt: number;
+  /**
+   * The other hand's fit error, when it has a fit at all. Close to `rmsErrorMeters` means the
+   * hands moved together and the choice of `hand` is weak.
+   */
+  otherHandRmsErrorMeters: number | null;
 };
 
 /** Fewer samples than this cannot separate grip offset, translation and scale reliably. */
@@ -107,21 +112,28 @@ export class VrcCameraCalibrator {
     world: TrackedPose,
     left: TrackedPose | null,
     right: TrackedPose | null,
+    capture: { accept?: boolean; hand?: "left" | "right" } = {},
   ): boolean {
     const previous = this.previous;
     this.previous = { at, left: clonePose(left), right: clonePose(right) };
-    if (previous == null || this.samples.length >= this.options.maxSamples) return false;
+    if (previous == null || capture.accept === false) return false;
     const dt = (at - previous.at) / 1000;
     if (dt <= 0 || dt > 0.25) return false;
-    if (!isStill(previous.left, left, dt, this.options)) return false;
-    if (!isStill(previous.right, right, dt, this.options)) return false;
+    if (capture.hand !== "right" && !isStill(previous.left, left, dt, this.options)) return false;
+    if (capture.hand !== "left" && !isStill(previous.right, right, dt, this.options)) return false;
     const last = this.samples.at(-1);
     if (last) {
       const moved = distance(last.world, world.position);
-      const turned = Math.max(turnedDeg(last.left, left), turnedDeg(last.right, right));
+      const turned = capture.hand
+        ? turnedDeg(last[capture.hand], capture.hand === "left" ? left : right)
+        : Math.max(turnedDeg(last.left, left), turnedDeg(last.right, right));
       if (moved < this.options.minSampleDistanceMeters && turned < this.options.minSampleAngleDeg) {
         return false;
       }
+    }
+    // Full: make room by dropping the most redundant sample, so coverage keeps growing.
+    if (this.samples.length >= this.options.maxSamples) {
+      this.samples.splice(mostRedundantSample(this.samples), 1);
     }
     this.samples.push({
       world: [...world.position],
@@ -136,12 +148,32 @@ export class VrcCameraCalibrator {
   }
 }
 
+/** Index of the sample closest to any other (camera position plus 1 cm per 4° of controller turn). */
+function mostRedundantSample(samples: readonly VrcCameraCalibrationSample[]): number {
+  let worst = 0;
+  let worstDistance = Infinity;
+  for (let i = 0; i < samples.length; i++) {
+    for (let j = i + 1; j < samples.length; j++) {
+      const turned = Math.max(
+        turnedDeg(samples[i].left, samples[j].left),
+        turnedDeg(samples[i].right, samples[j].right),
+      );
+      const d = distance(samples[i].world, samples[j].world) + turned * 0.0025;
+      if (d < worstDistance) {
+        worstDistance = d;
+        worst = i;
+      }
+    }
+  }
+  return worst;
+}
+
 /** Best fit over both hands; null when neither hand has a well-conditioned fit. */
 export function solveVrcCameraCalibration(
   samples: readonly VrcCameraCalibrationSample[],
   now = Date.now(),
 ): VrcCameraCalibration | null {
-  let best: VrcCameraCalibration | null = null;
+  const fits: VrcCameraCalibration[] = [];
   for (const hand of ["left", "right"] as const) {
     const handSamples = samples.flatMap((sample) => {
       const pose = sample[hand];
@@ -151,15 +183,25 @@ export function solveVrcCameraCalibration(
     const solved = solveForHand(handSamples);
     if (solved == null) continue;
     const { errors, ...fit } = solved;
-    if (best == null || fit.rmsErrorMeters < best.rmsErrorMeters) {
-      best = { ...fit, hand, samples: errors.length, solvedAt: now };
-    }
+    fits.push({
+      ...fit,
+      hand,
+      samples: errors.length,
+      solvedAt: now,
+      otherHandRmsErrorMeters: null,
+    });
   }
-  return best;
+  // The hand that holds the camera is the one whose movement explains it best.
+  fits.sort((a, b) => a.rmsErrorMeters - b.rmsErrorMeters);
+  if (fits.length === 0) return null;
+  return { ...fits[0], otherHandRmsErrorMeters: fits[1]?.rmsErrorMeters ?? null };
 }
 
 type HandSample = { world: Vec3; controller: TrackedPose };
-type HandFit = Omit<VrcCameraCalibration, "hand" | "samples" | "solvedAt">;
+type HandFit = Omit<
+  VrcCameraCalibration,
+  "hand" | "samples" | "solvedAt" | "otherHandRmsErrorMeters"
+>;
 
 /**
  * A camera let go or grabbed mid-capture leaves samples no rigid grip explains, and a
@@ -424,7 +466,27 @@ export type VrcCameraTrackerStatus = {
   lastError: string | null;
   hasWorldPose: boolean;
   fovYDeg: number | null;
+  /** Open-ended calibration (the wrist switch) is on; `liveFit` is its latest solve. */
+  live: boolean;
+  liveFit: VrcCameraCalibration | null;
+  /** Milliseconds since VRChat last reported the camera, and since that pose last changed. */
+  poseAgeMs: number | null;
+  poseMovedAgeMs: number | null;
+  /** A trustworthy fit is retained while the hand is away from the camera. */
+  samplingPaused: boolean;
+  rejectedSamples: number;
+  acceptedSamples: number;
 };
+
+/** Solves a sample set; the webxr actor passes one that runs in a worker (solves take ~100 ms). */
+export type VrcCameraSolver = (
+  samples: VrcCameraCalibrationSample[],
+) => Promise<VrcCameraCalibration | null>;
+
+const LIVE_MAX_SAMPLES = 300;
+const LIVE_SOLVE_INTERVAL_MS = 500;
+const LIVE_TRUSTED_SAMPLES = 24;
+const LIVE_TRUSTED_RMS_METERS = 0.02;
 
 /**
  * Scene-side state for the VRC camera view: the latest world pose from OSC, the active
@@ -437,18 +499,102 @@ export class VrcCameraTracker {
   private calibration: VrcCameraCalibration | null = null;
   private worldPose: TrackedPose | null = null;
   private worldPoseAt = 0;
+  private worldPoseMovedAt = 0;
   private fovYDeg: number | null = null;
   private lastError: string | null = null;
+  private live = false;
+  private liveFit: VrcCameraCalibration | null = null;
+  private referenceFit: VrcCameraCalibration | null = null;
+  private referenceWorlds: Vec3[] = [];
+  private samplingPaused = false;
+  private rejectedSamples = 0;
+  private acceptedSamples = 0;
+  private captureHand: "left" | "right" | null = null;
+  private gripProbe: {
+    at: number;
+    world: Vec3;
+    left: TrackedPose | null;
+    right: TrackedPose | null;
+  }[] = [];
+  /** Bumped by every begin/end, so a solve finishing after the switch changed is ignored. */
+  private liveGeneration = 0;
+  private solving = false;
+  private sampleRevision = 0;
+  private solvedRevision = -1;
+  private lastSolveAt = 0;
+
+  constructor(
+    private readonly solver: VrcCameraSolver = (samples) =>
+      Promise.resolve(solveVrcCameraCalibration(samples)),
+    /** Called with each new live fit (for the wrist page and the ball). */
+    private readonly onLiveFit: (fit: VrcCameraCalibration | null) => void = () => {},
+  ) {}
 
   startCalibration(durationMs: number, now = Date.now()): void {
+    this.endLive();
     this.calibrator = new VrcCameraCalibrator();
     this.calibrationEndsAt = now + durationMs;
     this.lastError = null;
   }
 
+  /**
+   * Open-ended calibration: collect samples and re-solve as they grow, until
+   * `endLiveCalibration`. Meant to run while the user watches the accuracy and the predicted
+   * camera position, so nothing has to guess when the camera was let go.
+   */
+  beginLiveCalibration(): void {
+    this.calibrator = new VrcCameraCalibrator({
+      maxSamples: LIVE_MAX_SAMPLES,
+      maxSpeedMetersPerSecond: 0.2,
+      maxAngularDegPerSecond: 45,
+      minSampleDistanceMeters: 0.02,
+      minSampleAngleDeg: 4,
+    });
+    this.calibrationEndsAt = Infinity;
+    this.live = true;
+    this.liveFit = null;
+    this.referenceFit = null;
+    this.referenceWorlds = [];
+    this.samplingPaused = false;
+    this.rejectedSamples = 0;
+    this.acceptedSamples = 0;
+    this.captureHand = null;
+    this.gripProbe = [];
+    this.liveGeneration++;
+    this.sampleRevision = 0;
+    this.solvedRevision = -1;
+    this.lastSolveAt = -Infinity;
+    this.lastError = null;
+  }
+
+  /** Keeps the latest live fit (if any) as the calibration and stops sampling. */
+  endLiveCalibration(): VrcCameraCalibration | null {
+    if (!this.live) return this.calibration;
+    const fit = this.liveFit;
+    this.endLive();
+    if (fit != null) this.calibration = fit;
+    else this.lastError = "no calibration yet: move and turn the held camera while calibrating";
+    return this.calibration;
+  }
+
+  private endLive(): void {
+    if (!this.live) return;
+    this.live = false;
+    this.liveFit = null;
+    this.referenceFit = null;
+    this.referenceWorlds = [];
+    this.samplingPaused = false;
+    this.captureHand = null;
+    this.gripProbe = [];
+    this.calibrator = null;
+    this.liveGeneration++;
+  }
+
   clearCalibration(): void {
+    this.endLive();
     this.calibrator = null;
     this.calibration = null;
+    this.lastError = null;
   }
 
   setFovYDeg(value: number): void {
@@ -464,17 +610,195 @@ export class VrcCameraTracker {
     controllers: { left: TrackedPose | null; right: TrackedPose | null },
     now = Date.now(),
   ): { finished: true; calibration: VrcCameraCalibration | null } | null {
-    this.worldPose = unityPoseToRightHanded(pose);
+    const next = unityPoseToRightHanded(pose);
+    if (this.worldPose == null || distance(this.worldPose.position, next.position) > 0.001) {
+      this.worldPoseMovedAt = now;
+    }
+    this.worldPose = next;
     this.worldPoseAt = now;
-    const calibrator = this.calibrator;
+    let calibrator = this.calibrator;
     if (calibrator == null) return null;
-    calibrator.add(now, this.worldPose, controllers.left, controllers.right);
+    // Once a fit is trustworthy, an unrelated hand movement must not poison its samples.
+    if (this.live && this.liveFit) {
+      this.detectNewGrip(controllers, now);
+      calibrator = this.calibrator!;
+    }
+    const reference = this.live
+      ? this.referenceFit ?? (this.captureHand ? this.liveFit : null)
+      : null;
+    const held = reference ? controllers[reference.hand] : null;
+    const tolerance = reference ? Math.max(0.04, reference.rmsErrorMeters * 4) : Infinity;
+    this.samplingPaused = reference != null && (held == null || sampleError(reference, {
+          world: this.worldPose.position,
+          controller: held,
+        }) > tolerance);
+    if (this.samplingPaused) this.rejectedSamples++;
+    if (
+      calibrator.add(now, this.worldPose, controllers.left, controllers.right, {
+        accept: !this.samplingPaused,
+        hand: reference?.hand,
+      })
+    ) {
+      this.sampleRevision++;
+      this.acceptedSamples++;
+    }
+    if (this.live) {
+      this.maybeSolveLive(now);
+      return null;
+    }
     if (now < this.calibrationEndsAt) return null;
     return { finished: true, calibration: this.finishCalibration(now) };
   }
 
+  /** One solve in flight at a time, at most every LIVE_SOLVE_INTERVAL_MS, only on new samples. */
+  private maybeSolveLive(now: number): void {
+    const calibrator = this.calibrator;
+    if (this.solving || calibrator == null) return;
+    if (calibrator.samples.length < LIVE_TRUSTED_SAMPLES) return;
+    if (this.sampleRevision === this.solvedRevision) return;
+    if (now - this.lastSolveAt < LIVE_SOLVE_INTERVAL_MS) return;
+    const generation = this.liveGeneration;
+    const samples = calibrator.samples.map((sample) =>
+      this.captureHand
+        ? { ...sample, [this.captureHand === "left" ? "right" : "left"]: null }
+        : sample
+    );
+    this.solving = true;
+    this.lastSolveAt = now;
+    this.solvedRevision = this.sampleRevision;
+    this.solver(samples).then((fit) => {
+      if (generation !== this.liveGeneration) return;
+      this.lastError = null;
+      if (fit != null && this.acceptLiveFit(fit)) {
+        this.liveFit = fit;
+        if (
+          this.referenceFit == null && fit.samples >= LIVE_TRUSTED_SAMPLES &&
+          fit.rmsErrorMeters < LIVE_TRUSTED_RMS_METERS
+        ) {
+          this.referenceFit = fit;
+          this.referenceWorlds = samples.filter((sample) => {
+            const controller = sample[fit.hand];
+            return controller != null &&
+              sampleError(fit, { world: sample.world, controller }) < 0.03;
+          }).slice(-32).map((sample) => sample.world);
+        }
+      }
+      this.onLiveFit(this.liveFit);
+    }, (error) => {
+      if (generation !== this.liveGeneration) return;
+      this.lastError = `live solve failed: ${error instanceof Error ? error.message : error}`;
+    }).finally(() => {
+      this.solving = false;
+    });
+  }
+
+  /**
+   * A re-grab can change the grip offset or the holding hand. Look for a near-constant
+   * camera offset in either controller's frame while the CAMERA moves, rather than mistaking
+   * a hand waved next to a stationary camera for a new grab. Each grab has its own samples.
+   * The world mapping and best achieved error survive every segment change.
+   */
+  private detectNewGrip(
+    controllers: { left: TrackedPose | null; right: TrackedPose | null },
+    now: number,
+  ): void {
+    const fit = this.liveFit!;
+    const world = this.worldPose!.position;
+    if (this.gripProbe.length && now - this.gripProbe.at(-1)!.at < 75) return;
+    this.gripProbe.push({
+      at: now,
+      world: [...world],
+      left: clonePose(controllers.left),
+      right: clonePose(controllers.right),
+    });
+    this.gripProbe = this.gripProbe.filter((sample) => now - sample.at <= 6000).slice(-32);
+    const current = controllers[fit.hand];
+    if (
+      current && sampleError(fit, { world, controller: current }) <=
+        Math.max(0.04, fit.rmsErrorMeters * 4)
+    ) return;
+    if (this.gripProbe.length < 6 || now - this.gripProbe[0].at < 200) return;
+    const mapped = this.gripProbe.map((sample) =>
+      applyVrcCameraCalibration(fit, {
+        position: sample.world,
+        quaternion: [0, 0, 0, 1],
+      }).position
+    );
+    if (Math.max(...mapped.map((p) => distance(p, mapped[0]))) < 0.02) return;
+    let best: { hand: "left" | "right"; offset: Vec3; spread: number } | null = null;
+    for (const hand of ["left", "right"] as const) {
+      if (this.gripProbe.some((sample) => sample[hand] == null)) continue;
+      const offsets = this.gripProbe.map((sample, i): Vec3 => {
+        const controller = sample[hand]!;
+        const m = quatToMatrix(controller.quaternion);
+        const delta = mapped[i].map((v, axis) => v - controller.position[axis]);
+        // Inverse rotation = transpose for a unit quaternion.
+        return [0, 1, 2].map((axis) =>
+          m[0][axis] * delta[0] + m[1][axis] * delta[1] + m[2][axis] * delta[2]
+        ) as Vec3;
+      });
+      const offset = [0, 1, 2].map((axis) =>
+        offsets.reduce((sum, p) => sum + p[axis], 0) / offsets.length
+      ) as Vec3;
+      if (Math.hypot(...offset) > 0.5) continue;
+      const spread = Math.sqrt(
+        offsets.reduce((sum, p) => sum + distance(p, offset) ** 2, 0) / offsets.length,
+      );
+      const tolerance = Math.max(0.015, Math.min(0.035, fit.rmsErrorMeters * 3));
+      if (spread > tolerance) continue;
+      if (!best || spread < best.spread) best = { hand, offset, spread };
+    }
+    if (!best) return;
+    // Keep the fit and its error; only the new grab's hand/offset and sample pool change.
+    this.liveFit = {
+      ...fit,
+      hand: best.hand,
+      gripOffset: best.offset,
+      otherHandRmsErrorMeters: null,
+    };
+    if (this.referenceFit) {
+      this.referenceFit = {
+        ...this.referenceFit,
+        hand: best.hand,
+        gripOffset: best.offset,
+      };
+    }
+    this.captureHand = best.hand;
+    this.calibrator = new VrcCameraCalibrator({
+      maxSamples: LIVE_MAX_SAMPLES,
+      maxSpeedMetersPerSecond: 0.2,
+      maxAngularDegPerSecond: 45,
+      minSampleDistanceMeters: 0.02,
+      minSampleAngleDeg: 4,
+    });
+    this.gripProbe = [];
+    this.sampleRevision = 0;
+    this.solvedRevision = -1;
+    this.lastSolveAt = -Infinity;
+    this.liveGeneration++;
+  }
+
+  /** Do not trade an aligned camera for a low-error fit of unrelated/released-hand motion. */
+  private acceptLiveFit(fit: VrcCameraCalibration): boolean {
+    if (fit.samples < LIVE_TRUSTED_SAMPLES) return false;
+    const previous = this.liveFit;
+    if (previous && fit.rmsErrorMeters > previous.rmsErrorMeters) return false;
+    const reference = this.referenceFit;
+    if (!reference) return true;
+    if (fit.hand !== (this.captureHand ?? reference.hand)) return false;
+    const tolerance = Math.max(0.02, reference.rmsErrorMeters * 3);
+    return this.referenceWorlds.every((world) => {
+      const pose: TrackedPose = { position: world, quaternion: [0, 0, 0, 1] };
+      return distance(
+        applyVrcCameraCalibration(fit, pose).position,
+        applyVrcCameraCalibration(reference, pose).position,
+      ) <= tolerance;
+    });
+  }
+
   /** Solves with the samples so far; also called by an early stop. */
   finishCalibration(now = Date.now()): VrcCameraCalibration | null {
+    if (this.live) return this.endLiveCalibration();
     const calibrator = this.calibrator;
     if (calibrator == null) return this.calibration;
     this.calibrator = null;
@@ -488,21 +812,35 @@ export class VrcCameraTracker {
     return result;
   }
 
+  /**
+   * The camera's tracking-space pose under the calibration in use: the live fit while
+   * calibrating (so the recording layer shows the alignment as it improves), else the kept one.
+   */
   currentViewPose(now = Date.now()): VrcCameraViewPose | null {
-    if (this.calibration == null || this.worldPose == null) return null;
-    const pose = applyVrcCameraCalibration(this.calibration, this.worldPose);
+    const calibration = (this.live ? this.liveFit : null) ?? this.calibration;
+    if (calibration == null || this.worldPose == null) return null;
+    const pose = applyVrcCameraCalibration(calibration, this.worldPose);
     return { ...pose, fovYDeg: this.fovYDeg, ageMs: now - this.worldPoseAt };
   }
 
   status(now = Date.now()): VrcCameraTrackerStatus {
     return {
       calibrating: this.calibrator != null,
-      calibrationRemainingMs: this.calibrator ? Math.max(0, this.calibrationEndsAt - now) : 0,
+      calibrationRemainingMs: this.calibrator && !this.live
+        ? Math.max(0, this.calibrationEndsAt - now)
+        : 0,
       samples: this.calibrator?.samples.length ?? 0,
       calibration: this.calibration,
       lastError: this.lastError,
       hasWorldPose: this.worldPose != null,
       fovYDeg: this.fovYDeg,
+      live: this.live,
+      liveFit: this.liveFit,
+      poseAgeMs: this.worldPose ? now - this.worldPoseAt : null,
+      poseMovedAgeMs: this.worldPose ? now - this.worldPoseMovedAt : null,
+      samplingPaused: this.samplingPaused,
+      rejectedSamples: this.rejectedSamples,
+      acceptedSamples: this.acceptedSamples,
     };
   }
 }

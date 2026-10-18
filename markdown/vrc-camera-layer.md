@@ -7,7 +7,10 @@ stack it over VRChat's own camera output. VR keeps rendering as usual; the layer
 ## Pieces
 
 - `cameraOrigin` (`petplay/VRCOriginCamera.ts`) receives `/usercamera/Pose` and `/usercamera/Zoom`
-  over OSCQuery and forwards both to `webxr`.
+  over OSCQuery and forwards both to `webxr`. The OSC receiver prefers UDP 9001, then a free
+  adjacent port if face/eye tracking already owns it. Its actual port is advertised through
+  OSCQuery and `_osc._udp`; the alternate receiver uses its own HTTP endpoint to avoid cached
+  destinations. mDNS announcements use a `.local` hostname, multicast loopback and TTL 255.
 - `webxr` holds a `VrcCameraTracker` (`classes/vrcCameraCalibration.ts`): the latest world pose and
   the world→tracking calibration. Views registered with `camera: "vrc"` get the calibrated pose
   (`vrcCamera`) and a transparent background with every frame.
@@ -22,10 +25,18 @@ positions only (VRChat's smoothing and auto-level change the reported rotation, 
 camera is). Samples are taken only while the hand is nearly still, because OSC lags the controller.
 RANSAC plus worst-sample trimming drop samples from a camera that was let go mid-capture.
 
-**Locomotion invalidates it.** Joystick moves, snap turns and teleports change the mapping; redo
-the calibration afterwards.
+The fit is fixed in world→tracking space. The normal camera mode is expected to follow the
+playspace; the menu does not invalidate calibration on movement. Alignment through joystick
+moves, snap turns and teleports still needs a real-session check.
 
 ## Use
+
+In VR, open Settings → CAMERA. Hold VRChat's camera, turn Calibrate ON, then slowly move and
+turn it. Watch the live error and green predicted-position ball; switch OFF when aligned, then
+let go. START opens the recording layer; choose the matching resolution while stopped. CLEAR
+removes a fit. The ball is excluded from recording captures. See [the menu notes](vrc-camera-menu.md).
+
+The desktop CLI retains its timed calibration flow:
 
 ```bash
 deno task client camera --width=1920 --height=1080   # match VRChat's stream resolution
@@ -43,11 +54,15 @@ capture of "PetPlay VRC Camera" above it. KDE keeps the window's alpha.
 
 ## Known gaps
 
+- OBS Xcomposite can hold a stale image even while the recording window continues drawing.
+  Confirm with the window diagnostics counter. Hiding the OBS layer source, reapplying its
+  window-capture settings, then showing it again recovered the capture in the live session;
+  no PetPlay restart or recalibration was needed.
+
 - VRChat's `Zoom` (default 45, range 20–150) is taken as the vertical FOV; `--fov=<deg>` is the
   fallback until VRChat reports it. The end-to-end check below aligned at 45.
 - Semi-transparent panels come out more transparent than in VR: raylib's `BLEND_ALPHA` blends
   the alpha channel the same way it blends colour, so translucent alpha ends up squared.
-- No in-VR trigger for calibration yet (a wrist-menu button would fit).
 - Spout (Windows) output isn't implemented; on Windows the same transparent window can be captured.
 
 ## End-to-end check (2026-10-18)
@@ -63,3 +78,12 @@ the layer's alpha. Scripts used: `_scratch/{driver,inputs,grab,calib-move,aim,ob
 
 Not yet explained: the first camera-view instance of that session received the scene without
 the window layer's content (1 instance) after the layer was shown; a restarted view drew it.
+
+## Recording-window delivery
+
+The recording window requests the same compact scene transport as the independent overlay
+renderer. UI glyph geometry is cached across frames instead of being expanded into JSON every
+frame. An `OverlaySceneInbox` retains scene assets before returning delivery credit, so the
+sender can continue while the window renders or skips an older snapshot. Drawing is paced
+with an asynchronous deadline; raylib's blocking `SetTargetFPS` wait is disabled. Window FPS
+is counted from actual draws, and health reports packet/decode/render/swap timing separately.

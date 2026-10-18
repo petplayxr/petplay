@@ -200,6 +200,8 @@ export function anchoredLowerers(): RenderLowerer[] {
           object,
           instance.worldMatrix,
         );
+        (instance as typeof instance & { vrcCameraHidden?: boolean }).vrcCameraHidden =
+          object.userData.vrcCameraHidden === true;
         return instance;
       }),
   }));

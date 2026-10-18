@@ -97,6 +97,19 @@ export class WebXRRaythreeSceneBridge {
   }
 }
 
+/** Calibration helpers belong in the headset view, never on the recording camera's lens. */
+export function withoutVrcCameraHelpers(extraction: ExtractionResult): ExtractionResult {
+  return {
+    ...extraction,
+    frame: {
+      ...extraction.frame,
+      instances: extraction.frame.instances.filter((instance) =>
+        !(instance as { vrcCameraHidden?: boolean }).vrcCameraHidden
+      ),
+    },
+  };
+}
+
 export function getSceneBackgroundColor(
   scene: object,
 ): [number, number, number, number] {

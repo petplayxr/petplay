@@ -1,5 +1,6 @@
 #!/usr/bin/env -S deno run -A
 import { ActorId, actorState, PostMan } from "../submodules/stageforge/mod.ts";
+import { listenOscReceiver } from "../classes/oscReceiverSocket.ts";
 import { LogChannel } from "@mommysgoodpuppy/logchannel";
 import type { Vec3Tuple, VrcCameraDebugPose } from "../classes/vrcCameraDebugState.ts";
 
@@ -110,7 +111,9 @@ new PostMan(
     },
     __HEALTH__: (_payload: unknown) => {
       return {
-        driverRunning: state.driver != null,
+        driverRunning: state.driver?.running ?? false,
+        oscPort: state.driver?.oscPort ?? null,
+        oscQueryRequests: state.driver?.httpRequests ?? 0,
         hasLatestCameraPose: state.latestCameraPose != null,
         hasPositionEstimate: state.positionEstimate != null,
         positionSampleCount: state.positionSamples.length,
@@ -131,7 +134,10 @@ new PostMan(
         vrchatOscPort: DEFAULT_VRCHAT_OSC_PORT,
         onMessage: handleOscMessage,
       });
-      state.driver.start().catch((error) => {
+      const driver = state.driver;
+      driver.start().catch(async (error) => {
+        await driver.stop();
+        if (state.driver === driver) state.driver = null;
         LogChannel.error(
           "vrc-camera-origin",
           `camera origin driver failed: ${error instanceof Error ? error.message : error}`,
@@ -476,6 +482,7 @@ function degreesFromRadians(value: number): number {
 }
 
 class CameraOscQueryDriver {
+  httpRequests = 0;
   private httpServer: Deno.HttpServer | null = null;
   private oscSocket: ReturnType<typeof Deno.listenDatagram> | null = null;
   private mdns: OscQueryMdnsAdvertiser | null = null;
@@ -491,6 +498,11 @@ class CameraOscQueryDriver {
     },
   ) {}
 
+  get running(): boolean { return this.oscSocket != null; }
+  get oscPort(): number | null {
+    return this.oscSocket ? (this.oscSocket.addr as Deno.NetAddr).port : null;
+  }
+
   sendMessage(address: string, args: OscOutboundArg[]): void {
     if (!this.oscSocket) return;
     const packet = encodeOscMessage(address, args);
@@ -502,17 +514,21 @@ class CameraOscQueryDriver {
   }
 
   async start(): Promise<void> {
+    const preferredPort = this.options.oscPort;
+    this.oscSocket = listenOscReceiver(preferredPort);
+    this.options.oscPort = (this.oscSocket.addr as Deno.NetAddr).port;
+    // VRChat caches the OSC destination against its OSCQuery endpoint. Give an alternate
+    // receiver its own HTTP endpoint as well, rather than reusing a cached default one.
+    if (this.options.oscPort !== preferredPort) {
+      this.options.httpPort = getAvailableTcpPort(this.options.oscPort);
+    }
+    this.options.name = `${this.options.name}-${this.options.oscPort}`;
     this.httpServer = Deno.serve(
       { hostname: "127.0.0.1", port: this.options.httpPort },
       this.handleHttpRequest.bind(this),
     );
 
-    this.oscSocket = Deno.listenDatagram({
-      port: this.options.oscPort,
-      transport: "udp",
-    });
-
-    this.mdns = new OscQueryMdnsAdvertiser(this.options.name, this.options.httpPort);
+    this.mdns = new OscQueryMdnsAdvertiser(this.options.name, this.options.httpPort, this.options.oscPort);
     await this.mdns.start();
 
     LogChannel.log(
@@ -541,6 +557,7 @@ class CameraOscQueryDriver {
   }
 
   private handleHttpRequest(req: Request): Response {
+    this.httpRequests++;
     const url = new URL(req.url);
     if (url.searchParams.has("HOST_INFO")) {
       const hostInfo: OSCQueryHostInfo = {
@@ -590,9 +607,9 @@ class OscQueryMdnsAdvertiser {
   private readonly instanceName: string;
   private readonly targetName: string;
 
-  constructor(serviceName: string, private readonly httpPort: number) {
+  constructor(serviceName: string, private readonly httpPort: number, private readonly oscPort: number) {
     this.instanceName = sanitizeDnsLabel(serviceName);
-    this.targetName = `${this.instanceName}.oscjson.tcp`;
+    this.targetName = `${this.instanceName}.oscjson.local`;
   }
 
   async start(): Promise<void> {
@@ -637,6 +654,9 @@ class OscQueryMdnsAdvertiser {
     }
 
     try {
+      const membership = await socket.joinMulticastV4(OscQueryMdnsAdvertiser.ADDRESS, address);
+      await membership.setTTL(255);
+      await membership.setLoopback(true);
       await socket.send(this.buildPacket(), {
         hostname: OscQueryMdnsAdvertiser.ADDRESS,
         port: OscQueryMdnsAdvertiser.PORT,
@@ -650,10 +670,17 @@ class OscQueryMdnsAdvertiser {
   private buildPacket(): Uint8Array {
     const serviceType = "_oscjson._tcp.local";
     const instanceName = `${this.instanceName}.${serviceType}`;
-    const answers = [ptrRecord(serviceType, instanceName, OscQueryMdnsAdvertiser.TTL_SECONDS)];
+    const oscServiceType = "_osc._udp.local";
+    const oscInstanceName = `${this.instanceName}.${oscServiceType}`;
+    const answers = [
+      ptrRecord(serviceType, instanceName, OscQueryMdnsAdvertiser.TTL_SECONDS),
+      ptrRecord(oscServiceType, oscInstanceName, OscQueryMdnsAdvertiser.TTL_SECONDS),
+    ];
     const additionals = [
       srvRecord(instanceName, this.targetName, this.httpPort, OscQueryMdnsAdvertiser.TTL_SECONDS),
       txtRecord(instanceName, OscQueryMdnsAdvertiser.TTL_SECONDS),
+      srvRecord(oscInstanceName, this.targetName, this.oscPort, OscQueryMdnsAdvertiser.TTL_SECONDS),
+      txtRecord(oscInstanceName, OscQueryMdnsAdvertiser.TTL_SECONDS),
       aRecord(this.targetName, "127.0.0.1", OscQueryMdnsAdvertiser.TTL_SECONDS),
     ];
     const records = [...answers, ...additionals];

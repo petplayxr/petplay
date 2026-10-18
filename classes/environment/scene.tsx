@@ -9,6 +9,7 @@ import {
   type UseFrameNextOptions,
   useThree,
 } from "@react-three/fiber/webgpu";
+import { vrcCameraStore } from "./vrcCameraStore.ts";
 import { readVrcCameraDebugSnapshot } from "../vrcCameraDebugState.ts";
 import { DisplayInstance } from "./displayInstance/logic.tsx";
 import {
@@ -231,6 +232,23 @@ function createLinuxKeyboardSink(actor: string): KeyboardSink {
 
 /** VRC camera OSC debug markers; off unless `PETPLAY_VRC_CAMERA_DEBUG=1`. */
 const SHOW_VRC_CAMERA_DEBUG = Deno.env.get("PETPLAY_VRC_CAMERA_DEBUG") === "1";
+
+/** Visible while calibrating or recording; recording views filter this mesh before delivery. */
+function VrcCameraCalibrationBall() {
+  const ref = useRef<THREE.Mesh>(null!);
+  useFrame(() => {
+    const pose = vrcCameraStore.predicted();
+    ref.current.visible = pose != null;
+    if (pose) ref.current.position.fromArray(pose.position);
+  });
+  return (
+    <mesh ref={ref} name="vrc-camera-calibration-ball" visible={false}
+      userData={{ vrcCameraHidden: true }} pointerEvents="none">
+      <sphereGeometry args={[0.025, 16, 12]} />
+      <meshBasicMaterial color="#36ff68" />
+    </mesh>
+  );
+}
 
 function VrcCameraDebugVisuals() {
   const cameraGroupRef = useRef<THREE.Group>(null!);
@@ -2017,6 +2035,7 @@ export function WebXRScene(
       <pointLight intensity={8} position={[0, 1.9, -1.25]} color="#ffb347" />
       {/* <XROrigin /> */}
 
+      <VrcCameraCalibrationBall />
       {SHOW_VRC_CAMERA_DEBUG && <VrcCameraDebugVisuals />}
 
       <WindowLayer

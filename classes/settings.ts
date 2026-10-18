@@ -28,6 +28,10 @@ const isWristOpacity = (value: unknown): value is number =>
 const isLocaleOrNull = (value: unknown): value is string | null =>
   value === null || (typeof value === "string" && /^[a-z]{2,3}$/.test(value));
 
+/** Recording-layer sizes the wrist page cycles through (VRChat's stream presets). */
+export const VRC_CAMERA_RESOLUTIONS = ["1920x1080", "1280x720", "2560x1440"] as const;
+export type VrcCameraResolution = typeof VRC_CAMERA_RESOLUTIONS[number];
+
 export const SETTINGS_SCHEMA = {
   grabboxOutline: {
     default: true as boolean,
@@ -65,6 +69,12 @@ export const SETTINGS_SCHEMA = {
       "Where the wrist menu was dragged to, relative to its default mount; null is the default",
     valid: (value: unknown): value is WristOffset | null => value === null || isWristOffset(value),
   } satisfies SettingSpec<WristOffset | null>,
+  vrcCameraResolution: {
+    default: "1920x1080" as VrcCameraResolution,
+    label: "VRC camera recording layer size; match VRChat's stream resolution",
+    valid: (value: unknown): value is VrcCameraResolution =>
+      (VRC_CAMERA_RESOLUTIONS as readonly unknown[]).includes(value),
+  } satisfies SettingSpec<VrcCameraResolution>,
   desktopNotifications: {
     default: true as boolean,
     label: "Show desktop notifications in the headset as toasts (Linux)",

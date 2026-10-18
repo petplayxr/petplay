@@ -47,9 +47,10 @@ export const WRIST_SETTINGS = {
   controllerLaser: [189, 47],
   haptics: [189, -31],
   desktopNotifications: [189, -109],
-  wrist: [-158, -187],
-  monitors: [0, -187],
-  layouts: [158, -187],
+  wrist: [-189, -187],
+  monitors: [-63, -187],
+  layouts: [63, -187],
+  camera: [189, -187],
 } as const satisfies Record<string, PanelPoint>;
 
 /** Settings → Wrist menu page: the right-hand pill of each row. */

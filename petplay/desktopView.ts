@@ -42,6 +42,12 @@ import {
   runPendingScreenCapture,
 } from "../classes/environment/screenCapture.ts";
 import { wait } from "../classes/utils.ts";
+import { OverlaySceneInbox } from "../classes/overlaySceneDelivery.ts";
+import {
+  OVERLAY_SCENE_WIRE_FORMAT,
+  OverlaySceneWireDecoder,
+  type OverlayScenePacket,
+} from "../classes/overlaySceneWire.ts";
 import * as THREE from "three";
 
 export type StartDesktopViewPayload = {
@@ -66,7 +72,7 @@ export type StartDesktopViewPayload = {
 
 /** Stable renderer context id: asset sync is incremental per id. */
 const RENDER_CONTEXT_ID = "desktop-decoupled-view";
-/** A payload is acked once it has been rendered; a busy view gets a fresh frame. */
+/** Yield between draws so incoming scenes can be decoded and cached. */
 const LOOP_SLEEP_MS = 1;
 /** Loop sleep while there is nothing new to draw; only window events are polled. */
 const IDLE_LOOP_SLEEP_MS = 4;
@@ -129,6 +135,11 @@ let latestPayload: WebXRRaythreeRenderPayload | null = null;
 let latestSeq = 0;
 let renderedSeq = 0;
 let lastFrameAt = 0;
+let sceneInbox = new OverlaySceneInbox();
+let wireDecoder = new OverlaySceneWireDecoder();
+let lastDecodeMs = 0;
+let lastPacketBytes = 0;
+let lastEndDrawingMs = 0;
 
 new PostMan(
   state,
@@ -147,24 +158,14 @@ new PostMan(
       return getDesktopViewStatus();
     },
     /** One frame of scene IR from the `webxr` actor. */
-    WEBXRVIEWFRAME: (payload: WebXRRaythreeRenderPayload) => {
-      latestPayload = payload;
-      latestSeq += 1;
-      state.framesReceived += 1;
-      lastFrameAt = performance.now();
-      state.lastPayload = {
-        instances: payload.leftEye.frame.instances.length,
-        geometries: payload.leftEye.assets.geometries.length,
-        materials: payload.leftEye.assets.materials.length,
-        textures: payload.leftEye.assets.textures.length,
-        lights: payload.leftEye.frame.lights.length,
-        panels: payload.ui?.panels?.length ?? 0,
-        texts: payload.ui?.texts?.length ?? 0,
-        frameCount: payload.frame.frameCount,
-      };
-      state.assetsSeen.geometries += payload.leftEye.assets.geometries.length;
-      state.assetsSeen.materials += payload.leftEye.assets.materials.length;
-      state.assetsSeen.textures += payload.leftEye.assets.textures.length;
+    WEBXRVIEWFRAME: receiveScene,
+    WEBXRVIEWFRAMEPACKET: (packet: OverlayScenePacket) => {
+      const startedAt = performance.now();
+      const decoded = wireDecoder.decode(packet);
+      lastDecodeMs = performance.now() - startedAt;
+      lastPacketBytes = packet.data.length;
+      if (decoded.stale) acknowledgeScene(decoded);
+      else receiveScene(decoded.payload);
     },
     REQUESTCAPTURE: async (payload: { path?: string } | null) => {
       if (!state.running) {
@@ -187,6 +188,39 @@ globalThis.addEventListener("unload", () => {
   state.stopRequested = true;
 });
 
+/** Keep dependencies before returning credit: rendering may skip superseded snapshots. */
+function receiveScene(payload: WebXRRaythreeRenderPayload): void {
+  sceneInbox.receive(payload);
+  latestPayload = payload;
+  latestSeq++;
+  state.framesReceived++;
+  lastFrameAt = performance.now();
+  state.lastPayload = {
+    instances: payload.leftEye.frame.instances.length,
+    geometries: payload.leftEye.assets.geometries.length,
+    materials: payload.leftEye.assets.materials.length,
+    textures: payload.leftEye.assets.textures.length,
+    lights: payload.leftEye.frame.lights.length,
+    panels: payload.ui?.panels?.length ?? 0,
+    texts: payload.ui?.texts?.length ?? 0,
+    frameCount: payload.frame.frameCount,
+  };
+  state.assetsSeen.geometries += payload.leftEye.assets.geometries.length;
+  state.assetsSeen.materials += payload.leftEye.assets.materials.length;
+  state.assetsSeen.textures += payload.leftEye.assets.textures.length;
+  acknowledgeScene(payload);
+}
+
+function acknowledgeScene(payload: Pick<WebXRRaythreeRenderPayload, "delivery">): void {
+  if (!state.registered || !state.webxrTarget) return;
+  state.framesAcked++;
+  PostMan.PostMessage({
+    target: state.webxrTarget,
+    type: "WEBXRVIEWFRAMEACK",
+    payload: { actorId: state.id, delivery: payload.delivery },
+  });
+}
+
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -208,6 +242,10 @@ function getDesktopViewStatus() {
     payloadHeld: latestPayload != null,
     renderLagFrames: Math.max(0, latestSeq - renderedSeq),
     lastRenderMs: Number(state.lastRenderMs.toFixed(3)),
+    lastDecodeMs,
+    lastPacketBytes,
+    lastEndDrawingMs,
+    wireFormat: OVERLAY_SCENE_WIRE_FORMAT,
     lastPayload: state.lastPayload,
     assetsSeen: { ...state.assetsSeen },
     capturePath: state.capturePath,
@@ -245,6 +283,9 @@ function startDesktopView(payload: StartDesktopViewPayload): void {
   latestPayload = null;
   latestSeq = 0;
   renderedSeq = 0;
+  sceneInbox = new OverlaySceneInbox();
+  wireDecoder = new OverlaySceneWireDecoder();
+  lastDecodeMs = lastPacketBytes = lastEndDrawingMs = 0;
   state.loop = runDesktopViewWindow()
     .catch((error) => {
       state.lastError = messageOf(error);
@@ -283,6 +324,7 @@ function registerWithWebXr(): void {
       actorId: state.id,
       label: state.camera === "vrc" ? "vrc-camera" : "desktop",
       camera: state.camera,
+      wireFormat: OVERLAY_SCENE_WIRE_FORMAT,
     },
   });
   state.registered = true;
@@ -321,7 +363,9 @@ async function runDesktopViewWindow(): Promise<void> {
     if (flags !== 0) raylib.SetConfigFlags(flags);
     raylib.H.InitWindow(width, height, state.title);
     windowUp = true;
-    raylib.SetTargetFPS(state.fps);
+    // Raylib waits synchronously in EndDrawing when capped, blocking scene messages.
+    // Pace with the async loop below so delivery and decoding continue between draws.
+    raylib.SetTargetFPS(0);
     renderer = new WebXRRaythreeRaylibRenderer();
     state.running = true;
     LogChannel.log(
@@ -331,15 +375,18 @@ async function runDesktopViewWindow(): Promise<void> {
     registerWithWebXr();
 
     let fpsMarkAt = performance.now();
+    let drawsSinceFpsMark = 0;
     const windowStartedAt = fpsMarkAt;
     let lastDrawAt = 0;
     while (!raylib.WindowShouldClose() && !state.stopRequested) {
+      const loopStartedAt = performance.now();
       // Draw only when there is something new: an unchanged scene costs a
       // window-event poll, not a full re-render at the window's refresh rate.
       const drawDue = latestSeq !== renderedSeq || hasPendingScreenCapture() ||
         raylib.IsWindowResized() || performance.now() - lastDrawAt >= IDLE_REDRAW_MS;
       if (drawDue) {
         drawLatestFrame(renderer);
+        drawsSinceFpsMark++;
         lastDrawAt = performance.now();
         // After EndDrawing: the frame is complete and no draw is in flight, which
         // is the only point where reading the framebuffer is safe.
@@ -376,7 +423,8 @@ async function runDesktopViewWindow(): Promise<void> {
       }
       const now = performance.now();
       if (now - fpsMarkAt >= 500) {
-        state.lastWindowFps = raylib.GetFPS();
+        state.lastWindowFps = Math.round(drawsSinceFpsMark * 1000 / (now - fpsMarkAt));
+        drawsSinceFpsMark = 0;
         fpsMarkAt = now;
       }
       // A `/reload` of the webxr actor rebuilds its view registry; a view that
@@ -389,7 +437,10 @@ async function runDesktopViewWindow(): Promise<void> {
         registerWithWebXr();
         lastFrameAt = now;
       }
-      await wait(drawDue ? LOOP_SLEEP_MS : IDLE_LOOP_SLEEP_MS);
+      const remainingMs = drawDue && state.fps > 0
+        ? Math.max(LOOP_SLEEP_MS, 1000 / state.fps - (performance.now() - loopStartedAt))
+        : drawDue ? LOOP_SLEEP_MS : IDLE_LOOP_SLEEP_MS;
+      await wait(remainingMs);
     }
   } finally {
     unregisterWithWebXr();
@@ -409,7 +460,8 @@ async function runDesktopViewWindow(): Promise<void> {
 function drawLatestFrame(renderer: WebXRRaythreeRaylibRenderer): void {
   raylib.BeginDrawing();
   try {
-    const payload = latestPayload;
+    const scene = sceneInbox.current();
+    const payload = scene?.payload ?? null;
     const vrcView = state.camera === "vrc";
     if (payload == null) {
       raylib.H.ClearBackground(vrcView ? TRANSPARENT : { r: 12, g: 14, b: 18, a: 255 });
@@ -437,6 +489,7 @@ function drawLatestFrame(renderer: WebXRRaythreeRaylibRenderer): void {
       payload.ui,
     );
     state.lastRenderMs = performance.now() - renderStartedAt;
+    if (scene) sceneInbox.markAdopted(scene);
     state.framesRendered += 1;
     if (renderedSeq !== latestSeq) {
       renderedSeq = latestSeq;
@@ -459,18 +512,11 @@ function drawLatestFrame(renderer: WebXRRaythreeRaylibRenderer): void {
       );
     }
   } finally {
+    const endStartedAt = performance.now();
     raylib.EndDrawing();
+    lastEndDrawingMs = performance.now() - endStartedAt;
   }
-  // Ack outside the drawing scope: the scene may ship the next frame as soon as
-  // this arrives, and it must not race the framebuffer.
-  if (renderedSeq !== state.framesAcked && state.registered && state.webxrTarget != null) {
-    state.framesAcked = renderedSeq;
-    PostMan.PostMessage({
-      target: state.webxrTarget,
-      type: "WEBXRVIEWFRAMEACK",
-      payload: { actorId: state.id, seq: renderedSeq, delivery: latestPayload?.delivery },
-    });
-  }
+
 }
 
 const vrcCameraWorld = new THREE.Matrix4();
