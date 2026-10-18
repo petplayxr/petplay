@@ -120,7 +120,9 @@ def restore():
     print('Restored original settings and external-driver registrations; SteamVR remains off', flush=True)
 
 
-def prepare(direct_server=False, disable_async=False, driver_direct=False, real_hmd=False):
+def prepare(direct_server=False, disable_async=False, driver_direct=False, real_hmd=False, touch_controllers=False):
+    # Touch emulation lets applications' shipped Touch bindings drive the synthetic hands.
+    controller_type = 'oculus_touch' if touch_controllers else 'petplay_synthetic'
     if running():
         raise RuntimeError('Stop SteamVR before starting a synthetic-only session')
     if BACKUP.exists():
@@ -153,7 +155,8 @@ def prepare(direct_server=False, disable_async=False, driver_direct=False, real_
             vr.pop('forcedDriver', None)
             vr['activateMultipleDrivers'] = True
             settings.setdefault('driver_petplay', {}).update(enable=True, syntheticHmd=False,
-                syntheticControllers=True, driverDirect=False, socketDirectory=str(SESSION / 'ipc'))
+                syntheticControllers=True, driverDirect=False, socketDirectory=str(SESSION / 'ipc'),
+                syntheticControllerType=controller_type)
             paths = json.loads(PATHS.read_text())
             paths['external_drivers'] = list(dict.fromkeys([*paths.get('external_drivers', []), str(hybrid)]))
             atomic_write(SETTINGS, (json.dumps(settings, indent=2) + '\n').encode())
@@ -172,7 +175,7 @@ def prepare(direct_server=False, disable_async=False, driver_direct=False, real_
         settings.setdefault('power', {}).update(pauseCompositorOnStandby=False,
                                                 turnOffScreensTimeout=3600.0,
                                                 turnOffControllersTimeout=3600.0)
-        settings.setdefault('driver_petplay', {}).update(enable=True, syntheticHmd=True, syntheticControllers=True, driverDirect=driver_direct, socketDirectory=str(SESSION / 'ipc'))
+        settings.setdefault('driver_petplay', {}).update(enable=True, syntheticHmd=True, syntheticControllers=True, driverDirect=driver_direct, socketDirectory=str(SESSION / 'ipc'), syntheticControllerType=controller_type)
         # Explicitly disable every bundled physical/remote driver, in addition to forcedDriver.
         runtime = Path(json.loads(PATHS.read_text())['runtime'][0])
         for folder in (runtime / 'drivers').iterdir():
@@ -222,6 +225,7 @@ def main():
     parser.add_argument('--disable-async', action='store_true', help='Disable Linux Vulkan async for this session only (capture diagnostic)')
     parser.add_argument('--renderdoc-layer', type=Path, help='Private RenderDoc implicit-layer directory for the X11 retry only')
     parser.add_argument('--capture-layer', action='store_true', help='Enable the optional pure Zig producer-side readback layer for this compositor only')
+    parser.add_argument('--touch-controllers', action='store_true', help='Present the synthetic controllers as Oculus Touch so applications use their own Touch bindings')
     parser.add_argument('--seconds', type=float, default=30)
     args = parser.parse_args()
     if args.real_hmd and (args.direct_server or args.driver_direct or args.disable_async or args.disable_fixes or args.capture_layer or args.renderdoc_layer or args.x11_compositor):
@@ -257,7 +261,7 @@ def main():
         raise RuntimeError("SteamVR must be off and pending recovery resolved before run")
     watcher = RuntimeLogWatch([STEAM / 'logs' / name for name in
                                ('vrcompositor.txt', 'vrcompositor-linux.txt')])
-    prepare(args.direct_server, args.disable_async, args.driver_direct, args.real_hmd)
+    prepare(args.direct_server, args.disable_async, args.driver_direct, args.real_hmd, args.touch_controllers)
     try:
         print(f'{"Real-HMD / synthetic-controller" if args.real_hmd else "Synthetic-only"} session prepared; recovery: {BACKUP}', flush=True)
         with (SESSION / 'launch.log').open('wb') as log:

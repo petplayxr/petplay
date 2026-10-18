@@ -118,7 +118,7 @@ const state = actorState({
   /** Draw the IR/payload diagnostics line into the window. */
   diagnostics: false,
   camera: "headset" as "headset" | "vrc",
-  fovYDeg: 50,
+  fovYDeg: 45,
   /** `camera: "vrc"`: whether the last frame carried a calibrated camera. */
   vrcCameraCalibrated: false,
   loop: null as Promise<void> | null,

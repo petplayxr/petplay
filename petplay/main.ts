@@ -607,7 +607,7 @@ async function startVrcCameraView(options: VrcCameraViewPayload | null) {
     camera: "vrc" as const,
     width: options?.width ?? getNumberArg("--vrc-camera-view-width", 1920),
     height: options?.height ?? getNumberArg("--vrc-camera-view-height", 1080),
-    fovYDeg: options?.fovYDeg ?? getNumberArg("--vrc-camera-fov", 50),
+    fovYDeg: options?.fovYDeg ?? getNumberArg("--vrc-camera-fov", 45),
     fps: getNumberArg("--vrc-camera-view-fps", 60),
     diagnostics: options?.diagnostics ?? false,
     title: "PetPlay VRC Camera",
