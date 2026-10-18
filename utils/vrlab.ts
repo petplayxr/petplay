@@ -35,6 +35,8 @@
  *
  * deno task vrlab marker left|right|off      # PetPlay sphere at its own controller pose
  *
+ * deno task vrlab dashboard [status|open|close|toggle]   # the SteamVR dashboard (takes input while open)
+ *
  * deno task vrlab eye [path.png] [--layers]  # what the headset is shown (VRChat + overlays), eyes side by side
  * ```
  *
@@ -54,6 +56,7 @@ import {
 } from "./vrlab/camera.ts";
 import { euler, type Hand, type HandInput, SyntheticDriver } from "./vrlab/driver.ts";
 import { captureEyes } from "./vrlab/eye.ts";
+import { dashboardVisible, setDashboard } from "./vrlab/steamvr.ts";
 import { launchObs, Obs } from "./vrlab/obs.ts";
 import { hideHandMarker, showHandMarker } from "./vrlab/petplay.ts";
 import { down, freshVrchat, status, up } from "./vrlab/stack.ts";
@@ -241,6 +244,17 @@ async function main(): Promise<void> {
         }
       }
       break;
+    case "dashboard": {
+      const want = sub === "open"
+        ? true
+        : sub === "close"
+        ? false
+        : sub === "toggle"
+        ? !dashboardVisible()
+        : null;
+      if (want !== null) await withDriver((d) => setDashboard(d, want));
+      return print({ dashboardVisible: dashboardVisible() });
+    }
     case "eye": {
       Deno.mkdirSync(`${Deno.cwd()}/logs/vrlab`, { recursive: true });
       return print(

@@ -37,6 +37,7 @@ import {
 } from "./vrlab/camera.ts";
 import { euler, SyntheticDriver, type Vec3 } from "./vrlab/driver.ts";
 import { captureEyes, waitForScenePresent } from "./vrlab/eye.ts";
+import { setDashboard } from "./vrlab/steamvr.ts";
 import { Obs } from "./vrlab/obs.ts";
 import {
   controllerPosition,
@@ -140,14 +141,23 @@ async function main(): Promise<boolean> {
     // Headset captures of each step (VRChat plus overlays), for when something changes.
     const snap = async (name: string) =>
       void await captureEyes(join(RUN_DIR, `${name}.png`), { driver });
+    // The SteamVR dashboard sometimes opens by itself and takes the controllers away from VRChat.
+    const noDashboard = async (before: string) => {
+      if (await setDashboard(driver, false)) {
+        step(`closed an unexpected SteamVR dashboard before ${before}`);
+      }
+    };
+    await noDashboard("the Action Menu");
     await openCamera(driver, undefined, snap);
     await sendOsc("/usercamera/Zoom", { f: FOV_DEG });
 
+    await noDashboard("the grab");
     step("grabbing it with the right hand");
     const held = await grabCamera(driver);
     await driver.setPose("left", { position: [-0.3, 1.2, -0.3], rotation: euler(0, 0, 0) });
     await snap("grabbed");
 
+    await noDashboard("the calibration sweep");
     step("sweeping it while PetPlay calibrates");
     const calibration = await sweepForCalibration(driver, held.position);
     const fit = calibration.calibration;
@@ -169,6 +179,7 @@ async function main(): Promise<boolean> {
     await snap("layer-started");
     await showWindowLayer();
     await snap("window-layer");
+    await noDashboard("aiming");
     const aim = await aimCamera(driver, CAMERA_POSITION, CAMERA_TARGET);
     await snap("aimed");
     check("aimed camera within 1 cm", aim.errorMeters < 0.01, {

@@ -115,3 +115,18 @@ in view. One press of B (300 ms) together with grip, made with the hand at the s
 did show it, on the Tools page. Not yet explained. Candidates: the radial was opened earlier on
 the other hand or off-screen and later presses toggled it, or the hand pose had the menu outside
 the view. Check by screenshot, one press at a time, starting from a fresh restart.
+
+## SteamVR dashboard
+
+The SteamVR dashboard sometimes opens by itself mid-run; the cause is not known yet. While it is
+open it has the controllers: VRChat stops following the hands, so a held camera stays put (one
+check run missed its aim by 979 mm). It shows in `vrlab eye` as the VRChat card with "Resume
+Game".
+
+- `deno task vrlab dashboard [status|open|close|toggle]` reads `IVROverlay::IsDashboardVisible`
+  through a background OpenVR client, and toggles with the **left** controller's `system`
+  button. The right one does nothing. A 150 ms press is enough, and the state flips 0.1–0.3 s
+  after the release, so a capture taken right after a press can still show the old state.
+- `vrlab:camera-check` closes it before the Action Menu, the grab, the calibration sweep and the
+  aim, and logs `closed an unexpected SteamVR dashboard before …` when it had to. Those lines
+  and the per-step captures in the run directory are the evidence for finding the trigger.
