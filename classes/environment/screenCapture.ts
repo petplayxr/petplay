@@ -19,6 +19,7 @@ import raylib from "../../submodules/raylib_ts_bindings_deno/raylib_bindings.ts"
 
 type PendingCapture = {
   path: string;
+  keepAlpha: boolean;
   resolve: (path: string) => void;
   reject: (error: Error) => void;
 };
@@ -33,10 +34,13 @@ let lastCaptureError: string | null = null;
  * one. Only one capture may be queued at a time; a second call while one is
  * outstanding replaces it, since the newer frame is the one worth having.
  */
-export function requestScreenCapture(path: string): Promise<string> {
+export function requestScreenCapture(
+  path: string,
+  options: { keepAlpha?: boolean } = {},
+): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     pending?.reject(new Error("superseded by a newer capture request"));
-    pending = { path, resolve, reject };
+    pending = { path, keepAlpha: options.keepAlpha === true, resolve, reject };
   });
 }
 
@@ -68,7 +72,7 @@ export function runPendingScreenCapture(): void {
   pending = null;
 
   try {
-    const path = writeScreenPng(request.path);
+    const path = writeScreenPng(request.path, request.keepAlpha);
     lastCapturePath = path;
     lastCaptureError = null;
     request.resolve(path);
@@ -79,7 +83,14 @@ export function runPendingScreenCapture(): void {
   }
 }
 
-function writeScreenPng(path: string): string {
+function writeScreenPng(path: string, keepAlpha: boolean): string {
+  // raylib's screen readback hard-codes alpha to 255, so a transparent window is read
+  // through GL directly.
+  const withAlpha = keepAlpha ? readScreenRgba() : null;
+  if (withAlpha) {
+    Deno.writeFileSync(path, PNG.sync.write(withAlpha));
+    return path;
+  }
   const image = raylib.H.LoadImageFromScreen();
   try {
     const { width, height, data, format } = image;
@@ -115,4 +126,46 @@ function writeScreenPng(path: string): string {
   } finally {
     raylib.H.UnloadImage(image);
   }
+}
+
+const GL_RGBA = 0x1908;
+const GL_UNSIGNED_BYTE = 0x1401;
+let glReadPixels:
+  | ((x: number, y: number, w: number, h: number, format: number, type: number, out: Uint8Array) => void)
+  | null
+  | undefined;
+
+function loadGlReadPixels() {
+  if (glReadPixels !== undefined) return glReadPixels;
+  const candidates = Deno.build.os === "windows" ? ["opengl32.dll"] : ["libGL.so.1", "libGL.so"];
+  for (const path of candidates) {
+    try {
+      const library = Deno.dlopen(path, {
+        glReadPixels: { parameters: ["i32", "i32", "i32", "i32", "u32", "u32", "buffer"], result: "void" },
+      });
+      glReadPixels = library.symbols.glReadPixels;
+      return glReadPixels;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  glReadPixels = null;
+  return glReadPixels;
+}
+
+/** The framebuffer with its alpha, top row first; null when GL cannot be reached. */
+function readScreenRgba(): PNG | null {
+  const read = loadGlReadPixels();
+  if (read == null) return null;
+  const width = raylib.GetRenderWidth();
+  const height = raylib.GetRenderHeight();
+  if (width <= 0 || height <= 0) return null;
+  const pixels = new Uint8Array(width * height * 4);
+  read(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+  const png = new PNG({ width, height });
+  const stride = width * 4;
+  for (let y = 0; y < height; y++) {
+    png.data.set(pixels.subarray((height - 1 - y) * stride, (height - y) * stride), y * stride);
+  }
+  return png;
 }

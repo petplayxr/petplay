@@ -187,6 +187,16 @@ new PostMan(
     DESKTOPVIEWSTATUS: async (_payload: unknown) => {
       return await getDecoupledDesktopViewStatus();
     },
+    /** VRChat camera layer: a transparent window rendered from the calibrated VRC camera. */
+    STARTVRCCAMERAVIEW: async (payload: VrcCameraViewPayload | null) => {
+      return await startVrcCameraView(payload);
+    },
+    STOPVRCCAMERAVIEW: async (_payload: unknown) => {
+      return await stopVrcCameraView();
+    },
+    VRCCAMERAVIEWSTATUS: async (_payload: unknown) => {
+      return await getVrcCameraViewStatus();
+    },
   } as const,
 );
 
@@ -322,6 +332,8 @@ const clientActors = {
   desktopControl: null as ActorId | null,
   /** Started on demand by `STARTDESKTOPVIEW` — the decoupled IR-consumer view actor. */
   desktopView: null as ActorId | null,
+  /** Started on demand by `STARTVRCCAMERAVIEW` — the transparent VRChat camera layer. */
+  vrcCameraView: null as ActorId | null,
 };
 
 function clientActorRegistry() {
@@ -334,6 +346,7 @@ function clientActorRegistry() {
     ...(clientActors.cameraOrigin ? { cameraOrigin: clientActors.cameraOrigin } : {}),
     ...(clientActors.desktopControl ? { desktopControl: clientActors.desktopControl } : {}),
     ...(clientActors.desktopView ? { desktopView: clientActors.desktopView } : {}),
+    ...(clientActors.vrcCameraView ? { vrcCameraView: clientActors.vrcCameraView } : {}),
     ...(supervisedActors ? { openvr: supervisedActors.ivr } : {}),
     ...(attachment
       ? {
@@ -573,6 +586,79 @@ function decoupledDesktopViewPayload(capture: DecoupledViewPayload | null = null
     capturePath: capture?.capturePath ?? null,
     hidden: capture?.hidden ?? false,
   };
+}
+
+/** Client-requested extras for the VRC camera layer (see `desktopView.ts`). */
+type VrcCameraViewPayload = {
+  width?: number;
+  height?: number;
+  fovYDeg?: number;
+  diagnostics?: boolean;
+};
+
+/**
+ * The VRChat camera layer is a second `desktopView` instance, so a preview and a
+ * recording layer can run side by side. Its size should match VRChat's stream output
+ * so OBS can stack the two captures 1:1.
+ */
+async function startVrcCameraView(options: VrcCameraViewPayload | null) {
+  const payload = {
+    webxrTarget: clientActors.webxr,
+    camera: "vrc" as const,
+    width: options?.width ?? getNumberArg("--vrc-camera-view-width", 1920),
+    height: options?.height ?? getNumberArg("--vrc-camera-view-height", 1080),
+    fovYDeg: options?.fovYDeg ?? getNumberArg("--vrc-camera-fov", 50),
+    fps: getNumberArg("--vrc-camera-view-fps", 60),
+    diagnostics: options?.diagnostics ?? false,
+    title: "PetPlay VRC Camera",
+  };
+  const existing = clientActors.vrcCameraView;
+  if (existing != null && await actorIsResponsive(existing, OPENVR_HEALTH_TIMEOUT_MS)) {
+    PostMan.PostMessage({ target: existing, type: "STARTDESKTOPVIEW", payload });
+    return await getVrcCameraViewStatus();
+  }
+  if (existing != null) {
+    PostMan.PostMessage({ target: System, type: "MURDER", payload: existing });
+    await waitForActorsStopped([existing]);
+    clientActors.vrcCameraView = null;
+  }
+  const actor = await PostMan.create("./desktopView.ts", import.meta.url, {
+    worker: "process",
+  });
+  clientActors.vrcCameraView = resolveActorId(actor);
+  PostMan.PostMessage({ target: actor, type: "STARTDESKTOPVIEW", payload });
+  registerClientActors();
+  LogChannel.log("actor", `[desktop] vrc camera view started ${clientActors.vrcCameraView}`);
+  return await getVrcCameraViewStatus();
+}
+
+async function stopVrcCameraView() {
+  const id = clientActors.vrcCameraView;
+  if (id == null) {
+    return await getVrcCameraViewStatus();
+  }
+  await callActor(id, "STOPDESKTOPVIEW").catch((error) => {
+    LogChannel.log("actor", `[desktop] vrc camera STOPDESKTOPVIEW: ${messageOf(error)}`);
+  });
+  PostMan.PostMessage({ target: System, type: "MURDER", payload: id });
+  await waitForActorsStopped([id]);
+  clientActors.vrcCameraView = null;
+  registerClientActors();
+  LogChannel.log("actor", "[desktop] vrc camera view stopped");
+  return await getVrcCameraViewStatus();
+}
+
+async function getVrcCameraViewStatus() {
+  const id = clientActors.vrcCameraView;
+  if (id == null) {
+    return { running: false, actorId: null, details: null };
+  }
+  try {
+    const health = await callActor<{ details?: unknown }>(id, "HEALTH", OPENVR_HEALTH_TIMEOUT_MS);
+    return { running: true, actorId: id, details: health?.details ?? null };
+  } catch {
+    return { running: false, actorId: id, details: null };
+  }
 }
 
 async function getDecoupledDesktopViewStatus() {

@@ -65,6 +65,7 @@ import {
   type Vec3Tuple,
   type VrcCameraDebugPose,
 } from "../classes/vrcCameraDebugState.ts";
+import { type TrackedPose, VrcCameraTracker } from "../classes/vrcCameraCalibration.ts";
 import { captureDenoCpuProfile } from "../classes/denoCpuProfile.ts";
 import { getSettings, isSettingKey, loadSettings, setSetting } from "../classes/settings.ts";
 import { pushToast, type ToastInput } from "../classes/environment/toastStore.ts";
@@ -736,12 +737,17 @@ new PostMan(
     VRCCAMERADEBUGUPDATE: (
       payload: {
         cameraPose?: VrcCameraDebugPose | null;
+        zoom?: number | null;
         originEstimate?: Vec3Tuple | null;
         lookAtTargetEstimate?: Vec3Tuple | null;
       },
     ) => {
       if (payload.cameraPose) {
         setVrcCameraDebugPose(payload.cameraPose);
+        trackVrcCameraPose(payload.cameraPose);
+      }
+      if (typeof payload.zoom === "number") {
+        vrcCameraTracker.setFovYDeg(payload.zoom);
       }
       if ("originEstimate" in payload) {
         setVrcCameraOriginEstimate(payload.originEstimate ?? null);
@@ -750,6 +756,32 @@ new PostMan(
         setVrcCameraLookAtTargetEstimate(payload.lookAtTargetEstimate ?? null);
       }
     },
+    /**
+     * Grab-to-calibrate for `camera: "vrc"` views: while this runs, hold the VRChat camera
+     * and slowly turn it through several angles. Locomotion invalidates the result.
+     */
+    STARTVRCCAMERACALIBRATION: (payload: { durationMs?: number } | null) => {
+      const durationMs = Math.max(2_000, payload?.durationMs ?? VRC_CAMERA_CALIBRATION_MS);
+      vrcCameraTracker.startCalibration(durationMs);
+      pushToast({
+        title: "Calibrating VRChat camera",
+        content: `Hold the camera and slowly turn it for ${Math.round(durationMs / 1000)} s`,
+        timeoutMs: durationMs,
+      });
+      return vrcCameraTracker.status();
+    },
+    /** Ends a running capture now and solves with the samples so far. */
+    STOPVRCCAMERACALIBRATION: (_payload: void) => {
+      if (vrcCameraTracker.status().calibrating) {
+        reportVrcCameraCalibration(vrcCameraTracker.finishCalibration());
+      }
+      return vrcCameraTracker.status();
+    },
+    CLEARVRCCAMERACALIBRATION: (_payload: void) => {
+      vrcCameraTracker.clearCalibration();
+      return vrcCameraTracker.status();
+    },
+    GETVRCCAMERACALIBRATION: (_payload: void) => vrcCameraTracker.status(),
     SETDESKTOPVIEWOFFSET: (
       payload: DesktopViewOffsetPayload | Vec3Tuple | null,
     ) => {
@@ -827,6 +859,7 @@ new PostMan(
       state.views.set(actorId, {
         label: payload?.label ?? "view",
         cameraControl: payload?.cameraControl === true,
+        camera: payload?.camera === "vrc" ? "vrc" : "headset",
         primed: false,
         inFlight: false,
         sent: 0,
@@ -1279,6 +1312,8 @@ type WebXrViewChannel = {
   credit: OverlaySceneCredit;
   /** The view drives `SETDESKTOPVIEWOFFSET` for the shared viewpoint. */
   cameraControl: boolean;
+  /** `vrc`: frames carry the calibrated VRChat camera pose and a transparent background. */
+  camera: "headset" | "vrc";
   /** False until the first dependency-complete asset delivery has been shipped. */
   primed: boolean;
   /** All transport credits occupied; further frames are skipped, not queued. */
@@ -1300,6 +1335,7 @@ type RegisterWebXrViewPayload = {
   label?: string;
   cameraControl?: boolean;
   ownsTracking?: boolean;
+  camera?: "headset" | "vrc";
 };
 
 /** A tracking-owning view still gets an unchanged scene this often: liveness and loss recovery. */
@@ -1311,6 +1347,56 @@ function hasViewCameraControl(): boolean {
     if (view.cameraControl) return true;
   }
   return false;
+}
+
+/** Default grab-to-calibrate capture length. */
+const VRC_CAMERA_CALIBRATION_MS = 10_000;
+/** A fit worse than this probably paired the camera with the wrong motion. */
+const VRC_CAMERA_CALIBRATION_WARN_RMS_METERS = 0.03;
+
+const vrcCameraTracker = new VrcCameraTracker();
+
+function trackVrcCameraPose(pose: VrcCameraDebugPose): void {
+  const inputs = state.host?.getDirectOpenVrInputs();
+  const result = vrcCameraTracker.onWorldPose(pose, {
+    left: trackedPose(inputs?.controllers.left ?? null),
+    right: trackedPose(inputs?.controllers.right ?? null),
+  });
+  if (result) reportVrcCameraCalibration(result.calibration);
+}
+
+function trackedPose(
+  pose: { position: Float32Array; quaternion: Float32Array } | null,
+): TrackedPose | null {
+  if (pose == null) return null;
+  return {
+    position: [pose.position[0], pose.position[1], pose.position[2]],
+    quaternion: [pose.quaternion[0], pose.quaternion[1], pose.quaternion[2], pose.quaternion[3]],
+  };
+}
+
+function reportVrcCameraCalibration(
+  calibration: ReturnType<VrcCameraTracker["finishCalibration"]>,
+): void {
+  const status = vrcCameraTracker.status();
+  if (calibration == null) {
+    LogChannel.log("webxrv2", `[webxr] vrc camera ${status.lastError ?? "calibration failed"}`);
+    pushToast({ title: "Camera calibration failed", content: status.lastError ?? "", tone: "error" });
+    return;
+  }
+  const rmsCm = (calibration.rmsErrorMeters * 100).toFixed(1);
+  LogChannel.log(
+    "webxrv2",
+    `[webxr] vrc camera calibrated: hand=${calibration.hand} rms=${rmsCm}cm scale=${
+      calibration.scale.toFixed(3)
+    } yaw=${(calibration.yawRad * 180 / Math.PI).toFixed(1)}deg samples=${calibration.samples}`,
+  );
+  const rough = calibration.rmsErrorMeters > VRC_CAMERA_CALIBRATION_WARN_RMS_METERS;
+  pushToast({
+    title: rough ? "Camera calibration is rough" : "Camera calibrated",
+    content: `${calibration.hand} hand, ${rmsCm} cm error${rough ? " - try again, turning slowly" : ""}`,
+    tone: rough ? "warning" : "info",
+  });
 }
 
 function getWebXrViewsStatus() {
@@ -1398,10 +1484,12 @@ function publishRaythreeFrameToViews(
     view.lastSentAt = performance.now();
     view.primed = true;
     const extraction = { ...payload.leftEye, assets: prepared.assets };
+    const vrcView = view.camera === "vrc";
     const outgoing: WebXRRaythreeRenderPayload = {
       ...payload,
-      background: view.label === "projection-renderer" ? [0, 0, 0, 0] : background,
+      background: view.label === "projection-renderer" || vrcView ? [0, 0, 0, 0] : background,
       delivery: prepared.delivery, leftEye: extraction, rightEye: extraction,
+      ...(vrcView ? { vrcCamera: vrcCameraTracker.currentViewPose() } : {}),
     };
     if (view.compactWire) {
       const start = performance.now();

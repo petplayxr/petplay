@@ -15,6 +15,7 @@ import type { SceneDelivery } from "./overlaySceneDelivery.ts";
 import { type ExtractionResult, RaythreeExtractor } from "../submodules/raythree/src/lib.ts";
 import type { WebXRShadowFrame } from "./webxrhost.ts";
 import type { IntervalMetric } from "./intervalMetric.ts";
+import type { VrcCameraViewPose } from "./vrcCameraCalibration.ts";
 import { extractWebXRRaythreeUi, type WebXRRaythreeUiSnapshot } from "./webxrRaythreeUi.ts";
 
 /** Optional per-section timings for `buildPayload` (Raylib overlay profiling). */
@@ -27,6 +28,8 @@ export type WebXRRaythreeBuildProbes = {
 
 export type WebXRRaythreeRenderPayload = {
   delivery?: SceneDelivery;
+  /** Only for `camera: "vrc"` views: the calibrated VRChat camera, or null when uncalibrated. */
+  vrcCamera?: VrcCameraViewPose | null;
   renderGripOffsets?: Partial<Record<"left" | "right", Float32Array>>;
   frame: WebXRShadowFrame;
   background: [number, number, number, number];

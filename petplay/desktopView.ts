@@ -20,6 +20,12 @@
  * capture path and close. That is how `client capture` takes a screenshot with no
  * preview window left running.
  *
+ * `camera: "vrc"` renders from the calibrated VRChat user camera instead of the headset,
+ * into a transparent window with no FPS counter: the PetPlay layer of a recording,
+ * captured by OBS (PipeWire window capture keeps alpha) and stacked over VRChat's own
+ * camera output. Calibration lives in the scene (`STARTVRCCAMERACALIBRATION`); until it
+ * exists the window stays fully transparent.
+ *
  * Runs as a child OS process (`{ worker: "process" }`) so the window's GL context
  * and event loop stay out of the host process, matching `displayOverlayHost`.
  */
@@ -36,6 +42,7 @@ import {
   runPendingScreenCapture,
 } from "../classes/environment/screenCapture.ts";
 import { wait } from "../classes/utils.ts";
+import * as THREE from "three";
 
 export type StartDesktopViewPayload = {
   /** `webxr` actor id to register with (frames + camera offset). */
@@ -51,6 +58,10 @@ export type StartDesktopViewPayload = {
   capturePath?: string | null;
   /** Create the window hidden — used by the one-shot capture path. */
   hidden?: boolean;
+  /** Viewpoint: the headset's left eye (default) or the calibrated VRChat camera. */
+  camera?: "headset" | "vrc";
+  /** Vertical FOV for `camera: "vrc"` when VRChat has not reported its zoom. */
+  fovYDeg?: number;
 };
 
 /** Stable renderer context id: asset sync is incremental per id. */
@@ -65,6 +76,9 @@ const IDLE_REDRAW_MS = 250;
 const CAPTURE_FALLBACK_MS = 5_000;
 /** Silence this long after receiving frames means the scene's view registry was rebuilt. */
 const VIEW_REREGISTER_AFTER_MS = 5_000;
+const TRANSPARENT = { r: 0, g: 0, b: 0, a: 0 };
+const VRC_CAMERA_NEAR_METERS = 0.03;
+const VRC_CAMERA_FAR_METERS = 500;
 
 const state = actorState({
   name: "desktop_view",
@@ -103,6 +117,10 @@ const state = actorState({
   assetsSeen: { geometries: 0, materials: 0, textures: 0 },
   /** Draw the IR/payload diagnostics line into the window. */
   diagnostics: false,
+  camera: "headset" as "headset" | "vrc",
+  fovYDeg: 50,
+  /** `camera: "vrc"`: whether the last frame carried a calibrated camera. */
+  vrcCameraCalibrated: false,
   loop: null as Promise<void> | null,
 });
 
@@ -153,7 +171,9 @@ new PostMan(
         return { ok: false, error: "desktop view is not running" };
       }
       try {
-        const path = await requestScreenCapture(payload?.path ?? `${Deno.cwd()}/desktop-view.png`);
+        const path = await requestScreenCapture(payload?.path ?? `${Deno.cwd()}/desktop-view.png`, {
+          keepAlpha: state.camera === "vrc",
+        });
         return { ok: true, path };
       } catch (error) {
         return { ok: false, error: messageOf(error) };
@@ -193,6 +213,8 @@ function getDesktopViewStatus() {
     capturePath: state.capturePath,
     captureWritten: state.captureWritten,
     hidden: state.hidden,
+    camera: state.camera,
+    vrcCameraCalibrated: state.vrcCameraCalibrated,
     loopRunning: state.loop != null,
   };
 }
@@ -209,9 +231,12 @@ function startDesktopView(payload: StartDesktopViewPayload): void {
   state.capturePath = payload.capturePath ?? null;
   state.captureWritten = null;
   state.hidden = payload.hidden ?? state.hidden;
+  state.fovYDeg = payload.fovYDeg != null && payload.fovYDeg > 1 ? payload.fovYDeg : state.fovYDeg;
   if (state.loop != null) {
     return;
   }
+  // Fixed for the window's lifetime: it decides the window flags and the registration.
+  state.camera = payload.camera ?? state.camera;
   state.stopRequested = false;
   state.lastError = null;
   state.framesReceived = 0;
@@ -254,7 +279,11 @@ function registerWithWebXr(): void {
     type: "REGISTERWEBXRVIEW",
     // No `cameraControl`: this is a preview. View control moves the rendered XR
     // pose, which desyncs it from the OpenVR overlays placed in absolute space.
-    payload: { actorId: state.id, label: "desktop" },
+    payload: {
+      actorId: state.id,
+      label: state.camera === "vrc" ? "vrc-camera" : "desktop",
+      camera: state.camera,
+    },
   });
   state.registered = true;
   LogChannel.log("actor", `[desktopView] registered with ${target} as ${state.id}`);
@@ -281,9 +310,10 @@ async function runDesktopViewWindow(): Promise<void> {
   let renderer: WebXRRaythreeRaylibRenderer | null = null;
   let captureRequested = false;
   try {
-    if (state.hidden) {
-      raylib.SetConfigFlags(raylib.ConfigFlags.FLAG_WINDOW_HIDDEN);
-    }
+    let flags = 0;
+    if (state.hidden) flags |= raylib.ConfigFlags.FLAG_WINDOW_HIDDEN;
+    if (state.camera === "vrc") flags |= raylib.ConfigFlags.FLAG_WINDOW_TRANSPARENT;
+    if (flags !== 0) raylib.SetConfigFlags(flags);
     raylib.H.InitWindow(width, height, state.title);
     windowUp = true;
     raylib.SetTargetFPS(state.fps);
@@ -375,18 +405,29 @@ function drawLatestFrame(renderer: WebXRRaythreeRaylibRenderer): void {
   raylib.BeginDrawing();
   try {
     const payload = latestPayload;
+    const vrcView = state.camera === "vrc";
     if (payload == null) {
-      raylib.H.ClearBackground({ r: 12, g: 14, b: 18, a: 255 });
+      raylib.H.ClearBackground(vrcView ? TRANSPARENT : { r: 12, g: 14, b: 18, a: 255 });
+      return;
+    }
+    const matrices = vrcView ? vrcCameraMatrices(payload) : {
+      projectionMatrix: payload.frame.leftEyeProjectionMatrix,
+      viewMatrix: payload.frame.leftEyeViewMatrix,
+    };
+    state.vrcCameraCalibrated = vrcView && matrices != null;
+    if (matrices == null) {
+      // Uncalibrated: an empty layer rather than a headset view a stream would show.
+      raylib.H.ClearBackground(TRANSPARENT);
+      if (state.diagnostics) {
+        raylib.H.DrawText("VRC camera not calibrated", 16, 16, 20, { r: 255, g: 214, b: 120, a: 255 });
+      }
       return;
     }
     const renderStartedAt = performance.now();
     renderer.renderExtraction(
       payload.leftEye,
       payload.background,
-      {
-        projectionMatrix: payload.frame.leftEyeProjectionMatrix,
-        viewMatrix: payload.frame.leftEyeViewMatrix,
-      },
+      matrices,
       RENDER_CONTEXT_ID,
       payload.ui,
     );
@@ -396,8 +437,9 @@ function drawLatestFrame(renderer: WebXRRaythreeRaylibRenderer): void {
       renderedSeq = latestSeq;
     }
     // Window-side diagnostics: drawn every frame so a capture proves both the
-    // framebuffer path and what the IR carried.
-    raylib.DrawFPS(16, 16);
+    // framebuffer path and what the IR carried. The VRC camera layer is recorded, so
+    // it carries no counter unless diagnostics are asked for.
+    if (!vrcView || state.diagnostics) raylib.DrawFPS(16, 16);
     if (state.diagnostics) {
       raylib.H.DrawText(
         `ir=${state.framesReceived} rendered=${state.framesRendered} inst=${
@@ -424,4 +466,33 @@ function drawLatestFrame(renderer: WebXRRaythreeRaylibRenderer): void {
       payload: { actorId: state.id, seq: renderedSeq, delivery: latestPayload?.delivery },
     });
   }
+}
+
+const vrcCameraWorld = new THREE.Matrix4();
+const vrcCameraView = new THREE.Matrix4();
+const vrcCameraPosition = new THREE.Vector3();
+const vrcCameraQuaternion = new THREE.Quaternion();
+const vrcCameraScale = new THREE.Vector3(1, 1, 1);
+const vrcCameraProjection = new THREE.PerspectiveCamera();
+const vrcCameraViewElements = new Float32Array(16);
+const vrcCameraProjectionElements = new Float32Array(16);
+
+/** View/projection for the calibrated VRChat camera; null when the scene has no calibration. */
+function vrcCameraMatrices(
+  payload: WebXRRaythreeRenderPayload,
+): { projectionMatrix: Float32Array; viewMatrix: Float32Array } | null {
+  const camera = payload.vrcCamera;
+  if (camera == null) return null;
+  vrcCameraPosition.fromArray(camera.position);
+  vrcCameraQuaternion.fromArray(camera.quaternion);
+  vrcCameraWorld.compose(vrcCameraPosition, vrcCameraQuaternion, vrcCameraScale);
+  vrcCameraView.copy(vrcCameraWorld).invert();
+  vrcCameraViewElements.set(vrcCameraView.elements);
+  vrcCameraProjection.fov = camera.fovYDeg ?? state.fovYDeg;
+  vrcCameraProjection.aspect = raylib.GetScreenWidth() / Math.max(1, raylib.GetScreenHeight());
+  vrcCameraProjection.near = VRC_CAMERA_NEAR_METERS;
+  vrcCameraProjection.far = VRC_CAMERA_FAR_METERS;
+  vrcCameraProjection.updateProjectionMatrix();
+  vrcCameraProjectionElements.set(vrcCameraProjection.projectionMatrix.elements);
+  return { projectionMatrix: vrcCameraProjectionElements, viewMatrix: vrcCameraViewElements };
 }

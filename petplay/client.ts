@@ -104,6 +104,11 @@ function help(): string {
     "  capture    PNG through the desktop preview's own screen capture; uses a",
     "             running preview or starts a hidden one for one frame",
     "             (--path=<file.png>, --width=/--height= for that frame)",
+    "  camera     transparent window rendered from the VRChat camera, for OBS to",
+    "             stack over VRChat's stream output (--width=/--height= to match it,",
+    "             --fov=<deg> until VRChat reports its zoom, --diagnostics, --stop)",
+    "             `camera calibrate [--seconds=10]`: hold the VRChat camera and turn",
+    "             it slowly; redo after locomotion. `camera status` reads both",
     "  repair     repair the XR presentation in place (--restart restarts the stack)",
     "  reboot     stop the server, start it again with the same arguments, and",
     "             bring the desktop surface back (--no-detach skips the SteamVR",
@@ -319,6 +324,90 @@ async function desktopCommand(
     }
   }
   return 0;
+}
+
+type VrcCameraCalibrationStatus = {
+  calibrating: boolean;
+  calibrationRemainingMs: number;
+  samples: number;
+  calibration: {
+    hand: string;
+    rmsErrorMeters: number;
+    maxErrorMeters: number;
+    scale: number;
+    yawRad: number;
+    samples: number;
+  } | null;
+  lastError: string | null;
+  hasWorldPose: boolean;
+  fovYDeg: number | null;
+};
+
+/** `camera` drives the VRChat camera layer and its calibration (see `desktopView.ts`). */
+async function cmdCamera(): Promise<number> {
+  const health = await requireServer();
+  const main = health.actors?.main;
+  const webxr = health.actors?.webxr;
+  if (main == null || webxr == null) {
+    throw new Error("server has no `main`/`webxr` actor registered");
+  }
+  const sub = Deno.args.filter((arg) => !arg.startsWith("-"))[1];
+  if (sub === "calibrate") {
+    const seconds = numberFlag("--seconds") ?? 10;
+    let status = await sendMessage<VrcCameraCalibrationStatus>(webxr, "STARTVRCCAMERACALIBRATION", {
+      durationMs: seconds * 1000,
+    });
+    console.log(`calibrating for ${seconds}s: hold the VRChat camera and slowly turn it`);
+    if (!status.hasWorldPose) {
+      console.warn("no VRChat camera pose received yet: is the camera open and OSC enabled?");
+    }
+    while (status.calibrating) {
+      await wait(1_000);
+      status = await sendMessage<VrcCameraCalibrationStatus>(webxr, "GETVRCCAMERACALIBRATION");
+      if (status.calibrating) {
+        console.log(`  ${Math.ceil(status.calibrationRemainingMs / 1000)}s left, ${status.samples} samples`);
+      }
+      if (status.calibrating && status.calibrationRemainingMs <= 0) {
+        // Poses stopped arriving; solve with what there is.
+        status = await sendMessage<VrcCameraCalibrationStatus>(webxr, "STOPVRCCAMERACALIBRATION");
+      }
+    }
+    console.log(formatVrcCameraCalibration(status));
+    return status.lastError == null ? 0 : 1;
+  }
+  if (sub === "status") {
+    const [view, calibration] = await Promise.all([
+      sendMessage<DesktopViewStatus>(main, "VRCCAMERAVIEWSTATUS"),
+      sendMessage<VrcCameraCalibrationStatus>(webxr, "GETVRCCAMERACALIBRATION"),
+    ]);
+    console.log(`camera view  ${formatDesktopView(view)}`);
+    console.log(`calibration  ${formatVrcCameraCalibration(calibration)}`);
+    return 0;
+  }
+  const stopping = hasFlag("--stop");
+  const status = await sendMessage<DesktopViewStatus>(
+    main,
+    stopping ? "STOPVRCCAMERAVIEW" : "STARTVRCCAMERAVIEW",
+    stopping ? null : {
+      width: numberFlag("--width") ?? undefined,
+      height: numberFlag("--height") ?? undefined,
+      fovYDeg: numberFlag("--fov") ?? undefined,
+      diagnostics: hasFlag("--diagnostics"),
+    },
+  );
+  console.log(`camera view ${stopping ? "stop" : "start"} -> ${formatDesktopView(status)}`);
+  return 0;
+}
+
+function formatVrcCameraCalibration(status: VrcCameraCalibrationStatus): string {
+  const fov = status.fovYDeg == null ? "fov unreported" : `fov ${status.fovYDeg.toFixed(1)}deg`;
+  const pose = status.hasWorldPose ? "pose received" : "no pose yet";
+  if (status.lastError) return `failed: ${status.lastError} (${pose}, ${fov})`;
+  const fit = status.calibration;
+  if (fit == null) return `not calibrated (${pose}, ${fov})`;
+  return `${fit.hand} hand, rms ${(fit.rmsErrorMeters * 100).toFixed(1)}cm max ${
+    (fit.maxErrorMeters * 100).toFixed(1)
+  }cm, scale ${fit.scale.toFixed(3)}, yaw ${(fit.yawRad * 180 / Math.PI).toFixed(1)}deg, ${fit.samples} samples (${fov})`;
 }
 
 /** Repairs the scene's presentation in place — no process restart. */
@@ -565,6 +654,8 @@ async function main(): Promise<number> {
       return await cmdDesktop();
     case "capture":
       return await cmdCapture();
+    case "camera":
+      return await cmdCamera();
     case "repair":
       return await cmdRepair();
     case "reboot":

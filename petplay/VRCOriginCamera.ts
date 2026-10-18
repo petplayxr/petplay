@@ -69,6 +69,7 @@ type CameraOrbitRuntime = {
 const USER_CAMERA_POSE = "/usercamera/Pose";
 const USER_CAMERA_MODE = "/usercamera/Mode";
 const USER_CAMERA_LOOK_AT_ME = "/usercamera/LookAtMe";
+const USER_CAMERA_ZOOM = "/usercamera/Zoom";
 const CUSTOM_OBJECT_SYNC_PREFIX = "/avatar/parameters/CustomObjectSync/";
 const CUSTOM_OBJECT_SYNC_POSITION_X = `${CUSTOM_OBJECT_SYNC_PREFIX}PositionX`;
 const CUSTOM_OBJECT_SYNC_POSITION_Y = `${CUSTOM_OBJECT_SYNC_PREFIX}PositionY`;
@@ -91,6 +92,7 @@ const state = actorState({
   webxr: null as ActorId | null,
   driver: null as CameraOscQueryDriver | null,
   latestCameraPose: null as VrcCameraDebugPose | null,
+  latestZoom: null as number | null,
   positionSamples: [] as CameraRaySample[],
   positionEstimate: null as CameraPositionEstimate | null,
   visualBaselinePosition: null as Vec3Tuple | null,
@@ -213,6 +215,14 @@ function handleOscMessage(message: OscMessage): void {
     }
   }
 
+  if (message.address === USER_CAMERA_ZOOM && typeof message.args[0] === "number") {
+    state.latestZoom = message.args[0];
+    if (state.webxr) {
+      PostMan.PostMessage({ target: state.webxr, type: "VRCCAMERADEBUGUPDATE", payload: { zoom: state.latestZoom } });
+    }
+    return;
+  }
+
   if (message.address !== USER_CAMERA_POSE) return;
   if (message.args.length < 6 || !message.args.every((value) => typeof value === "number")) {
     return;
@@ -228,7 +238,8 @@ function handleOscMessage(message: OscMessage): void {
   updatePositionEstimate(pose);
 
   const now = Date.now();
-  if (now - state.lastDebugPostAt < 33) {
+  // The VRC camera view renders from these poses, so forward them at display-like rates.
+  if (now - state.lastDebugPostAt < 8) {
     return;
   }
   state.lastDebugPostAt = now;
@@ -679,6 +690,11 @@ function buildAddressTree(): OSCQueryNode {
             FULL_PATH: USER_CAMERA_POSE,
             ACCESS: 3,
             TYPE: "ffffff",
+          },
+          "Zoom": {
+            FULL_PATH: USER_CAMERA_ZOOM,
+            ACCESS: 3,
+            TYPE: "f",
           },
         },
       },
