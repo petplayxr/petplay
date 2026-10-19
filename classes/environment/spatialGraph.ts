@@ -699,6 +699,12 @@ export function recenterSpatialRoots(
       },
     };
   }
+  // A keyboard that no longer hangs from a display comes back under the primary one, so one
+  // dropped out of reach, or left on a hand, is a Recenter away. A taken bottom slot keeps it put.
+  const keyboard = Object.values(graph.nodes).find((node) => node.kind === "keyboard");
+  if (keyboard != null && keyboard.constraint == null) {
+    return attachSpatialNodeToSlot(graph, keyboard.id, `${primary.id}-bottom-slot`);
+  }
   return graph;
 }
 

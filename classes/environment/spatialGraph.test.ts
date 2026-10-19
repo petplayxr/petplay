@@ -577,6 +577,27 @@ Deno.test("recenter puts the primary display in front of the head and keeps the 
   );
 });
 
+Deno.test("recenter brings a lost keyboard back under the primary display", () => {
+  let graph = detachFromParent(createInitialSpatialGraph(), "keyboard");
+  graph = commitNodeTransform(graph, "keyboard", {
+    position: [40, -3, 12],
+    rotation: [0, 2, 0],
+    scale: [0.38, 0.38, 0.38],
+  });
+  const recentered = recenterSpatialRoots(graph, [0, 1.6, 0], 0, [0, -0.08, -1.35]);
+  const keyboard = recentered.nodes.keyboard;
+  assert(keyboard?.parentId === "display-1", "keyboard reparented to the primary display");
+  assert(
+    keyboard.constraint?.attachmentSlotId === "display-1-bottom-slot",
+    "keyboard hinged to the bottom slot",
+  );
+
+  // A display already hanging below the primary keeps the slot; the keyboard just moves along.
+  let occupied = detachFromParent(spawnHingedDisplay(graph, "display-1", "bottom"), "keyboard");
+  occupied = recenterSpatialRoots(occupied, [0, 1.6, 0], 0, [0, -0.08, -1.35]);
+  assert(occupied.nodes.keyboard?.constraint == null, "taken bottom slot leaves the keyboard free");
+});
+
 Deno.test("locking a node is a no-op when unchanged and survives a clone", () => {
   const graph = createInitialSpatialGraph();
   assert(setSpatialNodeLocked(graph, "display-1", false) === graph, "unlocking an unlocked node");
