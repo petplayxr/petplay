@@ -176,9 +176,8 @@ Actor→actor messages are typed strings; the only transport is
 `PostMan.PostMessage({ target, type, payload, reply })`, which is a structured clone. That is why IR
 payloads and raw interface pointers (as numbers/bigints) can both cross it, and why `Object3D`
 graphs cannot. Note the direction of the two pose edges: the origin and camera-origin actors *push*
-into `webxr`; the scene does not poll them. `hmd` also serves a pose websocket on port 8887
-(`petplay/hmd.ts:106,116`) that nothing connects to today — the live HMD poses reach the scene
-through `WebXRHost`'s own IVRSystem sampling.
+into `webxr`; the scene does not poll them. `hmd` answers pose and display-frequency requests
+only; the live HMD poses reach the scene through `WebXRHost`'s own IVRSystem sampling.
 
 The desktop control **child is not an actor**: it reaches the graph through the agent REPL's HTTP
 surface (its window process posts `SETDESKTOPVIEWOFFSET` and `GETWRISTMENUSTATE` messages, which the
@@ -504,9 +503,9 @@ Findings from writing this doc, all traceable to code:
   so reading one gives a distorted panorama rather than a view. `client capture` goes through the
   preview renderer's own framebuffer instead, which is a plain screen readback.
 - **Multi-instance collisions beyond overlay keys**: two instances on one machine still fight over
-  fixed ports — the `hmd` pose websocket (8887) and the capture receiver (12345) both fail with
-  `Address already in use` in the second instance. Overlay keys are claimed per process now; these
-  ports are the remaining fixed resources (env/pid-derived ports would fix them the same way).
+  fixed ports — the capture receiver (12345) fails with `Address already in use` in the second
+  instance. Overlay keys are claimed per process now; this port is the remaining fixed resource
+  (an env/pid-derived port would fix it the same way).
 - **Desktop view fidelity is angular-resolution bound**: the headset rasterizes each eye at 3560²
   over the same FOV the window draws into 1280×720, so UI text that is legible in VR is a few pixels
   tall in the window. Supersampling the view or dollying closer are the workarounds; interaction

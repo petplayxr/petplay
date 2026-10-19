@@ -182,6 +182,28 @@ the server keeps running after its stdin ends, and quits with code 0. Unit suite
 compiled smoke passed in both modes; lifecycle, smoke, showhide, layouts, window-settings, wrist,
 keyboard, toasts, grablatency, grabdrops and camera passed.
 
+## Accepted: remove the hmd actor's unused 100 Hz pose loop
+
+After the shutdown fix, quits of `174f92e` completed teardown but 2 of 20 still segfaulted in
+`exit()` (`_scratch/perf/shutdown/head-quits/`). Both cores, like the earlier ones, fault on
+`worker-7` inside `vrclient.so` from an FFI call. `worker-7` was the busiest worker after webxr's
+render threads: 106 voluntary wakeups/s. `petplay/hmd.ts` started a `Deno.serve` on port 8887
+and a loop that called `GetDeviceToAbsoluteTrackingPose` for all 64 devices every 10 ms, sending
+the HMD pose only if a websocket client was connected. Nothing connects to it
+(`docs/ARCHITECTURE.md` said so), and the actor has no `__SHUTDOWN__`, so the loop kept calling
+into `vrclient.so` while `exit()` ran its handlers. The server and loop are removed; the actor
+still answers `GETHMDPOSITION` (VRCOrigin) and `GETHMDDISPLAYFREQUENCY`.
+
+`_scratch/perf/hmd-loop/`, release, alternating quits after 15 s of shown windows, lab without
+VRChat: baseline 1 SIGSEGV in 15 quits (`worker-7`, `vrclient.so` again), `worker-7` 105–107
+wakeups/s in every launch; candidate 0 in 25 quits, `worker-7` no longer among the busiest
+workers. Across today's runs `174f92e` crashed in 3 of 35 quits. That split alone is not
+significant (Fisher p ≈ 0.19); the evidence that this is the cause is that every core's faulting
+thread is the loop's thread. It also frees the fixed port 8887. Unit suite 234 passed; compiled
+smoke passed in both modes; lifecycle, smoke, showhide, layouts, window-settings, wrist,
+keyboard, toasts, grablatency, grabdrops and camera passed. The opt-in `--vrc-origin` loop has
+the same no-stop shape; it was not changed.
+
 ## Shelved: VRChat camera OSC while PetPlay's camera is unused
 
 The always-mounted wrist home subscribes to the whole camera snapshot, so it re-renders at 4 Hz
