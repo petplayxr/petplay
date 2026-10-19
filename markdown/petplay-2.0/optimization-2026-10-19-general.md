@@ -218,6 +218,32 @@ webxr is not a recoverable worker, so such a string could end the session. three
 235 passed; compiled smoke passed in both modes; smoke, wrist, keyboard, toasts, window-settings,
 showhide, camera and layouts (twice) passed.
 
+## Accepted: keep wrist pages built after their first visit
+
+Frame observation with per-frame heap sampling (`_scratch/perf/gc-misses/`) put every missed
+refresh of two general-route rounds (release `e3aa83b`, VRChat, beyond75) inside the
+wrist-menu-cycles step. `WristMenuUi` returned one page per view, so each switch unmounted the
+old page's UIKit tree (listener aborts, `removeChild`) and built the new one (signals, property
+layers, yoga). Pages now sit in their own `React.Activity`, built on first visit and hidden
+afterwards, with `intersectChildren` off while hidden. Subpage elements are memoized and a hidden
+page keeps the opacity and pointer type it was last shown with, so the clock's tick and an
+opacity step don't restyle hidden pages. The playtest and vrlab text lookups now skip hidden text.
+
+`_scratch/perf/wrist-pages/ab1/`, release, four alternating pairs with VRChat, the general route
+each: refresh intervals of 20 ms or more during wrist-menu-cycles 3, 7, 3, 3 → 0, 0, 0, 0; worst
+interval in that step 23.6–25.5 → 14.1–15.8 ms; whole-route misses 17 → 2. Every route step
+passed in all eight runs, and once on the debug build with VRChat.
+
+Tradeoff, accepted: switching the menu to the other hand remounts it in the other controller,
+which now tears down every visited page. Four hand switches after a route, release with VRChat
+(`hand/`): worst interval 33.9–39.3 → 62.2–67.4 ms, misses 4 → 5 per four switches. A hand switch
+is a one-off setting that already dropped frames; page switches are the everyday path. Moving the
+menu between controllers without a remount would remove it.
+
+Unit suite 235 passed; compiled smoke passed in both modes; lifecycle, smoke, showhide, layouts,
+window-settings, wrist, keyboard, toasts, grablatency, grabdrops and camera passed. hovertoolbar
+still needs a second host output.
+
 ## Shelved: VRChat camera OSC while PetPlay's camera is unused
 
 The always-mounted wrist home subscribes to the whole camera snapshot, so it re-renders at 4 Hz

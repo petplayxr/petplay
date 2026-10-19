@@ -41,10 +41,10 @@ function wristMenu(ctx: PlaytestContext): THREE.Object3D {
 
 const wristText = (ctx: PlaytestContext, text: string) => ctx.textObject(wristMenu(ctx), text);
 
-/** All the text drawn on the wrist menu. */
+/** All the text drawn on the wrist menu; hidden pages stay built but don't count. */
 function wristTexts(ctx: PlaytestContext): string[] {
   const texts: string[] = [];
-  wristMenu(ctx).traverse((object) => {
+  wristMenu(ctx).traverseVisible((object) => {
     const text = object.userData?.raythreeUiText?.text;
     if (typeof text === "string") texts.push(text);
   });

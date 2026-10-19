@@ -390,6 +390,14 @@ export type PlaytestFrameStats = {
   stalls: [number, number][];
 };
 
+/** Hidden wrist pages and windows stay built under a hidden Activity: only shown text counts. */
+function shown(object: THREE.Object3D): boolean {
+  for (let node: THREE.Object3D | null = object; node != null; node = node.parent) {
+    if (!node.visible) return false;
+  }
+  return true;
+}
+
 /**
  * Times every frame while a step runs, from the end of one r3f update to the next, so a stall
  * anywhere on the thread (a React commit, a texture upload, the render) shows up as a long
@@ -463,7 +471,7 @@ export async function runPlaytestStep(
     scene,
     nodeObject: (id) => findObject(scene(), (object) => object.userData?.spatialElementId === id),
     textObject: (root, text) =>
-      findObject(root, (object) => object.userData?.raythreeUiText?.text === text),
+      findObject(root, (object) => object.userData?.raythreeUiText?.text === text && shown(object)),
     clickObject: async (target, face = target, distance = 0.6) => {
       const point = target.getWorldPosition(new THREE.Vector3());
       const facing = face.getWorldQuaternion(new THREE.Quaternion());

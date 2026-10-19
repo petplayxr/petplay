@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { CameraSettingsView } from "./cameraView.tsx";
 import { useVrcCameraSnapshot } from "../vrcCameraStore.ts";
 import type { AllowedPointerEventsType } from "@pmndrs/pointer-events";
@@ -395,69 +395,79 @@ export function WristMenuUi(
   }: WristMenuUiProps,
 ) {
   const pe: AllowedPointerEventsType = pointerEventsType ?? "all";
-  const [view, setView] = useState<"main" | "settings" | "wrist" | "monitors" | "layouts" | "camera">(
-    "main",
-  );
+  const [view, setView] = useState<WristView>("main");
+  // A page is built on its first visit and kept after that.
+  const visited = React.useRef(new Set<WristView>()).current;
+  visited.add(view);
   const batteries = useBatteryReadings();
   const nowPlaying = useNowPlaying();
   const camera = useVrcCameraSnapshot();
   const opacity = useSetting("wristMenuOpacity");
+  const layoutSlots = workspaceLayout.layoutSlots ?? EMPTY_LAYOUT_SLOTS;
 
-  if (view === "settings") {
-    return (
-      <Shell pointerEventsType={pe} opacity={opacity}>
-        <SettingsView
-          onBack={() => setView("main")}
-          onOpenWrist={() => setView("wrist")}
-          onOpenMonitors={() => setView("monitors")}
-          onOpenLayouts={() => setView("layouts")}
-          onOpenCamera={() => setView("camera")}
-        />
-      </Shell>
-    );
-  }
-
-  if (view === "camera") {
-    return <Shell pointerEventsType={pe} opacity={opacity}>
+  // Built once per change of what they show, so the clock's once-a-second render does not
+  // re-render the hidden pages. A hidden page also keeps the opacity and pointer type it was last
+  // shown with: opacity is inherited by every UIKit component, so stepping it would otherwise
+  // restyle all six pages at once. A page shown after a change restyles then, as before.
+  const shownStyle = React.useRef(new Map<WristView, PageStyle>());
+  const styleOf = (page: WristView): PageStyle => {
+    const last = shownStyle.current.get(page);
+    if (last !== undefined && (view !== page || (last.pe === pe && last.opacity === opacity))) {
+      return last;
+    }
+    const style = { pe, opacity };
+    shownStyle.current.set(page, style);
+    return style;
+  };
+  const mainStyle = styleOf("main");
+  const settingsStyle = styleOf("settings");
+  const cameraStyle = styleOf("camera");
+  const wristStyle = styleOf("wrist");
+  const layoutsStyle = styleOf("layouts");
+  const monitorsStyle = styleOf("monitors");
+  const settings = useMemo(() => (
+    <Shell pointerEventsType={settingsStyle.pe} opacity={settingsStyle.opacity}>
+      <SettingsView
+        onBack={() => setView("main")}
+        onOpenWrist={() => setView("wrist")}
+        onOpenMonitors={() => setView("monitors")}
+        onOpenLayouts={() => setView("layouts")}
+        onOpenCamera={() => setView("camera")}
+      />
+    </Shell>
+  ), [settingsStyle]);
+  const cameraPage = useMemo(() => (
+    <Shell pointerEventsType={cameraStyle.pe} opacity={cameraStyle.opacity}>
       <CameraSettingsView onBack={() => setView("settings")} />
-    </Shell>;
-  }
+    </Shell>
+  ), [cameraStyle]);
+  const wrist = useMemo(() => (
+    <Shell pointerEventsType={wristStyle.pe} opacity={wristStyle.opacity}>
+      <WristSettingsView onBack={() => setView("settings")} />
+    </Shell>
+  ), [wristStyle]);
+  const layouts = useMemo(() => (
+    <Shell pointerEventsType={layoutsStyle.pe} opacity={layoutsStyle.opacity}>
+      <LayoutSlotsView
+        slots={layoutSlots}
+        onSave={onSaveLayout}
+        onLoad={onLoadLayout}
+        onBack={() => setView("settings")}
+      />
+    </Shell>
+  ), [layoutsStyle, layoutSlots, onSaveLayout, onLoadLayout]);
+  const monitors = useMemo(() => (
+    <Shell pointerEventsType={monitorsStyle.pe} opacity={monitorsStyle.opacity}>
+      <MonitorAssignments
+        workspaceLayout={workspaceLayout}
+        onAssignOutput={onAssignOutput}
+        onAddOutput={onAddOutput}
+        onBack={() => setView("settings")}
+      />
+    </Shell>
+  ), [monitorsStyle, workspaceLayout, onAssignOutput, onAddOutput]);
 
-  if (view === "wrist") {
-    return (
-      <Shell pointerEventsType={pe} opacity={opacity}>
-        <WristSettingsView onBack={() => setView("settings")} />
-      </Shell>
-    );
-  }
-
-  if (view === "layouts") {
-    return (
-      <Shell pointerEventsType={pe} opacity={opacity}>
-        <LayoutSlotsView
-          slots={workspaceLayout.layoutSlots ?? []}
-          onSave={onSaveLayout}
-          onLoad={onLoadLayout}
-          onBack={() => setView("settings")}
-        />
-      </Shell>
-    );
-  }
-
-  if (view === "monitors") {
-    return (
-      <Shell pointerEventsType={pe} opacity={opacity}>
-        <MonitorAssignments
-          workspaceLayout={workspaceLayout}
-          onAssignOutput={onAssignOutput}
-          onAddOutput={onAddOutput}
-          onBack={() => setView("settings")}
-        />
-      </Shell>
-    );
-  }
-
-  return (
+  const main = (
     <WristOverlay
       clock={clock}
       dateLabel={dateLabel}
@@ -466,12 +476,44 @@ export function WristMenuUi(
       batteries={batteries}
       nowPlaying={nowPlaying}
       onMedia={sendMediaCommand}
-      opacity={opacity}
+      opacity={mainStyle.opacity}
       active={{ layout: layoutActive, edit: editActive }}
       onToggle={onToggle}
       onOpenSettings={() => setView("settings")}
       onRecenter={onRecenter}
-      pointerEventsType={pe}
+      pointerEventsType={mainStyle.pe}
     />
+  );
+
+  const page = (name: WristView, content: React.ReactNode) =>
+    visited.has(name) && <WristPage key={name} visible={view === name}>{content}</WristPage>;
+  return (
+    <>
+      {page("main", main)}
+      {page("settings", settings)}
+      {page("wrist", wrist)}
+      {page("monitors", monitors)}
+      {page("layouts", layouts)}
+      {page("camera", cameraPage)}
+    </>
+  );
+}
+
+type WristView = "main" | "settings" | "wrist" | "monitors" | "layouts" | "camera";
+type PageStyle = { pe: AllowedPointerEventsType; opacity: number };
+
+const EMPTY_LAYOUT_SLOTS: LayoutSlotSummary[] = [];
+
+/**
+ * One wrist page, kept built while another is shown once it has been opened. Unmounting a page
+ * and building the next one took 20-35 ms of UIKit construction and listener teardown per switch. A hidden Activity keeps
+ * the tree and its objects but runs effect cleanups, so a hidden page has no frame jobs; pointer
+ * events ignore `visible`, so the group also stops rays reaching it.
+ */
+function WristPage({ visible, children }: { visible: boolean; children: React.ReactNode }) {
+  return (
+    <group {...({ intersectChildren: visible } as Record<string, unknown>)}>
+      <React.Activity mode={visible ? "visible" : "hidden"}>{children}</React.Activity>
+    </group>
   );
 }
