@@ -596,6 +596,14 @@ Deno.test("recenter brings a lost keyboard back under the primary display", () =
   let occupied = detachFromParent(spawnHingedDisplay(graph, "display-1", "bottom"), "keyboard");
   occupied = recenterSpatialRoots(occupied, [0, 1.6, 0], 0, [0, -0.08, -1.35]);
   assert(occupied.nodes.keyboard?.constraint == null, "taken bottom slot leaves the keyboard free");
+
+  const deleted = deleteSpatialNode(createInitialSpatialGraph(), "keyboard");
+  assert(deleted.nodes.keyboard == null, "keyboard deleted");
+  const restored = recenterSpatialRoots(deleted, [0, 1.6, 0], 0, [0, -0.08, -1.35]).nodes.keyboard;
+  assert(
+    restored?.constraint?.attachmentSlotId === "display-1-bottom-slot",
+    "a deleted keyboard is recreated under the primary display",
+  );
 });
 
 Deno.test("locking a node is a no-op when unchanged and survives a clone", () => {
