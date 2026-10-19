@@ -150,10 +150,11 @@ export function destroyTemp() {
 }
 
 const stream = Deno.stdin.readable.values();
-export async function asyncPrompt(): Promise<string> {
+/** The next stdin line, or null once stdin has ended (closed, or `/dev/null`). */
+export async function asyncPrompt(): Promise<string | null> {
   const next = await stream.next();
   if ("done" in next && next.done) {
-    return "";
+    return null;
   } else {
     return new TextDecoder().decode(next.value).slice(0, -1);
   }

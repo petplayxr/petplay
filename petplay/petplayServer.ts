@@ -273,7 +273,10 @@ export async function startPetplayServer(
 
   if (options.interactive) {
     while (true) {
-      const msgD = await asyncPrompt() ?? "";
+      // A launch without a terminal has stdin at its end: stop reading rather than
+      // post an empty line to main every 10 ms for the life of the process.
+      const msgD = await asyncPrompt();
+      if (msgD == null) break;
       const msg = msgD.replace(/\r/g, "");
       const currentMainAddress = postalservice.getRootActorId() ?? mainAddress;
       postalservice.PostMessage({

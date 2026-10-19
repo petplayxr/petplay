@@ -167,12 +167,20 @@ camera passed. hovertoolbar could not run: it needs two host outputs and only on
 frame in cycle 0 came 0.3 s into observation, right after launch and VRChat world entry. The old
 space floor stayed at ~106–117 MB. Too short to speak to the long-session degradation issue.
 
-## Open: closed stdin spins the interactive loop
+## Accepted: stop reading stdin once it has ended
 
-`startPetplayServer`'s stdin loop runs while `options.interactive`, and `asyncPrompt` returns
+`startPetplayServer`'s stdin loop ran while `options.interactive`, and `asyncPrompt` returned
 `""` both for an empty line and at end of input. With stdin closed (the lab, or a launch without
-a terminal) it posts an empty `STDIN` message to `main` continuously: 123,788 `[ACTOR] stdin:`
-log lines in 22 min of the soak.
+a terminal) it posted an empty `STDIN` message to `main` every 10 ms for the life of the process:
+123,788 `[ACTOR] stdin:` log lines in 22 min of the soak. `asyncPrompt` now returns null at end
+of input and the loop stops there.
+
+`_scratch/perf/stdin-eof/`, release, two alternating pairs, 60 s each, no VRChat: stdin log
+lines 90.1/s → 0, server main-thread CPU 0.58/0.65 % → 0.08/0.10 %, `main`'s worker 0.8 % → below
+0.3 %, context switches 1156/1179 → 952/962 per second. A piped line still reaches `main` once,
+the server keeps running after its stdin ends, and quits with code 0. Unit suite 234 passed;
+compiled smoke passed in both modes; lifecycle, smoke, showhide, layouts, window-settings, wrist,
+keyboard, toasts, grablatency, grabdrops and camera passed.
 
 ## Shelved: VRChat camera OSC while PetPlay's camera is unused
 
