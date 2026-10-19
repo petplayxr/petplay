@@ -204,6 +204,20 @@ smoke passed in both modes; lifecycle, smoke, showhide, layouts, window-settings
 keyboard, toasts, grablatency, grabdrops and camera passed. The opt-in `--vrc-origin` loop has
 the same no-stop shape; it was not changed.
 
+## Fixed: text that opens with glyphs the font lacks crashed the scene
+
+A layouts playtest run never brought its scene up: webxr died on `TypeError: Cannot read
+properties of undefined (reading 'id')` in the vendored `three-msdf-text-utils` `TextLayout`
+(line 171), measuring toast text and laying out a text node. It was 1 of 414 playtest runs. The
+word counter read `lastGlyph.id` when a space was the first glyph placed on a line. Word wrap
+trims leading spaces, so that only happens when the characters before the space have no glyph in
+the font: `"😀 hello"`, `"♪ Song"`, `"日本 語"` and `"Title\n🎉 Artist"` all threw. The wrist's
+now-playing line, relayed desktop notifications and window titles reach the UI verbatim, and
+webxr is not a recoverable worker, so such a string could end the session. threewebxrwebgpudeno
+`d26ebd2` guards the read; `classes/environment/ui/msdfText.test.ts` fails without it. Unit suite
+235 passed; compiled smoke passed in both modes; smoke, wrist, keyboard, toasts, window-settings,
+showhide, camera and layouts (twice) passed.
+
 ## Shelved: VRChat camera OSC while PetPlay's camera is unused
 
 The always-mounted wrist home subscribes to the whole camera snapshot, so it re-renders at 4 Hz
