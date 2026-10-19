@@ -2,8 +2,8 @@
 
 Status: property-order cache rejected (inconclusive); static UI texture preload and
 construct-with-props, render-time text measurement, hidden layout prewarm, the keycap
-restyle skip, keycap border width and hidden panel mesh prewarm accepted.
-First reveal remains a ~27 ms release hitch (~13 ms over budget per reveal): still open.
+restyle skip, keycap border width and hidden panel mesh prewarm and memoized window content accepted.
+First reveal is now a ~25 ms release frame (~12 ms over budget). Work moves to general use.
 
 ## Reproduction and attribution
 
@@ -334,3 +334,22 @@ within the A/A floor and the debug warm-reveal noise. An earlier debug attempt
 Executables (release baseline, candidate, debug baseline, candidate): 67bcf92c 69187bbf 351dcdd5 e8bbec56 . Unit suite 234
 passed; compiled smoke (both modes), showhide, layouts, hovertoolbar, window-settings, wrist,
 keyboard and toasts passed.
+
+## Accepted: stop re-rendering every window on show
+
+Every show and hide re-rendered `WindowLayer`, which rebuilt the element tree inside its
+Activity, so all ~650 UIKit components rendered again on top of the effect re-run that revealing
+requires. Each show also reloaded the KDE workspace outputs and stored a new, equal array. That
+cloned the graph through `reconcileWorkspaceOutputs` and re-rendered everything again, and it
+synchronously saved the layout ~0.1 s after the show. The Activity's contents are now a memoized
+`WindowLayerContent`, and an equal outputs list keeps its identity. React work across three
+profiled reveal phases fell from 108 to 70 ms (`_scratch/perf/memo-content/profile/`).
+
+Release, five pairs (`paired/`): first reveal worst frame -5.6, -2.5, -1.4, -3.7, -3.3 ms
+(median 27.6 → 24.8). First-reveal excess fell from 82 to 28 ms, lower in every pair.
+`show-display-2` -1.4, -3.7, -1.0, -5.1, -6.8 ms (median 21.7 → 16.6). `show-display-3` was
+mixed (-8.1 to +7.2). Menus, drag and scale were within the A/A floor. Debug, two pairs
+(`paired-debug/`): first-reveal excess 89 → 18 and 84 → 14 ms; every reveal better by 1.8 to
+14.9 ms. Executables (release baseline, candidate, debug baseline, candidate): 69187bbf 5d32247d e8bbec56 94006d8d . Unit suite
+234 passed; compiled smoke (both modes), showhide, layouts, hovertoolbar, window-settings, wrist,
+keyboard, toasts and lifecycle passed.

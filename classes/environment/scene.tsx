@@ -670,7 +670,13 @@ function WindowLayer({
   React.useEffect(() => {
     let cancelled = false;
     void loadKdeWorkspaceOutputs().then((outputs) => {
-      if (!cancelled) setWorkspaceOutputs(outputs);
+      // Reloaded on every show: an equal list keeps its identity, or reconciling it clones the
+      // graph, re-renders every window and saves the layout ~0.1 s after each show.
+      if (!cancelled) {
+        setWorkspaceOutputs((current) =>
+          JSON.stringify(current) === JSON.stringify(outputs) ? current : outputs
+        );
+      }
     });
     return () => {
       cancelled = true;
@@ -819,24 +825,6 @@ function WindowLayer({
       );
     }), [camera, forwardOffset, renderer]);
 
-  const roots = getSpatialChildren(graph, null);
-  const renderRoot = (node: SpatialNode) => (
-    <SpatialNodeView
-      key={node.id}
-      node={node}
-      graph={graph}
-      setGraph={setGraph}
-      workspaceOutputs={workspaceOutputs}
-      selectedNodeId={selectedNodeId}
-      onSelectNode={setSelectedNodeId}
-      handleStores={handleStores}
-      directOpenVrInputSource={directOpenVrInputSource}
-      displayOverlayHostActor={displayOverlayHostActor}
-      onMouse={onMouse}
-      onKey={onKey}
-    />
-  );
-
   // Hiding keeps the windows built: unmounting them and building them again stalled a frame by
   // ~0.4 s on every show (~0.2 s on hide). A hidden Activity keeps React's tree and the three
   // objects but runs effect cleanups, so a hidden window has no frame jobs and no OpenVR overlay.
@@ -848,25 +836,51 @@ function WindowLayer({
       <group ref={layer} {...({ intersectChildren: visible } as Record<string, unknown>)}>
         <React.Activity mode={visible ? "visible" : "hidden"}>
           <ConstructWithPropsContext.Provider value={constructWithProps}>
-            <group userData={{ spatialGraphRoot: true, originId: SCENE_ORIGIN_ID, static: true }}>
-              <CommonOverlayChords
-                inputSource={directOpenVrInputSource}
-                graph={graph}
-                handleStores={handleStores}
-                onMouse={onMouse}
-              />
-              {fontsLoaded && roots.map((node) => (
-                <SpatialRootOrigin key={node.id} originId={node.originId}>
-                  {renderRoot(node)}
-                </SpatialRootOrigin>
-              ))}
-            </group>
+            <WindowLayerContent
+              fontsLoaded={fontsLoaded}
+              graph={graph}
+              setGraph={setGraph}
+              workspaceOutputs={workspaceOutputs}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={setSelectedNodeId}
+              handleStores={handleStores}
+              directOpenVrInputSource={directOpenVrInputSource}
+              displayOverlayHostActor={displayOverlayHostActor}
+              onMouse={onMouse}
+              onKey={onKey}
+            />
           </ConstructWithPropsContext.Provider>
         </React.Activity>
       </group>
     </SpatialAudioProvider>
   );
 }
+
+/**
+ * The windows inside the layer's Activity. Memoized so showing and hiding the layer, which
+ * re-renders `WindowLayer`, does not re-render every window: revealing the Activity re-runs their
+ * effects either way, and the re-render added ~650 UIKit component renders to each show.
+ */
+const WindowLayerContent = React.memo(function WindowLayerContent(
+  { fontsLoaded, ...props }: SpatialGraphViewProps & { fontsLoaded: boolean },
+) {
+  const { graph, directOpenVrInputSource, handleStores, onMouse } = props;
+  return (
+    <group userData={{ spatialGraphRoot: true, originId: SCENE_ORIGIN_ID, static: true }}>
+      <CommonOverlayChords
+        inputSource={directOpenVrInputSource}
+        graph={graph}
+        handleStores={handleStores}
+        onMouse={onMouse}
+      />
+      {fontsLoaded && getSpatialChildren(graph, null).map((node) => (
+        <SpatialRootOrigin key={node.id} originId={node.originId}>
+          <SpatialNodeView key={node.id} node={node} {...props} />
+        </SpatialRootOrigin>
+      ))}
+    </group>
+  );
+});
 
 /**
  * Holds one root window. Attached to the head or a hand, each frame its matrix becomes that
