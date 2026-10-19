@@ -1,9 +1,9 @@
 # First display reveal: evidence and property-order experiment
 
 Status: property-order cache rejected (inconclusive); static UI texture preload and
-construct-with-props, render-time text measurement, hidden layout prewarm and the keycap
-restyle skip accepted.
-First reveal remains a ~54 ms release hitch (~40 ms over budget per reveal): still open.
+construct-with-props, render-time text measurement, hidden layout prewarm, the keycap
+restyle skip and keycap border width accepted.
+First reveal remains a ~30 ms release hitch (~17 ms over budget per reveal): still open.
 
 ## Reproduction and attribution
 
@@ -284,3 +284,31 @@ debug `be1888c4…` → `44d5369b…`. Unit suite 234 passed; compiled smoke (bo
 layouts, hovertoolbar, window-settings, wrist, keyboard and toasts passed. hovertoolbar and wrist
 first failed on HEAD and on the candidate alike, because `kscreen-doctor` aborts without
 `WAYLAND_DISPLAY`. They passed once it was set.
+
+## Accepted: build keycaps with the border width they keep
+
+A probe that hooks `resetProperties` and `calculateLayout` during a fresh first reveal
+(`_scratch/perf/reset-probe.ts`) found 82 restyles. 79 were keycaps: the chrome built them with
+border width 0 or 3, and the interaction layer's first effect, which only runs on reveal, set 1, 2
+or 5. Border width is a flex property, so this also re-laid out the keyboard (8.7 ms in one
+`calculateLayout`). The interactive cap now passes its base border width to the chrome. The other
+three were the wrist menu shells, whose pointer filter was a new function on every render. The
+menu re-renders every second for its clock, so those three also restyled once a second while idle.
+The filter is now memoized. After both changes the probe counts no restyles and no layouts on the
+first reveal or in five seconds of visible idle.
+
+Release, five pairs (`_scratch/perf/keycap-border/paired/`):
+
+| Metric | Baseline | Candidate | Pair differences |
+| --- | ---: | ---: | --- |
+| First reveal worst `frameMetric` (median, ms) | 47.71 | 30.00 | -17.3, -15.6, -21.5, -17.7, -13.0 |
+| First reveal excess (ms) | | | 26→12, 29→19, 37→16, 33→16, 22→16 |
+| First reveal frames over 20 ms (total) | 10 | 4 | |
+
+Other phases were within the A/A floor. Debug, three pairs (`paired-debug/`): first reveal -25.1,
+-17.0, -12.6 ms. `show-display-2` read +1.8, +5.3, +15.7 ms, so two more pairs of eight
+reveals were run (`hunt-debug/`). There, warm reveals came out equal or better (summed excess
+796 → 777 ms; `show-display-2` -9.0, -1.0 ms) and the first reveal -11.5, -14.7 ms.
+Executables: release `5acdf072…` → `67bcf92c…`, debug `44d5369b…` → `351dcdd5…`. Unit suite
+234 passed; compiled smoke (both modes), showhide, layouts, hovertoolbar, window-settings, wrist,
+keyboard and toasts passed.

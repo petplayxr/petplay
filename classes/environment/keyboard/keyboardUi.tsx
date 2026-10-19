@@ -272,6 +272,11 @@ export type KeyCapChromeProps =
     pixelSize: number;
     children?: React.ReactNode;
     pressedVisual?: boolean;
+    /**
+     * The cap's border width. Interactive caps pass the width they will hold: a cap built with a
+     * different one restyles and re-lays out the whole keyboard on its first effect.
+     */
+    borderWidth?: number;
     /** uikit local Z (meters × pixelSize); negative = depress into board. */
     transformTranslateZ?: number;
     transformScaleX?: number;
@@ -297,6 +302,7 @@ export const KeyCapChrome = React.memo(function KeyCapChrome(
     pixelSize,
     children,
     pressedVisual = false,
+    borderWidth = pressedVisual ? 3 : 0,
     transformTranslateZ,
     transformScaleX,
     transformScaleY,
@@ -438,7 +444,7 @@ export const KeyCapChrome = React.memo(function KeyCapChrome(
         minHeight={minHeight}
         backgroundColor={fill}
         backgroundOpacity={1}
-        borderWidth={pressedVisual ? 3 : 0}
+        borderWidth={borderWidth}
         borderColor={borderC}
         borderRadius={KEY_RADIUS}
         padding={4}

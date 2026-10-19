@@ -239,7 +239,11 @@ export function WristMenuPanel(
   // reports handedness as "none" would otherwise read as "not attached" and
   // turn the guard off exactly when it is needed.
   const attached = attachedToController ?? hostHandedness != null;
-  const menuPointerType = wristMenuPointerEvents(hostHandedness, attached);
+  // Stable across the clock's per-second renders: a new filter function restyles the menu shell.
+  const menuPointerType = useMemo(
+    () => wristMenuPointerEvents(hostHandedness, attached),
+    [hostHandedness, attached],
+  );
   const startedAt = useRef(performance.now());
   const [buttonState, setButtonState] = useState(() => toStateSnapshot(initialState));
   const [now, setNow] = useState(() => Date.now());

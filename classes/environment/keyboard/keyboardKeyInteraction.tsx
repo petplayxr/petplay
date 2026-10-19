@@ -307,6 +307,7 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
       minHeight={minHeight}
       pixelSize={pixelSize}
       pressedVisual={litSurface}
+      borderWidth={baseBorderWidth}
       onPointerOver={(e) => {
         if (!isTriggerLikePointer(e)) return;
         // Keycaps sit 4-deep in row/column/group containers. The pointer
