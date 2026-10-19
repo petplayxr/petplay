@@ -75,17 +75,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      # The capture helper only changes with its submodule, so a hit skips Rust entirely.
+      - id: capture-helper-commit
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD:submodules/screen-streamer)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: capture-helper
+        with:
+          path: |
+            dist/cargo/*/release/screen-streamer
+            dist/cargo/*/release/screen-streamer.exe
+          key: capture-helper-${{ runner.os }}-${{ runner.arch }}-rust-1.99.0-${{ steps.capture-helper-commit.outputs.sha }}
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.capture-helper.outputs.cache-hit != 'true'
         with:
           toolchain: 1.99.0
       - uses: Swatinem/rust-cache@v2
+        if: steps.capture-helper.outputs.cache-hit != 'true'
         with:
           workspaces: submodules/screen-streamer -> ../../dist/cargo
       - name: Install Linux capture build dependencies
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.capture-helper.outputs.cache-hit != 'true'
         run: sudo apt-get update && sudo apt-get install -y pkg-config clang libpipewire-0.3-dev libdbus-1-dev
       - name: Test Linux capture buffer handling
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.capture-helper.outputs.cache-hit != 'true'
         run: >-
           cargo test --locked --release
           --target=${{ runner.arch == 'ARM64' && 'aarch64-unknown-linux-gnu' || 'x86_64-unknown-linux-gnu' }}
@@ -94,7 +107,7 @@ jobs:
           CARGO_TARGET_DIR: ${{ github.workspace }}/dist/cargo
       - name: Install ARM64 raylib build dependencies
         if: runner.arch == 'ARM64'
-        run: sudo apt-get install -y cmake libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev xvfb xauth libgl1-mesa-dri
+        run: sudo apt-get update && sudo apt-get install -y cmake libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev xvfb xauth libgl1-mesa-dri
       - uses: mlugg/setup-zig@v2
         if: runner.arch == 'ARM64'
         with:
@@ -109,6 +122,7 @@ jobs:
         run: bash utils/native/raylib/build-ci-glfw.sh
       - run: deno task build ${{ matrix.args }}
         env:
+          PETPLAY_PREBUILT_CAPTURE_HELPER: ${{ steps.capture-helper.outputs.cache-hit == 'true' && '1' || '' }}
           PETPLAY_RAYLIB_SYSROOT: ${{ runner.arch == 'ARM64' && format('{0}/dist/glfw-fixture', github.workspace) || '' }}
       - name: Smoke test compiled ARM64 executable with bundled raylib
         if: runner.arch == 'ARM64'

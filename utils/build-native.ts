@@ -15,7 +15,12 @@ export async function buildNative(
   const manifest = fromFileUrl(new URL("submodules/screen-streamer/Cargo.toml", root));
   const targetDirectory = fromFileUrl(new URL("dist/cargo/", root));
   const output = fromFileUrl(new URL(screenStreamerRelativePath(target), root));
-  const result = await new Deno.Command("cargo", {
+  const built = `${targetDirectory}/${target}/${profile}/${filename}`;
+  // CI restores `built` from a cache keyed on the screen-streamer commit and skips cargo.
+  const prebuilt = Deno.env.get("PETPLAY_PREBUILT_CAPTURE_HELPER") === "1" &&
+    await Deno.stat(built).then(() => true, () => false);
+  if (prebuilt) console.log(`Reusing ${built}`);
+  const result = prebuilt ? { success: true, code: 0 } : await new Deno.Command("cargo", {
     args: [
       "build",
       "--locked",
@@ -32,7 +37,7 @@ export async function buildNative(
   }).output();
   if (!result.success) throw new Error(`screen-streamer build failed (${result.code})`);
   await Deno.mkdir(fromFileUrl(new URL(`dist/native/${target}/`, root)), { recursive: true });
-  await Deno.copyFile(`${targetDirectory}/${target}/${profile}/${filename}`, output);
+  await Deno.copyFile(built, output);
   if (!target.includes("windows")) await Deno.chmod(output, 0o755);
   if (target === nativeBuildTarget()) {
     const probe = await new Deno.Command(output, { args: ["--version"] }).output();
