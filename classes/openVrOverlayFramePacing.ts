@@ -14,11 +14,20 @@ import { LogChannel } from "@mommysgoodpuppy/logchannel";
 const MAX_VSYNC_POLLS = 2_000_000;
 /**
  * The vsync index stops advancing while SteamVR is in standby (headset off the head). Spinning
- * until it moves kept a core at 100% for as long as the headset sat idle, so a spin longer than
- * this many frame periods marks the counter stalled, and pacing idles on a timer until it moves.
+ * until it moves kept a core at 100% for as long as the headset sat idle, so one spin gives up
+ * after this many frame periods.
  */
-const VSYNC_STALL_FRAMES = 2;
+const VSYNC_SPIN_LIMIT_FRAMES = 2;
+/**
+ * Only an index this long without moving is standby, and pacing then idles on a timer until it
+ * moves. Over Steam Link the index advances at the scene app's rate, not the display's: with
+ * VRChat at ~30 fps, 30-60 ms gaps are routine, and the old two-frame (28 ms at 72 Hz) threshold
+ * took them for standby and slept 100 ms, over and over.
+ */
+const VSYNC_STALL_MS = 500;
 const VSYNC_STALLED_POLL_MS = 100;
+/** While the index is late, poll it on timers this far apart instead of spinning a core. */
+const VSYNC_LATE_POLL_MS = 1;
 const DEFAULT_VSYNC_SPIN_TAIL_MS = 1.0;
 // A 72 Hz headset has a 13.9 ms frame. Capping the coarse yield at 4 ms meant
 // that finishing early in a frame skipped the yield entirely and hammered
@@ -156,6 +165,8 @@ export class OpenVrOverlayFramePacer {
   private fallbackVsyncUnavailableLogged = false;
   /** Set when the vsync index stopped advancing (standby); cleared once it moves. */
   private vsyncStalled = false;
+  /** `performance.now()` when the vsync index last moved. */
+  private vsyncIndexMovedAt = 0;
   private readonly poseArrayBuffer: ArrayBuffer;
   private readonly posePtr: Deno.PointerValue<OpenVR.TrackedDevicePose>;
   private readonly vsyncSecondsBuffer = new Float32Array(1);
@@ -287,9 +298,28 @@ export class OpenVrOverlayFramePacer {
           await wait(coarseWaitMs);
           yieldedMs = performance.now() - t0;
         }
+        yieldedMs += await this.waitWhileVsyncLate(spinTailMs);
       }
     }
     return this.paceToDisplayAndRefreshPosesSync(yieldedMs);
+  }
+
+  /**
+   * After the coarse wait, spin at most two spin tails for the index, then poll it on short
+   * timers: the compositor is behind the display (an app-limited scene app over Steam Link sets
+   * its rate), and spinning through those gaps took a core from the scene app.
+   */
+  private async waitWhileVsyncLate(spinTailMs: number): Promise<number> {
+    const t0 = performance.now();
+    const last = this.lastVsyncFrameIndex;
+    while (
+      performance.now() - this.vsyncIndexMovedAt < VSYNC_STALL_MS &&
+      this.vr.GetTimeSinceLastVsync(this.vsyncSecondsPtr, this.vsyncFramePtr) &&
+      this.vsyncFrameBuffer[0] === last
+    ) {
+      if (performance.now() - t0 > 2 * spinTailMs) await wait(VSYNC_LATE_POLL_MS);
+    }
+    return performance.now() - t0;
   }
 
   /**
@@ -410,7 +440,7 @@ export class OpenVrOverlayFramePacer {
         OpenVR.TrackedDeviceProperty.Prop_DisplayFrequency_Float,
       ) ?? 90;
       // Stalled: check once without spinning (the async caller already idled on a timer).
-      const stallMs = this.vsyncStalled ? 0 : VSYNC_STALL_FRAMES * 1000 / this.displayHzCache;
+      const stallMs = this.vsyncStalled ? 0 : VSYNC_SPIN_LIMIT_FRAMES * 1000 / this.displayHzCache;
       const words = this.vsyncFrameWords;
       this.vsyncFrameBuffer[0] = last;
       const lastLow = words[0], lastHigh = words[1];
@@ -432,7 +462,7 @@ export class OpenVrOverlayFramePacer {
           (spins % 1024 === 0 && performance.now() - spinStart > stallMs)
         ) {
           const spinTime = performance.now() - spinStart;
-          if (!this.vsyncStalled) {
+          if (!this.vsyncStalled && performance.now() - this.vsyncIndexMovedAt >= VSYNC_STALL_MS) {
             this.vsyncStalled = true;
             LogChannel.log(
               "webxrv2",
@@ -452,6 +482,7 @@ export class OpenVrOverlayFramePacer {
         }
       }
       spinTime = performance.now() - spinStart;
+      this.vsyncIndexMovedAt = performance.now();
       if (this.vsyncStalled) {
         this.vsyncStalled = false;
         LogChannel.log(
