@@ -125,3 +125,59 @@ spacers between keys and rows, and each UIKit component carries ~180 reactive-gr
 count. The spacers deliberately own the gaps, so a ray between keys types the next key or the
 key below (`row-gap-types-key-below`). Folding them into the keys' hit targets would change that
 behavior, for an estimated ~8% shorter marking.
+
+## Accepted: quits no longer end in an uncaught error
+
+Evidence in `_scratch/perf/shutdown/`. Every quit of the release build (SIGTERM, 5 of 5 runs
+against `63a00cb`, lab without VRChat) logged `InvalidStateError: Worker has been terminated` and
+exited with code 1 about 0.2 s after the signal. Shutdown terminates the display overlay host's
+process worker before it shuts down webxr. A relay still in flight to that host reached
+stageforge's `WebSocketWorker.postMessage`, which throws after `terminate()` where a real
+`Worker` drops the message. The throw escaped `PostalService.OnMessage`, so webxr's native
+cleanup, `wrist_menu` and `main` never ran, and the process left through libc `exit()` with
+webxr's loops still live.
+
+That is the shape of most of the PetPlay core dumps from 2026-10-18 and 2026-10-19
+(`coredumpctl`): the main thread in `op_exit` → `exit()`, running `vrclient.so`'s exit
+handlers, while `worker-7` faults inside an FFI call into `vrclient.so` (+0x1f8a23, +0x1f896a,
++0x3f2e22). One extra baseline quit during this work did the same (pid 278352).
+
+stageforge `037eabf` drops messages to a terminated `WebSocketWorker`, with a test that fails
+without it. Candidate: 5 of 5 release quits and 4 of 4 debug quits completed every actor's
+shutdown and exited with code 0, 3.3–4.4 s after the signal (the existing 3 s
+`EXIT_STABILIZE_MS` included). Baseline child processes (overlay host, screen streamer,
+playerctl, busctl) were still alive 3 s after the parent exited, and gone 15 s later.
+
+Ten quits per arm can't measure the segfault rate: there was 1 core in 6 baseline quits and none
+in 9 candidate quits. Two exit-time crash shapes remain possible and are not addressed: the
+overlay host child calls `Deno.exit` right after terminating its actor worker
+(`WebSocketWorkerHost.ts`), and its cores show a thread jumping into unmapped code or aborting
+under libXext's exit handler while `exit()` runs.
+
+Unit suite 234 passed; stageforge tests 11 passed; compiled smoke passed in both modes; lifecycle,
+smoke, showhide, layouts, window-settings, wrist, keyboard, toasts, grablatency, grabdrops and
+camera passed. hovertoolbar could not run: it needs two host outputs and only one was enabled.
+
+## Soak, 2026-10-19
+
+`_scratch/perf/soak/run1/`: release `63a00cb` with VRChat at beyond75, the general route
+(30 s idle) repeated every 2.5 min under frame and compositor observation. Eight full cycles
+(20 min) before the lab's 3600 s window closed: every route step passed, VRChat had 0 dropped and
+0 reprojected frames, PetPlay p99 15.4–16.0 ms, steady-state max 19.3–42.2 ms. The 135.7 ms
+frame in cycle 0 came 0.3 s into observation, right after launch and VRChat world entry. The old
+space floor stayed at ~106–117 MB. Too short to speak to the long-session degradation issue.
+
+## Open: closed stdin spins the interactive loop
+
+`startPetplayServer`'s stdin loop runs while `options.interactive`, and `asyncPrompt` returns
+`""` both for an empty line and at end of input. With stdin closed (the lab, or a launch without
+a terminal) it posts an empty `STDIN` message to `main` continuously: 123,788 `[ACTOR] stdin:`
+log lines in 22 min of the soak.
+
+## Shelved: VRChat camera OSC while PetPlay's camera is unused
+
+The always-mounted wrist home subscribes to the whole camera snapshot, so it re-renders at 4 Hz
+whenever VRChat streams `/usercamera/Pose`. A patch that selects only the derived status string
+cut that stream's cost from +2.2 to +0.6 MB/s allocation and from +5.5 to +0.4 % of a core
+(five alternating pairs, `_scratch/perf/camera-unused/`). Not committed, at the user's direction
+to stay on the basic scenario; the patch is `_scratch/perf/camera-unused/shelved-candidate.patch`.
