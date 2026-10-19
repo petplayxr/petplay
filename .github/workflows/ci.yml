@@ -16,8 +16,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - run: bash utils/ci-submodules.sh
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.9.7
@@ -67,8 +66,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - run: bash utils/ci-submodules.sh
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.9.7
@@ -78,6 +76,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: submodules/screen-streamer -> ../../dist/cargo
       - name: Install Linux capture build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y pkg-config clang libpipewire-0.3-dev libdbus-1-dev
