@@ -1,8 +1,8 @@
 # General use under the synthetic workload: survey and allocation work
 
 Status: survey done; allocation fixes and UI snapshot reuse accepted. Idle GC pauses, now about
-every 17 s instead of every 11 s, remain the main source of PetPlay frame-time tails in general use. Follows the reveal work in
-`optimization-2026-10-18-ui-reveal.md`.
+every 17 s instead of every 11 s, remain the main source of PetPlay frame-time tails in general
+use. Follows the reveal work in `optimization-2026-10-18-ui-reveal.md`.
 
 ## Survey
 
@@ -97,3 +97,31 @@ grablatency, grabdrops and camera passed.
 - Major GCs remain about every 17 s, each still several 4–10 ms chunks. Shorter pauses need a
   smaller live heap (~100 MB), which isn't attributed yet. The remaining promotion has no single
   large source.
+
+## Rejected: V8 heap flags
+
+The webxr worker runs inside PetPlay's main child process (the `dev` process) with the other
+in-process workers, so V8 flags apply to all of them. `DENO_V8_FLAGS` reaches that process
+(confirmed from the webxr REPL), which allowed flag-only A/B runs of the same binary through
+wrapper scripts (`_scratch/perf/semi-space/`). Old-space timelines over 100–150 s:
+
+| Flag | Result |
+| --- | --- |
+| `--max-semi-space-size=128` | new space grew to 64 MB, then V8 shrank it back to 52.5 MB; majors unchanged |
+| `--no-memory-reducer` | majors unchanged |
+| `--heap-growing-percent=50` | majors unchanged |
+| `--external-memory-max-growing-factor=4` | majors unchanged; external memory stays ~10.5–11 MB |
+| `--no-scavenger-updates-allocation-limit` | majors unchanged |
+
+Every run shows the same shape: one first cycle up to ~175 MB about 75 s after launch, then
+majors after only 6–15 MB of growth above the ~101 MB live heap. `--min-semi-space-size` would
+pin a larger young generation, but it applies to every isolate in the process. The GC reason
+couldn't be read: `--trace-gc` output from the child doesn't reach any log, and Deno emits no
+`gc` performance entries. No flag is shipped.
+
+Not pursued: the keyboard holds 608 of the 687 UIKit components. About 200 of those are gap
+spacers between keys and rows, and each UIKit component carries ~180 reactive-graph objects
+(signals, links, effects, layer entries, abort listeners), which dominate the heap's object
+count. The spacers deliberately own the gaps, so a ray between keys types the next key or the
+key below (`row-gap-types-key-below`). Folding them into the keys' hit targets would change that
+behavior, for an estimated ~8% shorter marking.
