@@ -7,13 +7,24 @@ import {
 
 const root = new URL("../", import.meta.url);
 
-export async function buildNative(target: NativeBuildTarget): Promise<string> {
+export async function buildNative(
+  target: NativeBuildTarget,
+  profile: "release" | "debug" = "release",
+): Promise<string> {
   const filename = `screen-streamer${target.includes("windows") ? ".exe" : ""}`;
   const manifest = fromFileUrl(new URL("submodules/screen-streamer/Cargo.toml", root));
   const targetDirectory = fromFileUrl(new URL("dist/cargo/", root));
   const output = fromFileUrl(new URL(screenStreamerRelativePath(target), root));
   const result = await new Deno.Command("cargo", {
-    args: ["build", "--locked", "--release", "--manifest-path", manifest, "--target", target],
+    args: [
+      "build",
+      "--locked",
+      ...(profile === "release" ? ["--release"] : []),
+      "--manifest-path",
+      manifest,
+      "--target",
+      target,
+    ],
     env: { CARGO_TARGET_DIR: targetDirectory },
     stdin: "inherit",
     stdout: "inherit",
@@ -21,7 +32,7 @@ export async function buildNative(target: NativeBuildTarget): Promise<string> {
   }).output();
   if (!result.success) throw new Error(`screen-streamer build failed (${result.code})`);
   await Deno.mkdir(fromFileUrl(new URL(`dist/native/${target}/`, root)), { recursive: true });
-  await Deno.copyFile(`${targetDirectory}/${target}/release/${filename}`, output);
+  await Deno.copyFile(`${targetDirectory}/${target}/${profile}/${filename}`, output);
   if (!target.includes("windows")) await Deno.chmod(output, 0o755);
   if (target === nativeBuildTarget()) {
     const probe = await new Deno.Command(output, { args: ["--version"] }).output();

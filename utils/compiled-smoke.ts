@@ -1,8 +1,16 @@
 /** Boot a compiled app outside its checkout and verify its bundled renderer and capture helper. */
 import { fromFileUrl, resolve } from "@std/path";
 
-if (Deno.args.length !== 1) {
-  throw new Error("usage: deno run -A utils/compiled-smoke.ts <executable>");
+const expectedMode = Deno.args.find((a) => a.startsWith("--expect-mode="))?.slice(
+  "--expect-mode=".length,
+);
+if (
+  Deno.args.length !== (expectedMode ? 2 : 1) ||
+  (expectedMode && !["development", "production"].includes(expectedMode))
+) {
+  throw new Error(
+    "usage: deno run -A utils/compiled-smoke.ts <executable> [--expect-mode=development|production]",
+  );
 }
 const binary = resolve(Deno.args[0]!);
 const scratch = fromFileUrl(new URL("../_scratch/", import.meta.url));
@@ -15,6 +23,9 @@ const log = await Deno.open(`${work}/server.log`, { create: true, write: true })
 const environment = Deno.env.toObject();
 delete environment.PETPLAY_RAYLIB_LIBRARY;
 delete environment.PETPLAY_SCREEN_STREAMER;
+// Verify embedded conditions rather than accidentally inheriting a matching shell override.
+delete environment.NODE_ENV;
+delete environment.DENO_CONDITIONS;
 const child = new Deno.Command(binary, {
   args: ["--novr", "--agent-repl", `--agent-repl-port=${port}`],
   cwd: work,
@@ -53,6 +64,14 @@ try {
           target: "webxr",
           timeoutMs: 8_000,
           code: `
+          const expectedMode = ${JSON.stringify(expectedMode ?? null)};
+          if (expectedMode) {
+            const React = await import('react');
+            const element = React.createElement('group');
+            const development = Object.hasOwn(element, '_store');
+            if (Deno.env.get('NODE_ENV') !== expectedMode || development !== (expectedMode === 'development'))
+              throw Error('Embedded build mode/React mismatch: ' + JSON.stringify({ NODE_ENV: Deno.env.get('NODE_ENV'), development, expectedMode }));
+          }
           let found = false;
           host.rootStore.getState().scene.traverse(o => {
             if (o.userData?.wristMenuActor !== undefined) found = true;

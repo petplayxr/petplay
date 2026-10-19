@@ -11,15 +11,9 @@ import { nativeBuildTarget } from "../classes/nativeBuildTarget.ts";
 import { buildRaylib } from "./build-raylib.ts";
 import { buildNative } from "./build-native.ts";
 
-const targetArg = Deno.args.find((arg) => arg.startsWith("--target="));
-if (Deno.args.length > (targetArg ? 1 : 0)) {
-  throw new Error("usage: deno task build [--target=aarch64-unknown-linux-gnu]");
-}
-const target = targetArg?.slice("--target=".length);
-if (target != null && target !== "aarch64-unknown-linux-gnu") {
-  throw new Error(`unsupported build target: ${target}`);
-}
-const output = target ? "dist/petplay-aarch64" : "dist/petplay";
+import { parseBuildConfiguration } from "../classes/buildConfiguration.ts";
+const configuration = parseBuildConfiguration(Deno.args);
+const { mode, target, output } = configuration;
 
 const webxr = await new Deno.Command(Deno.execPath(), {
   args: ["task", "build:webxr"],
@@ -42,11 +36,13 @@ await Deno.writeTextFile(
     commit: commit || null,
     target: target ?? Deno.build.target,
     built: new Date().toISOString(),
+    mode,
+    nativeProfile: configuration.nativeProfile,
   }) +
     "\n",
 );
 const resolvedTarget = nativeBuildTarget(target);
-const captureHelper = await buildNative(resolvedTarget);
+const captureHelper = await buildNative(resolvedTarget, configuration.nativeProfile);
 const raylib = resolvedTarget === "aarch64-unknown-linux-gnu"
   ? await buildRaylib(resolvedTarget, Deno.env.get("PETPLAY_RAYLIB_SYSROOT"))
   : null;
@@ -59,10 +55,8 @@ const raylib = resolvedTarget === "aarch64-unknown-linux-gnu"
 const args = [
   "compile",
   "-A",
-  // A cross build must not embed the developer machine's .env into a deployable binary.
-  ...(target ? [] : ["--env-file"]),
-  // It still needs production React/npm builds: `release.env` carries only those settings.
-  ...(target ? ["--env-file=release.env"] : []),
+  // Always use the explicit variant, including native builds: private .env is not a build input.
+  `--env-file=${configuration.envFile}`,
   "--no-check",
   ...(target ? ["--target", target] : []),
   "--include",
@@ -103,7 +97,7 @@ args.push("petplay/petplay.ts", "dev");
 const build = new Deno.Command(Deno.execPath(), {
   args,
   // Package export conditions are resolved while compiling, so the compiler needs them too.
-  env: { DENO_CONDITIONS: "production" },
+  env: { DENO_CONDITIONS: mode, NODE_ENV: mode },
   stdin: "inherit",
   stdout: "inherit",
   stderr: "inherit",
