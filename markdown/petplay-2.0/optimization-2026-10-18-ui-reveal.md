@@ -2,8 +2,8 @@
 
 Status: property-order cache rejected (inconclusive); static UI texture preload and
 construct-with-props, render-time text measurement, hidden layout prewarm, the keycap
-restyle skip and keycap border width accepted.
-First reveal remains a ~30 ms release hitch (~17 ms over budget per reveal): still open.
+restyle skip, keycap border width and hidden panel mesh prewarm accepted.
+First reveal remains a ~27 ms release hitch (~13 ms over budget per reveal): still open.
 
 ## Reproduction and attribution
 
@@ -311,4 +311,26 @@ reveals were run (`hunt-debug/`). There, warm reveals came out equal or better (
 796 → 777 ms; `show-display-2` -9.0, -1.0 ms) and the first reveal -11.5, -14.7 ms.
 Executables: release `5acdf072…` → `67bcf92c…`, debug `44d5369b…` → `351dcdd5…`. Unit suite
 234 passed; compiled smoke (both modes), showhide, layouts, hovertoolbar, window-settings, wrist,
+keyboard and toasts passed.
+
+## Accepted: build hidden windows' panel meshes before the first show
+
+After the border fix, a first-reveal profile still spent ~7 ms in `InstancedPanelGroup.update`:
+instance buffer allocation, mesh and material creation and element activation. Laying out a
+hidden root makes its panels visible to UIKit, which only depends on layout and `visibility`,
+not on the three.js `visible` flag. The panels insert themselves and ask their group to update
+on the root's next frame. A hidden root has no frame jobs, and the layout prewarm updated each
+root once, so that next frame was the first show. The prewarm now gives each root one more
+`update(0)` a frame after its layout. The probe counted 7 panel-group resizes on the first
+reveal before and 0 after.
+
+Release, five pairs (`_scratch/perf/panel-flush/paired/`): first reveal worst `frameMetric`
+median 30.36 → 26.80 ms (-9.1, -0.8, -6.0, -8.8, +0.1). First-reveal excess fell in every pair
+(17→6, 17→14, 14→8, 21→10, 13→6), and frames over 20 ms fell from 6 to 1. Open-settings read
+3 → 5 frames over 20 ms. It runs while the layer is still hidden, but debug showed 3 vs 3 there.
+Debug, three pairs (`paired-debug/`): first reveal -11.5, -5.2, -3.9 ms. Other phases were
+within the A/A floor and the debug warm-reveal noise. An earlier debug attempt
+(`paired-debug-expired/`) ended when the lab's one-hour limit expired mid-run.
+Executables (release baseline, candidate, debug baseline, candidate): 67bcf92c 69187bbf 351dcdd5 e8bbec56 . Unit suite 234
+passed; compiled smoke (both modes), showhide, layouts, hovertoolbar, window-settings, wrist,
 keyboard and toasts passed.

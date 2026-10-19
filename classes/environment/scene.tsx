@@ -559,8 +559,10 @@ type UikitRoot = THREE.Object3D & {
 /**
  * Lays out the hidden windows' UIKit roots before their first show, one root per frame. A hidden
  * Activity runs no frame jobs, so the first show otherwise laid out every window in one frame
- * (~30 ms for the keyboard alone). Only roots that have never been laid out are touched: after a
- * show, the visible frame jobs own layout as before.
+ * (~30 ms for the keyboard alone). Each root gets one more update a frame after its layout: the
+ * layout makes its panels visible, and their instance buffers and meshes are built on the root's
+ * next frame, which would otherwise be the first show (~7 ms). Only roots that have never been
+ * laid out are touched: after a show, the visible frame jobs own layout as before.
  *
  * `layer` must be outside the Activity: refs inside a hidden Activity are detached.
  */
@@ -568,7 +570,7 @@ function usePrewarmHiddenUiLayout(
   visible: boolean,
   layer: React.RefObject<THREE.Object3D | null>,
 ) {
-  const queue = React.useRef<UikitRoot[]>([]);
+  const queue = React.useRef<{ root: UikitRoot; laidOut: boolean }[]>([]);
   const frame = React.useRef(0);
   useFrame(() => {
     const group = layer.current;
@@ -578,7 +580,14 @@ function usePrewarmHiddenUiLayout(
     }
     const next = queue.current.shift();
     if (next !== undefined) {
-      if (next.size.peek() == null && next.parent != null) next.update(0);
+      const { root, laidOut } = next;
+      if (root.parent == null) return;
+      if (laidOut) {
+        root.update(0);
+      } else if (root.size.peek() == null) {
+        root.update(0);
+        queue.current.push({ root, laidOut: true });
+      }
       return;
     }
     // Hidden content commits at offscreen priority and windows come and go, so look again now
@@ -591,7 +600,7 @@ function usePrewarmHiddenUiLayout(
         candidate.size != null && candidate.root.peek().component === object &&
         candidate.size.peek() == null
       ) {
-        queue.current.push(object as UikitRoot);
+        queue.current.push({ root: object as UikitRoot, laidOut: false });
       }
     });
   });
