@@ -71,15 +71,29 @@ const DEBUG_LEFT_CONTROLLER_CUBE_WIRE = {
 } as raylib.Color;
 
 /**
- * Default per-eye render target. Desktop keeps the high-resolution 7120-square stacked stereo
- * panorama (3560/eye). ARM64 means the Steam Frame, whose panels are 2160x2160 per eye: rendering
- * the desktop size there is ~2.7x the pixels for no visible gain on a mobile GPU.
+ * Per-eye render target before the headset is known. Desktop keeps the high-resolution 7120-square
+ * stacked stereo panorama (3560/eye). ARM64 means the Steam Frame, whose panels are 2160x2160 per
+ * eye: rendering the desktop size there is ~2.7x the pixels for no visible gain on a mobile GPU.
  */
 export const DEFAULT_RAYLIB_EYE_SIZE = Deno.build.arch === "aarch64" ? 2160 : 3560;
 
+let headsetEyeSize: number | null = null;
+
 /**
- * Per-eye render target (pixels) for 3D + uikit, [DEFAULT_RAYLIB_EYE_SIZE] unless
- * `--webxr-raylib-eye-size=<n>` trades sharpness for fill rate and VRAM.
+ * Size the eyes for the headset: its `GetRecommendedRenderTargetSize` (which already includes
+ * SteamVR's resolution setting), squared up to the larger side. The square eye spans ~109°, about
+ * a headset eye's field of view. 3560 on a Quest 3 over Steam Link (2064x2208) was ~2.8x the
+ * pixels the runtime asked for.
+ */
+export function setHeadsetEyeSize(width: number, height: number): number | null {
+  const size = Math.max(width, height);
+  headsetEyeSize = Number.isInteger(size) && size >= 512 ? Math.min(size, 4096) : null;
+  return headsetEyeSize;
+}
+
+/**
+ * Per-eye render target (pixels) for 3D + uikit: `--webxr-raylib-eye-size=<n>` if given (trades
+ * sharpness for fill rate and VRAM), else the headset's size, else [DEFAULT_RAYLIB_EYE_SIZE].
  */
 export function getRaylibNativeEyeSize(): number {
   const arg = Deno.args
@@ -90,7 +104,7 @@ export function getRaylibNativeEyeSize(): number {
   if (Number.isFinite(n) && n >= 64 && n <= 4096) {
     return n;
   }
-  return DEFAULT_RAYLIB_EYE_SIZE;
+  return headsetEyeSize ?? DEFAULT_RAYLIB_EYE_SIZE;
 }
 
 function getRaylibNativeEyeSizeCandidates(preferred = getRaylibNativeEyeSize()): number[] {
@@ -185,6 +199,14 @@ export class WebXROverlayRaylib {
     ) {
       throw new Error("Eye size must be 64..4096");
     }
+  }
+
+  /**
+   * Re-resolve the eye size after {@link setHeadsetEyeSize}: the render loop then rebuilds its
+   * targets at the new size, on its own thread of GL work.
+   */
+  followHeadsetEyeSize(): void {
+    if (this.requestedEyeSize == null) this.resolvedEyeSize = null;
   }
 
   initialize(name = "WebXR Overlay") {

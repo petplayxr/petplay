@@ -26,6 +26,7 @@ import {
 import { WebXROverlayGl } from "../classes/webxrOverlayGl.ts";
 import {
   getRaylibNativeEyeSize,
+  setHeadsetEyeSize,
   type NativeOpenVrRaylibDebugFrame,
   WebXROverlayRaylib,
 } from "../classes/webxrOverlayRaylib.ts";
@@ -1237,6 +1238,20 @@ function recoverRaylibOverlayTargets(reason: string): boolean {
  * content sits at a different depth than the OpenVR overlays beside it.
  * Safe to call repeatedly; it no-ops until both the system and host exist.
  */
+function applyHeadsetEyeSize(sys: OpenVR.IVRSystem): void {
+  const size = new Uint32Array(2);
+  sys.GetRecommendedRenderTargetSize(
+    Deno.UnsafePointer.of(size.subarray(0, 1)),
+    Deno.UnsafePointer.of(size.subarray(1)),
+  );
+  const eye = setHeadsetEyeSize(size[0]!, size[1]!);
+  LogChannel.log(
+    "webxrv2",
+    `[webxr] headset recommends ${size[0]}x${size[1]} per eye; rendering ${getRaylibNativeEyeSize()}`,
+  );
+  if (eye != null) state.raylibOverlayRaylib?.followHeadsetEyeSize();
+}
+
 function applyOpenVrEyeGeometry(): boolean {
   const sys = state.nativeRaylibVrSystem;
   const host = state.host;
@@ -2005,6 +2020,7 @@ function initializeRaylibOpenVrPacer(
     throw new Error(`invalid vrSystemPointer for ${label}`);
   }
   state.nativeRaylibVrSystem = new OpenVR.IVRSystem(systemPointer);
+  applyHeadsetEyeSize(state.nativeRaylibVrSystem);
   startBatteryPoll();
   if (payload.vrRenderModelsPointer) {
     const renderModelsPointer = Deno.UnsafePointer.create(
