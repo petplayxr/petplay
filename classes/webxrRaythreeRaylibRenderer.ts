@@ -395,6 +395,9 @@ export class WebXRRaythreeRaylibRenderer {
   private readonly worldMatrix = new THREE.Matrix4();
   private readonly sortMatrix = new THREE.Matrix4();
   private readonly sortVector = new THREE.Vector3();
+  private uiPanelDepths = new Float64Array(0);
+  private uiTextDepths = new Float64Array(0);
+  private readonly uiSortOrder: number[] = [];
   private readonly transparentInstanceScratch: Array<
     RenderInstance | InstancedRenderInstance
   > = [];
@@ -415,7 +418,10 @@ export class WebXRRaythreeRaylibRenderer {
   private readonly uiPanelBatchMaterial: raylibBindings.Material;
   private readonly uiTextGeometryInterner = new UiTextGeometryInterner();
   private work = {
-    textGeometryBuilds: 0, textBatchRebuilds: 0, textBatchHits: 0, textVerticesUploaded: 0,
+    textGeometryBuilds: 0,
+    textBatchRebuilds: 0,
+    textBatchHits: 0,
+    textVerticesUploaded: 0,
   };
   private readonly uiTextBatchMeshes = new Map<
     string,
@@ -976,11 +982,19 @@ export class WebXRRaythreeRaylibRenderer {
     textDrawn: number;
   } {
     const t0 = performance.now();
-        this.uiMvpP.fromArray(projectionMatrix as unknown as number[]);
+    this.uiMvpP.fromArray(projectionMatrix as unknown as number[]);
     this.uiMvpV.fromArray(viewMatrix as unknown as number[]);
     this.uiMvpPV.copy(this.uiMvpP).multiply(this.uiMvpV);
 
-    const panels = [...ui.panels].sort((left, right) => {
+    if (this.uiPanelDepths.length < ui.panels.length) {
+      this.uiPanelDepths = new Float64Array(ui.panels.length * 2);
+    }
+    if (this.uiTextDepths.length < ui.texts.length) {
+      this.uiTextDepths = new Float64Array(ui.texts.length * 2);
+    }
+    const panelDepths = this.uiPanelDepths;
+    const textDepths = this.uiTextDepths;
+    const panels = this.sortUiByDepth(ui.panels, panelDepths, (left, right) => {
       if (left.renderOrder !== right.renderOrder) {
         return left.renderOrder - right.renderOrder;
       }
@@ -991,16 +1005,9 @@ export class WebXRRaythreeRaylibRenderer {
       if (orderDifference !== 0) {
         return orderDifference;
       }
-      if (left.instanceIndex !== right.instanceIndex) {
-        return left.instanceIndex - right.instanceIndex;
-      }
-      return this.getWorldMatrixViewDepth(right.worldMatrix) -
-        this.getWorldMatrixViewDepth(left.worldMatrix);
+      return left.instanceIndex - right.instanceIndex;
     });
-    const texts = [...ui.texts].sort((left, right) =>
-      this.getWorldMatrixViewDepth(right.worldMatrix) -
-      this.getWorldMatrixViewDepth(left.worldMatrix)
-    );
+    const texts = this.sortUiByDepth(ui.texts, textDepths, null);
 
     // Group by uikit root and draw the roots back to front.
     //
@@ -1012,19 +1019,25 @@ export class WebXRRaythreeRaylibRenderer {
     // Sorting roots by view depth restores the one guarantee that matters
     // between them, while uikit's order still decides everything inside one.
     const rootOrder = new Map<number, { depth: number; count: number }>();
-    for (const panel of panels) {
+    for (let i = 0; i < ui.panels.length; i++) {
+      const panel = ui.panels[i]!;
       const entry = rootOrder.get(panel.rootIndex) ?? { depth: 0, count: 0 };
-      entry.depth += this.getWorldMatrixViewDepth(panel.worldMatrix);
+      entry.depth += panelDepths[i]!;
       entry.count += 1;
       rootOrder.set(panel.rootIndex, entry);
     }
     // A root may legitimately have text or images and no panels (the display
     // backplate's logo sits in a transparent container); left out here, it
     // would never be drawn at all.
-    for (const item of [...texts, ...(ui.images ?? [])]) {
-      if (rootOrder.has(item.rootIndex)) continue;
-      rootOrder.set(item.rootIndex, {
-        depth: this.getWorldMatrixViewDepth(item.worldMatrix),
+    for (let i = 0; i < texts.length; i++) {
+      const text = texts[i]!;
+      if (rootOrder.has(text.rootIndex)) continue;
+      rootOrder.set(text.rootIndex, { depth: textDepths[i]!, count: 1 });
+    }
+    for (const image of ui.images ?? []) {
+      if (rootOrder.has(image.rootIndex)) continue;
+      rootOrder.set(image.rootIndex, {
+        depth: this.getWorldMatrixViewDepth(image.worldMatrix),
         count: 1,
       });
     }
@@ -1078,7 +1091,9 @@ export class WebXRRaythreeRaylibRenderer {
     let textMs = 0;
     const ops: UiDrawOp[] = [];
     const panelOp = (panels: WebXRRaythreeUiPanelSnapshot[]) => {
-      if (panels.length > 0) ops.push({ kind: "panels", panels, drawn: [], rowOffset: 0, slot: null });
+      if (panels.length > 0) {
+        ops.push({ kind: "panels", panels, drawn: [], rowOffset: 0, slot: null });
+      }
     };
     for (const rootIndex of rootIndicesByDepth) {
       const rootPanels = panelsByRoot.get(rootIndex) ?? [];
@@ -1736,6 +1751,31 @@ export class WebXRRaythreeRaylibRenderer {
     return this.getWorldMatrixViewDepth(instance.worldMatrix);
   }
 
+  /**
+   * Returns `items` sorted by `compare`, then back to front, computing each item's view depth once
+   * into `depths` (by the item's index in `items`). Computing it inside the comparator boxed a
+   * number per comparison, twice per frame: a large share of the worker's garbage.
+   */
+  private sortUiByDepth<T extends { worldMatrix: ArrayLike<number> }>(
+    items: readonly T[],
+    depths: Float64Array,
+    compare: ((left: T, right: T) => number) | null,
+  ): T[] {
+    const order = this.uiSortOrder;
+    order.length = items.length;
+    for (let i = 0; i < items.length; i++) {
+      order[i] = i;
+      depths[i] = this.getWorldMatrixViewDepth(items[i]!.worldMatrix);
+    }
+    order.sort((left, right) =>
+      (compare === null ? 0 : compare(items[left]!, items[right]!)) ||
+      depths[right]! - depths[left]!
+    );
+    const sorted = new Array<T>(items.length);
+    for (let i = 0; i < items.length; i++) sorted[i] = items[order[i]!]!;
+    return sorted;
+  }
+
   private getWorldMatrixViewDepth(
     worldMatrix: ArrayLike<number>,
   ): number {
@@ -1941,7 +1981,11 @@ export class WebXRRaythreeRaylibRenderer {
       }
       return drawn;
     }
-    setShaderInt(this.uiPanelBatchShader.shader, this.uiPanelBatchShader.rowOffsetLoc, op.rowOffset);
+    setShaderInt(
+      this.uiPanelBatchShader.shader,
+      this.uiPanelBatchShader.rowOffsetLoc,
+      op.rowOffset,
+    );
     if (this.uiPanelBatchShader.mvpLoc >= 0) {
       rlFast.SetShaderValueMatrix(
         this.uiPanelBatchShader.shader,
@@ -2108,7 +2152,9 @@ export class WebXRRaythreeRaylibRenderer {
       this.textBatchPoolC,
     );
     this.uiTextBatchMeshes.set(batchKey, {
-      mesh, content: captureTextBatchContent(texts), worldMatrices: captureTextBatchTransforms(texts),
+      mesh,
+      content: captureTextBatchContent(texts),
+      worldMatrices: captureTextBatchTransforms(texts),
     });
     if (this.uiTextBatchShader.mvpLoc >= 0) {
       rlFast.SetShaderValueMatrix(

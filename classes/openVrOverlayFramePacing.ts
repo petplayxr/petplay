@@ -160,6 +160,11 @@ export class OpenVrOverlayFramePacer {
   private readonly posePtr: Deno.PointerValue<OpenVR.TrackedDevicePose>;
   private readonly vsyncSecondsBuffer = new Float32Array(1);
   private readonly vsyncFrameBuffer = new BigUint64Array(1);
+  /**
+   * The same frame index as two 32-bit words. Reading the `BigUint64Array` allocates a BigInt, and
+   * the vsync spin polls thousands of times a frame: compare the words instead.
+   */
+  private readonly vsyncFrameWords = new Uint32Array(this.vsyncFrameBuffer.buffer);
   private readonly vsyncSecondsPtr = Deno.UnsafePointer.of(
     this.vsyncSecondsBuffer,
   ) as Deno.PointerValue<number>;
@@ -406,6 +411,9 @@ export class OpenVrOverlayFramePacer {
       ) ?? 90;
       // Stalled: check once without spinning (the async caller already idled on a timer).
       const stallMs = this.vsyncStalled ? 0 : VSYNC_STALL_FRAMES * 1000 / this.displayHzCache;
+      const words = this.vsyncFrameWords;
+      this.vsyncFrameBuffer[0] = last;
+      const lastLow = words[0], lastHigh = words[1];
       while (newIndex === last) {
         if (!this.vr.GetTimeSinceLastVsync(this.vsyncSecondsPtr, this.vsyncFramePtr)) {
           return this.refreshPosesWithFallbackTiming(
@@ -415,8 +423,10 @@ export class OpenVrOverlayFramePacer {
             yieldedMs,
           );
         }
-        newIndex = this.vsyncFrameBuffer[0];
-        if (newIndex !== last) break;
+        if (words[0] !== lastLow || words[1] !== lastHigh) {
+          newIndex = this.vsyncFrameBuffer[0];
+          break;
+        }
         if (
           ++spins > MAX_VSYNC_POLLS ||
           (spins % 1024 === 0 && performance.now() - spinStart > stallMs)
@@ -444,7 +454,10 @@ export class OpenVrOverlayFramePacer {
       spinTime = performance.now() - spinStart;
       if (this.vsyncStalled) {
         this.vsyncStalled = false;
-        LogChannel.log("webxrv2", `[${this.label}] vsync index moving again (${last} -> ${newIndex})`);
+        LogChannel.log(
+          "webxrv2",
+          `[${this.label}] vsync index moving again (${last} -> ${newIndex})`,
+        );
       }
 
       if (last !== 0n && last + 1n < newIndex) {
