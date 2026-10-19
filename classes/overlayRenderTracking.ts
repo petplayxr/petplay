@@ -106,42 +106,64 @@ export function setRenderHandAnchors(
     : targetRay;
 }
 
-/** The nearest tracked root defines a local transform, without baking its old tracking pose. */
+/**
+ * The nearest tracked root defines a local transform, without baking its old tracking pose.
+ *
+ * Returns `previous` itself when the anchor is unchanged: UI snapshots are rebuilt every frame,
+ * and a fresh anchor per item per frame was a large share of the scene worker's promoted garbage.
+ */
 export function captureRenderAnchor(
   object: THREE.Object3D,
   worldMatrix: ArrayLike<number>,
   /** Transform of `worldMatrix` relative to `object` (an instance matrix), if any. */
   objectLocal?: ArrayLike<number>,
+  previous?: RenderAnchor,
+  /** Where `objectLocal`'s 16 elements start. */
+  objectLocalOffset = 0,
 ): RenderAnchor | undefined {
   for (let root: THREE.Object3D | null = object; root; root = root.parent) {
     const follow = root.userData?.renderTrackingFollow as RenderTrackingFollow | undefined;
     if (follow?.active() && spaces.includes(follow.space)) {
-      return followAnchor(follow, worldMatrix);
+      if (Math.abs(follow.pose.determinant()) < 1e-12) return undefined;
+      followHelper.copy(follow.pose).invert()
+        .multiply(chainHelper.fromArray(worldMatrix as number[]));
+      localScratch.set(followHelper.elements);
+      if (
+        previous?.follow && previous.space === follow.space && previous.pair === follow.pair &&
+        sameElements(previous.localMatrix, localScratch)
+      ) {
+        return previous;
+      }
+      return {
+        space: follow.space,
+        follow: true,
+        ...(follow.pair ? { pair: follow.pair } : {}),
+        localMatrix: localScratch.slice(),
+      };
     }
     const space = root.userData?.renderTrackingAnchor;
     if (space === "world") return undefined;
     if (!spaces.includes(space)) continue;
     if (Math.abs(root.matrixWorld.determinant()) < 1e-12) return undefined;
-    return { space, localMatrix: localMatrixUnder(root, object, worldMatrix, objectLocal) };
+    localMatrixUnder(root, object, worldMatrix, objectLocal, objectLocalOffset);
+    if (
+      previous != null && !previous.follow && previous.space === space &&
+      sameElements(previous.localMatrix, localScratch)
+    ) {
+      return previous;
+    }
+    return { space, localMatrix: localScratch.slice() };
   }
 }
 
 const followHelper = new THREE.Matrix4();
+const localHelper = new THREE.Matrix4();
+/** {@link localMatrixUnder}'s result; copied out only when an anchor changes. */
+const localScratch = new Float64Array(16);
 
-function followAnchor(
-  follow: RenderTrackingFollow,
-  worldMatrix: ArrayLike<number>,
-): RenderAnchor | undefined {
-  if (Math.abs(follow.pose.determinant()) < 1e-12) return undefined;
-  return {
-    space: follow.space,
-    follow: true,
-    ...(follow.pair ? { pair: follow.pair } : {}),
-    localMatrix: new Float64Array(
-      followHelper.copy(follow.pose).invert()
-        .multiply(chainHelper.fromArray(worldMatrix as number[])).elements,
-    ),
-  };
+function sameElements(left: ArrayLike<number>, right: ArrayLike<number>): boolean {
+  for (let i = 0; i < 16; i++) if (left[i] !== right[i]) return false;
+  return true;
 }
 
 const chainHelper = new THREE.Matrix4();
@@ -158,9 +180,10 @@ function localMatrixUnder(
   object: THREE.Object3D,
   worldMatrix: ArrayLike<number>,
   objectLocal: ArrayLike<number> | undefined,
-): Float64Array {
-  const local = new THREE.Matrix4();
-  if (objectLocal) local.fromArray(objectLocal as number[]);
+  objectLocalOffset: number,
+): void {
+  const local = localHelper.identity();
+  if (objectLocal) local.fromArray(objectLocal as number[], objectLocalOffset);
   for (let node: THREE.Object3D | null = object; node && node !== root; node = node.parent) {
     local.premultiply(node.matrix);
   }
@@ -170,7 +193,10 @@ function localMatrixUnder(
     error = Math.max(error, Math.abs(checkHelper.elements[i]! - Number(worldMatrix[i])));
     scale = Math.max(scale, Math.abs(Number(worldMatrix[i])));
   }
-  if (error <= 1e-4 * Math.max(1, scale)) return new Float64Array(local.elements);
+  if (error <= 1e-4 * Math.max(1, scale)) {
+    localScratch.set(local.elements);
+    return;
+  }
   const inverted = chainHelper.copy(root.matrixWorld).invert()
     .multiply(local.fromArray(worldMatrix as number[])).elements;
   // uikit derives matrixWorld from layout, so its nodes take this path. Holding the previous
@@ -182,11 +208,13 @@ function localMatrixUnder(
       drift = Math.max(drift, Math.abs(previous[i]! - inverted[i]!));
       size = Math.max(size, Math.abs(inverted[i]!));
     }
-    if (drift <= 1e-9 * size) return previous.slice();
+    if (drift <= 1e-9 * size) {
+      localScratch.set(previous);
+      return;
+    }
   }
-  const result = new Float64Array(inverted);
-  if (!objectLocal) invertedLocals.set(object, result.slice());
-  return result;
+  localScratch.set(inverted);
+  if (!objectLocal) invertedLocals.set(object, localScratch.slice());
 }
 
 const invertedLocals = new WeakMap<THREE.Object3D, Float64Array>();

@@ -235,19 +235,7 @@ export function extractWebXRRaythreeUi(scene: THREE.Scene): WebXRRaythreeUiSnaps
       if (mesh == null || !mesh.visible) {
         return;
       }
-      const start = snapshot.panels.length;
       maybeCollectPanels(mesh, snapshot.panels, rootIndex);
-      for (let i = start; i < snapshot.panels.length; i++) {
-        const panel = snapshot.panels[i];
-        panel.renderAnchor = captureRenderAnchor(
-          mesh,
-          panel.worldMatrix,
-          mesh.instanceMatrix.array.subarray(
-            panel.instanceIndex * 16,
-            panel.instanceIndex * 16 + 16,
-          ),
-        );
-      }
     });
   }
 
@@ -260,6 +248,37 @@ export function extractWebXRRaythreeUi(scene: THREE.Scene): WebXRRaythreeUiSnaps
   });
 
   return snapshot;
+}
+
+type PanelCacheEntry = {
+  snapshot: WebXRRaythreeUiPanelSnapshot;
+  /** Object world matrix, instance matrix, data and clipping the snapshot was built from. */
+  inputs: Float64Array;
+};
+
+/**
+ * Last frame's snapshot per panel instance. Most UI is static between frames, and rebuilding every
+ * panel's typed arrays each frame was most of the scene worker's garbage, driving a major GC
+ * about every 11 s. Snapshots are never mutated after they are pushed: a changed panel gets a new
+ * one, so consumers can still treat the same object as the same content.
+ */
+const panelSnapshotCache = new WeakMap<Object3D, (PanelCacheEntry | undefined)[]>();
+const panelInputs = new Float64Array(64);
+
+function samePanelInputs(entry: PanelCacheEntry | undefined): entry is PanelCacheEntry {
+  if (entry == null) return false;
+  const inputs = entry.inputs;
+  for (let i = 0; i < 64; i++) if (inputs[i] !== panelInputs[i]) return false;
+  return true;
+}
+
+function sameOrderInfo(
+  left: WebXRRaythreeUiOrderInfo | undefined,
+  right: WebXRRaythreeUiOrderInfo | undefined,
+): boolean {
+  if (left == null || right == null) return left === right;
+  return left.majorIndex === right.majorIndex && left.minorIndex === right.minorIndex &&
+    left.elementType === right.elementType && left.patchIndex === right.patchIndex;
 }
 
 function maybeCollectPanels(
@@ -307,6 +326,9 @@ function maybeCollectPanels(
       : undefined;
   const hasSplitData = aData0Arr != null && aData1Arr != null && aData2Arr != null &&
     aData3Arr != null;
+  let cache = panelSnapshotCache.get(object);
+  if (cache == null) panelSnapshotCache.set(object, cache = []);
+  const clippingArray = instanceClipping?.array as unknown as ArrayLike<number> | undefined;
   for (let index = 0; index < count; index++) {
     const matrixOffset = index * 16;
     const dataOffset = index * 16;
@@ -318,7 +340,7 @@ function maybeCollectPanels(
     if (localAbs < 1e-4) {
       continue;
     }
-    let data16: Float32Array | null = null;
+    let hasData = false;
     if (hasSplitData) {
       const o = index * 4;
       if (
@@ -331,8 +353,7 @@ function maybeCollectPanels(
           dataBlock16[8 + k] = Number(aData2Arr![o + k]);
           dataBlock16[12 + k] = Number(aData3Arr![o + k]);
         }
-        // Copy: pooled buffer must not appear in postMessage transfer lists (shared by many panels).
-        data16 = new Float32Array(dataBlock16);
+        hasData = true;
       }
     } else if (aDataMergedArr != null) {
       const o = index * 16;
@@ -340,33 +361,76 @@ function maybeCollectPanels(
         for (let k = 0; k < 16; k++) {
           dataBlock16[k] = Number(aDataMergedArr[o + k]);
         }
-        data16 = new Float32Array(dataBlock16);
+        hasData = true;
       }
     }
-    if (data16 == null) {
+    if (!hasData) {
       continue;
     }
-    matrixHelper.copy(object.matrixWorld);
-    instanceMatrixHelper.fromArray(
-      instanceMatrix.array as unknown as number[],
-      matrixOffset,
-    );
-    matrixHelper.multiply(instanceMatrixHelper);
-    target.push({
-      worldMatrix: new Float32Array(matrixHelper.elements),
-      // `data16` above is already an owned copy (pooled scratch must not leak out).
-      data: data16,
-      clipping: instanceClipping == null
-        ? new Float32Array(DEFAULT_CLIPPING)
-        : new Float32Array(instanceClipping.array.subarray(dataOffset, dataOffset + 16)),
-      instanceIndex: index,
-      rootIndex,
-      renderOrder,
-      depthTest,
-      depthWrite,
-      orderInfo,
-    });
+    const world = object.matrixWorld.elements;
+    for (let k = 0; k < 16; k++) {
+      panelInputs[k] = world[k]!;
+      panelInputs[16 + k] = Number(instanceArray[matrixOffset + k] ?? 0);
+      panelInputs[32 + k] = dataBlock16[k]!;
+      panelInputs[48 + k] = clippingArray == null
+        ? DEFAULT_CLIPPING[k]!
+        : Number(clippingArray[dataOffset + k]);
+    }
+    let entry = cache[index];
+    if (
+      !samePanelInputs(entry) || entry.snapshot.rootIndex !== rootIndex ||
+      entry.snapshot.renderOrder !== renderOrder || entry.snapshot.depthTest !== depthTest ||
+      entry.snapshot.depthWrite !== depthWrite ||
+      !sameOrderInfo(entry.snapshot.orderInfo, orderInfo)
+    ) {
+      matrixHelper.copy(object.matrixWorld);
+      instanceMatrixHelper.fromArray(
+        instanceMatrix.array as unknown as number[],
+        matrixOffset,
+      );
+      matrixHelper.multiply(instanceMatrixHelper);
+      const worldMatrix = new Float32Array(matrixHelper.elements);
+      entry = {
+        inputs: panelInputs.slice(),
+        snapshot: {
+          worldMatrix,
+          // Owned copies: the pooled scratch is shared by every panel.
+          data: new Float32Array(dataBlock16),
+          clipping: clippingArray == null
+            ? new Float32Array(DEFAULT_CLIPPING)
+            : new Float32Array(panelInputs.subarray(48, 64)),
+          instanceIndex: index,
+          rootIndex,
+          renderOrder,
+          depthTest,
+          depthWrite,
+          orderInfo,
+          renderAnchor: captureRenderAnchor(
+            object,
+            worldMatrix,
+            instanceArray,
+            entry?.snapshot.renderAnchor,
+            matrixOffset,
+          ),
+        },
+      };
+      cache[index] = entry;
+    } else {
+      // Tracking can change under an unchanged panel (attached to a hand, a grab starting).
+      const anchor = captureRenderAnchor(
+        object,
+        entry.snapshot.worldMatrix,
+        instanceArray,
+        entry.snapshot.renderAnchor,
+        matrixOffset,
+      );
+      if (anchor !== entry.snapshot.renderAnchor) {
+        entry.snapshot = { ...entry.snapshot, renderAnchor: anchor };
+      }
+    }
+    target.push(entry.snapshot);
   }
+  if (cache.length > count) cache.length = count;
 }
 
 /**
@@ -433,9 +497,32 @@ function maybeCollectText(
   ) {
     geometry = getTextGeometrySnapshot(meshGeometry, positionAttr, uvAttr, indexAttr);
   }
-  target.push({
-    worldMatrix: new Float32Array(object.matrixWorld.elements),
-    renderAnchor: captureRenderAnchor(object, object.matrixWorld.elements),
+  // Reuse last frame's snapshot while nothing it was built from changed; see panelSnapshotCache.
+  const world = object.matrixWorld.elements;
+  const cached = textSnapshotCache.get(object);
+  if (
+    cached != null && cached.metadata === metadata && cached.geometry === geometry &&
+    cached.snapshot.rootIndex === rootIndex && cached.snapshot.text === metadata.text &&
+    cached.snapshot.color === metadata.color && cached.snapshot.fontSize === metadata.fontSize &&
+    cached.snapshot.align === metadata.align && cached.snapshot.anchorX === metadata.anchorX &&
+    cached.snapshot.font === metadata.font && cached.snapshot.bounds === metadata.bounds &&
+    sameWorld(world, cached.world)
+  ) {
+    const anchor = captureRenderAnchor(
+      object,
+      world,
+      undefined,
+      cached.snapshot.renderAnchor,
+    );
+    if (anchor !== cached.snapshot.renderAnchor) {
+      cached.snapshot = { ...cached.snapshot, renderAnchor: anchor };
+    }
+    target.push(cached.snapshot);
+    return;
+  }
+  const snapshot: WebXRRaythreeUiTextSnapshot = {
+    worldMatrix: new Float32Array(world),
+    renderAnchor: captureRenderAnchor(object, world, undefined, cached?.snapshot.renderAnchor),
     text: metadata.text,
     color: metadata.color,
     fontSize: metadata.fontSize,
@@ -445,8 +532,22 @@ function maybeCollectText(
     rootIndex,
     bounds: metadata.bounds,
     geometry,
-  });
+  };
+  textSnapshotCache.set(object, { snapshot, metadata, geometry, world: new Float64Array(world) });
+  target.push(snapshot);
 }
+
+function sameWorld(world: ArrayLike<number>, saved: Float64Array): boolean {
+  for (let i = 0; i < 16; i++) if (world[i] !== saved[i]) return false;
+  return true;
+}
+
+const textSnapshotCache = new WeakMap<Object3D, {
+  snapshot: WebXRRaythreeUiTextSnapshot;
+  metadata: WebXRRaythreeTextUserData;
+  geometry: WebXRRaythreeUiTextSnapshot["geometry"];
+  world: Float64Array;
+}>();
 
 function getTextGeometrySnapshot(
   source: TextGeometrySource,
