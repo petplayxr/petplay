@@ -28,6 +28,5 @@ export function parseBuildConfiguration(args: string[]) {
     target,
     output,
     envFile: mode === "production" ? "release.env" : "development.env",
-    nativeProfile: mode === "production" ? "release" as const : "debug" as const,
   };
 }

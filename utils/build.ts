@@ -37,12 +37,13 @@ await Deno.writeTextFile(
     target: target ?? Deno.build.target,
     built: new Date().toISOString(),
     mode,
-    nativeProfile: configuration.nativeProfile,
   }) +
     "\n",
 );
 const resolvedTarget = nativeBuildTarget(target);
-const captureHelper = await buildNative(resolvedTarget, configuration.nativeProfile);
+// Both variants ship the optimized capture helper: an unoptimized one manages about 4 fps, and
+// building it would overwrite the dist/native copy that source runs use.
+const captureHelper = await buildNative(resolvedTarget);
 const raylib = resolvedTarget === "aarch64-unknown-linux-gnu"
   ? await buildRaylib(resolvedTarget, Deno.env.get("PETPLAY_RAYLIB_SYSROOT"))
   : null;

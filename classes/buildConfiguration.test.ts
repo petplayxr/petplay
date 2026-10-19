@@ -2,16 +2,8 @@ import { assertEquals, assertThrows } from "jsr:@std/assert";
 import { parseBuildConfiguration } from "./buildConfiguration.ts";
 Deno.test("build variants select explicit production/development conditions and distinct default artifacts", () => {
   const prod = parseBuildConfiguration([]), dev = parseBuildConfiguration(["--mode=development"]);
-  assertEquals([prod.envFile, prod.nativeProfile, prod.output], [
-    "release.env",
-    "release",
-    "dist/petplay",
-  ]);
-  assertEquals([dev.envFile, dev.nativeProfile, dev.output], [
-    "development.env",
-    "debug",
-    "dist/petplay-debug",
-  ]);
+  assertEquals([prod.envFile, prod.output], ["release.env", "dist/petplay"]);
+  assertEquals([dev.envFile, dev.output], ["development.env", "dist/petplay-debug"]);
   assertEquals(
     parseBuildConfiguration(["--output=_scratch/exact-app"]).output,
     "_scratch/exact-app",
