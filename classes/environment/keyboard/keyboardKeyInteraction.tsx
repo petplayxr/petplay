@@ -68,6 +68,8 @@ const KEY_REPEAT_INTERVAL_MS = 45;
 
 type ImperativeUIKitRef = {
   setProperties?: (props: Record<string, unknown>) => void;
+  /** The properties the component currently holds (UIKit's own field). */
+  inputProperties?: Record<string, unknown>;
 };
 
 type TextMeshRef = {
@@ -282,7 +284,14 @@ export const InteractiveKeyCap = React.memo(function InteractiveKeyCap(
   };
 
   const applyCurrentVisual = () => {
-    visualRef.current?.setProperties?.(visualPropsForDepress(depressRef.current));
+    // Showing the window layer re-runs the effect below on all 74 caps; re-setting values a cap
+    // already holds still resets its whole property stack (~4 ms per show), so skip that.
+    const visual = visualRef.current;
+    const props = visualPropsForDepress(depressRef.current);
+    const current = visual?.inputProperties;
+    const changed = current == null ||
+      Object.entries(props).some(([key, value]) => !Object.is(current[key], value));
+    if (changed) visual?.setProperties?.(props);
     applyTextVisual(depressRef.current);
   };
 

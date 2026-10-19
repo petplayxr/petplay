@@ -1,7 +1,8 @@
 # First display reveal: evidence and property-order experiment
 
 Status: property-order cache rejected (inconclusive); static UI texture preload and
-construct-with-props, render-time text measurement and hidden layout prewarm accepted.
+construct-with-props, render-time text measurement, hidden layout prewarm and the keycap
+restyle skip accepted.
 First reveal remains a ~54 ms release hitch (~40 ms over budget per reveal): still open.
 
 ## Reproduction and attribution
@@ -259,3 +260,27 @@ a weaker gain. Executables: release `946401a2…`, debug in `artifacts.sha256`. 
 passed; `--novr` smoke, showhide, layouts, hovertoolbar, window-settings, wrist, keyboard and
 toasts passed. Startup gains one layout per root in the first second (accepted tradeoff: the user
 prefers launch cost to interaction stalls).
+
+## Accepted: skip keycap restyles that change nothing on show
+
+Showing the window layer re-runs every keycap's visual effect (React re-runs effects when an
+Activity becomes visible), and each of the 74 caps called `setProperties` with the colours it
+already held. `setProperties` merges into `inputProperties` and resets the whole property stack even
+when nothing changed. `applyCurrentVisual` now compares against `inputProperties` and skips the call
+when every value is identical. Presses still go through `setProperties` directly.
+
+Release, four pairs of eight hide/show cycles each (`_scratch/perf/keycap-skip/hunt/`):
+
+| Metric                                            | Baseline | Candidate | Pair differences          |
+| ------------------------------------------------- | -------: | --------: | ------------------------- |
+| `show-display-2` worst `frameMetric` (median, ms) |    18.50 |     15.89 | -3.5, -2.3, -4.1, -0.6    |
+| `show-display-3` worst `frameMetric` (median, ms) |    19.65 |     16.88 | -1.9, -2.2, -1.4, -4.2    |
+| Warm reveals 2–8, summed excess (ms)              |      162 |        81 | lower in all seven phases |
+
+First reveal, menus, drag and scale were within the A/A floor. Debug, two pairs (`hunt-debug/`):
+`show-display-2` -10.7, -5.2 ms; `show-display-3` -6.3, -7.3 ms; menus within noise. Debug warm
+reveals still have about six frames over 20 ms each. Executables: release `946401a2…` → `5acdf072…`;
+debug `be1888c4…` → `44d5369b…`. Unit suite 234 passed; compiled smoke (both modes), showhide,
+layouts, hovertoolbar, window-settings, wrist, keyboard and toasts passed. hovertoolbar and wrist
+first failed on HEAD and on the candidate alike, because `kscreen-doctor` aborts without
+`WAYLAND_DISPLAY`. They passed once it was set.
